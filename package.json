@@ -9,9 +9,20 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@reduxjs/toolkit": "^2.11.2",
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.89.0",
+    "axios": "^1.13.2",
+    "i": "^0.3.7",
+    "lucide-react": "^0.562.0",
     "next": "16.1.1",
+    "npm": "^11.7.0",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-datepicker": "^9.1.0",
+    "react-dom": "19.2.3",
+    "react-phone-input-2": "^2.15.1",
+    "react-redux": "^9.2.0",
+    "sonner": "^2.0.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
