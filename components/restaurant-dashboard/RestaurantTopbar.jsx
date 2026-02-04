@@ -39,7 +39,8 @@ export default function RestaurantTopbar() {
 
   const [restaurantId, setRestaurantId] = useState(null);
 
-  const [unreadCount, setUnreadCount] = useState(0);
+  // ✅ start as null so UI doesn't flash "0" on first render
+  const [unreadCount, setUnreadCount] = useState(null);
   const [unreadBookings, setUnreadBookings] = useState([]);
 
   const [open, setOpen] = useState(false);
@@ -59,7 +60,6 @@ export default function RestaurantTopbar() {
     if (!rid) return;
     if (refetchTimerRef.current) clearTimeout(refetchTimerRef.current);
 
-    // throttle burst events into one refetch
     refetchTimerRef.current = setTimeout(async () => {
       if (refetchLockRef.current) return;
       refetchLockRef.current = true;
@@ -184,13 +184,12 @@ export default function RestaurantTopbar() {
     setLoadingList(false);
   };
 
-  // Realtime subscription (refetch on EVERY event)
+  // Realtime subscription
   useEffect(() => {
     if (!restaurantId) return;
 
-    // initial
-    fetchUnreadCount(restaurantId);
-    fetchUnreadBookings(restaurantId);
+    // ✅ don't show 0 first; fetch immediately once restaurantId is known
+    forceRefetch(restaurantId);
 
     if (channelRef.current) {
       supabaseBrowser.removeChannel(channelRef.current);
@@ -208,8 +207,6 @@ export default function RestaurantTopbar() {
           filter: `restaurant_id=eq.${restaurantId}`,
         },
         () => {
-          // ✅ ALWAYS refetch on every change (INSERT/UPDATE/DELETE),
-          // so setting read=false later also increases badge immediately.
           forceRefetch(restaurantId);
         }
       )
@@ -243,7 +240,10 @@ export default function RestaurantTopbar() {
     }
 
     setUnreadBookings((prev) => prev.filter((b) => b.id !== bookingId));
-    setUnreadCount((c) => Math.max(0, c - 1));
+    setUnreadCount((c) => {
+      const curr = typeof c === "number" ? c : 0;
+      return Math.max(0, curr - 1);
+    });
 
     if (restaurantId) forceRefetch(restaurantId);
   };
@@ -271,7 +271,10 @@ export default function RestaurantTopbar() {
     }
 
     setUnreadBookings((prev) => prev.filter((b) => b.id !== bookingId));
-    setUnreadCount((c) => Math.max(0, c - 1));
+    setUnreadCount((c) => {
+      const curr = typeof c === "number" ? c : 0;
+      return Math.max(0, curr - 1);
+    });
 
     if (restaurantId) forceRefetch(restaurantId);
   };
@@ -300,7 +303,10 @@ export default function RestaurantTopbar() {
     }
 
     setUnreadBookings((prev) => prev.filter((b) => b.id !== bookingId));
-    setUnreadCount((c) => Math.max(0, c - 1));
+    setUnreadCount((c) => {
+      const curr = typeof c === "number" ? c : 0;
+      return Math.max(0, curr - 1);
+    });
 
     if (restaurantId) forceRefetch(restaurantId);
   };
@@ -325,6 +331,8 @@ export default function RestaurantTopbar() {
     router.replace("/sign-in");
   };
 
+  const showBadge = typeof unreadCount === "number" && unreadCount > 0;
+
   return (
     <header className="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-gray-200">
       <div className="h-16 flex items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -341,7 +349,7 @@ export default function RestaurantTopbar() {
             >
               <Bell className="h-4 w-4 text-gray-700" />
 
-              {unreadCount > 0 && (
+              {showBadge && (
                 <span className="absolute -top-1.5 -right-1.5 min-w-4.5 h-4.5 px-1 rounded-full bg-red-500 text-white text-[11px] font-bold flex items-center justify-center leading-none">
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
