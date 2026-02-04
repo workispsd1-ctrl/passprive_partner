@@ -98,6 +98,91 @@ function ensureDishDiscountFields(item) {
   return item;
 }
 
+/* ----------------------------
+   SKELETON (loading state)
+-----------------------------*/
+function Skeleton() {
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+        {/* top strip */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-6">
+          <div className="animate-pulse space-y-3">
+            <div className="h-3 w-24 rounded bg-slate-200" />
+            <div className="h-7 w-40 rounded bg-slate-200" />
+            <div className="h-4 w-72 rounded bg-slate-200" />
+            <div className="h-10 w-40 rounded bg-slate-200 mt-4" />
+          </div>
+        </div>
+
+        {/* offers list */}
+        <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+            <div className="h-4 w-24 rounded bg-slate-200 animate-pulse" />
+            <div className="h-3 w-16 rounded bg-slate-200 animate-pulse" />
+          </div>
+
+          <div className="p-6 space-y-4">
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <div key={idx} className="animate-pulse">
+                <div className="h-5 w-64 rounded bg-slate-200" />
+                <div className="mt-2 h-3 w-80 rounded bg-slate-200" />
+                <div className="mt-3 flex gap-2">
+                  <div className="h-8 w-24 rounded bg-slate-200" />
+                  <div className="h-8 w-20 rounded bg-slate-200" />
+                  <div className="h-8 w-20 rounded bg-slate-200" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* dish discounts */}
+        <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+            <div className="space-y-2 animate-pulse">
+              <div className="h-4 w-28 rounded bg-slate-200" />
+              <div className="h-3 w-64 rounded bg-slate-200" />
+            </div>
+            <div className="flex gap-2">
+              <div className="h-7 w-20 rounded-full bg-slate-200 animate-pulse" />
+              <div className="h-7 w-28 rounded-full bg-slate-200 animate-pulse" />
+              <div className="h-7 w-24 rounded-full bg-slate-200 animate-pulse" />
+            </div>
+          </div>
+
+          <div className="p-6 space-y-6">
+            {Array.from({ length: 2 }).map((_, s) => (
+              <div key={s} className="space-y-3">
+                <div className="h-4 w-32 rounded bg-slate-200 animate-pulse" />
+                {Array.from({ length: 3 }).map((__, i) => (
+                  <div
+                    key={i}
+                    className="rounded-xl border border-slate-200 bg-white p-4"
+                  >
+                    <div className="animate-pulse">
+                      <div className="h-4 w-56 rounded bg-slate-200" />
+                      <div className="mt-2 h-3 w-40 rounded bg-slate-200" />
+                      <div className="mt-3 flex gap-2">
+                        <div className="h-8 w-24 rounded bg-slate-200" />
+                        <div className="h-8 w-24 rounded bg-slate-200" />
+                        <div className="h-8 w-20 rounded bg-slate-200" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* floating button */}
+      <div className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-slate-200 animate-pulse shadow-lg" />
+    </div>
+  );
+}
+
 export default function OffersPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -213,7 +298,6 @@ export default function OffersPage() {
     const updated = structuredClone(menu);
     const item = updated.sections[sIndex].items[iIndex];
 
-    // If empty -> remove discount fields entirely
     if (percentStr === "" || percentStr == null) {
       delete item.discount_percent;
       delete item.discounted_price;
@@ -226,7 +310,6 @@ export default function OffersPage() {
     }
 
     const p = Number(percentStr);
-
     if (!Number.isFinite(p) || p < 0 || p > 100) return;
 
     item.discount_percent = p;
@@ -289,7 +372,6 @@ export default function OffersPage() {
     }
 
     setSaving(false);
-    // reload to ensure DB is source of truth
     await loadData();
     return true;
   }
@@ -328,17 +410,14 @@ export default function OffersPage() {
       return alert("Please enter a valid discount value.");
     }
 
-    // build next array
     const next = (() => {
       const exists = offers.some((o) => o.id === cleaned.id);
       if (exists) return offers.map((o) => (o.id === cleaned.id ? cleaned : o));
       return [cleaned, ...offers];
     })();
 
-    // optimistic UI
     setOffers(next);
 
-    // ✅ save immediately
     const ok = await saveOffersOnly(next);
     if (ok) setOpenModal(false);
   }
@@ -384,8 +463,10 @@ export default function OffersPage() {
   /* -------------------------------------------
      UI
   ------------------------------------------- */
-  if (loading || !menu) {
-    return <div className="p-6 text-sm text-slate-500">Loading…</div>;
+  if (loading) return <Skeleton />;
+
+  if (!menu) {
+    return <div className="p-6 text-sm text-slate-500">No menu found.</div>;
   }
 
   return (
