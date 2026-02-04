@@ -13,11 +13,13 @@
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.89.0",
     "axios": "^1.13.2",
+    "chart.js": "^4.5.1",
     "i": "^0.3.7",
     "lucide-react": "^0.562.0",
     "next": "16.1.1",
     "npm": "^11.7.0",
     "react": "19.2.3",
+    "react-chartjs-2": "^5.3.1",
     "react-datepicker": "^9.1.0",
     "react-dom": "19.2.3",
     "react-phone-input-2": "^2.15.1",
@@ -26,12 +28,12 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
+    "@types/node": "20.19.31",
+    "@types/react": "19.2.10",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "5.9.3"
   }
 }
