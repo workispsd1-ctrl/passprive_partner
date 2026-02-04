@@ -10,8 +10,8 @@ export default function CorporateTopbar({ toggleMobileMenu }) {
     <header 
       className="bg-white sticky top-0 z-30 border-b border-gray-100" 
       style={{ 
-        minHeight: "80px",
-        height: "clamp(80px, 10vh, 120px)"
+        minHeight: "60px",
+        height: "60px"
       }}
     >
       <div className="flex items-center justify-between lg:justify-end h-full px-4 sm:px-6 lg:px-8 gap-3 sm:gap-4 lg:gap-6">
@@ -33,20 +33,20 @@ export default function CorporateTopbar({ toggleMobileMenu }) {
         <div 
           className="hidden md:flex items-center gap-2 rounded-2xl flex-1 max-w-lg" 
           style={{
-            height: "clamp(48px, 8vh, 60px)",
+            height: "40px",
             background: "#F9FAFB",
             paddingTop: "2px",
-            paddingRight: "clamp(16px, 3vw, 32px)",
+            paddingRight: "16px",
             paddingBottom: "2px",
-            paddingLeft: "clamp(12px, 2vw, 24px)",
-            borderRadius: "16px"
+            paddingLeft: "12px",
+            borderRadius: "12px"
           }}
         >
           {/* Search Icon */}
-          <div style={{ width: "24px", height: "24px" }} className="flex items-center justify-center flex-shrink-0">
+          <div style={{ width: "20px", height: "20px" }} className="flex items-center justify-center flex-shrink-0">
             <svg 
-              width="20" 
-              height="20" 
+              width="16" 
+              height="16" 
               viewBox="0 0 24 24" 
               fill="none"
             >
@@ -64,7 +64,7 @@ export default function CorporateTopbar({ toggleMobileMenu }) {
             style={{
               fontFamily: "Poppins, sans-serif",
               fontWeight: 400,
-              fontSize: "clamp(14px, 2vw, 18px)",
+              fontSize: "14px",
               lineHeight: "100%"
             }}
           />
@@ -75,32 +75,31 @@ export default function CorporateTopbar({ toggleMobileMenu }) {
           className="flex items-center justify-center rounded-xl hover:bg-gray-50 transition flex-shrink-0"
           type="button"
           aria-label="Notifications"
-          style={{ width: "clamp(40px, 6vw, 48px)", height: "clamp(40px, 6vw, 48px)" }}
+          style={{ width: "36px", height: "36px" }}
         >
           <Image 
             src="/Notifications.png" 
             alt="Notifications" 
-            width={40} 
-            height={40}
+            width={28} 
+            height={28}
           />
         </button>
 
         {/* User Profile */}
         <div 
-          className="flex items-center gap-2 lg:gap-4 flex-shrink-0"
-          style={{ minHeight: "clamp(48px, 8vh, 60px)" }}
+          className="flex items-center gap-2 lg:gap-3 flex-shrink-0"
         >
           {/* Profile Image */}
           <Image
             src="/Rectangle 1393.png"
             alt="Profile"
-            width={60}
-            height={60}
+            width={40}
+            height={40}
             className="object-cover flex-shrink-0"
             style={{
-              width: "clamp(40px, 7vw, 60px)",
-              height: "clamp(40px, 7vw, 60px)",
-              borderRadius: "clamp(12px, 2vw, 16px)"
+              width: "40px",
+              height: "40px",
+              borderRadius: "10px"
             }}
           />
           
@@ -111,7 +110,7 @@ export default function CorporateTopbar({ toggleMobileMenu }) {
               style={{
                 fontFamily: "Poppins, sans-serif",
                 fontWeight: 500,
-                fontSize: "clamp(14px, 2vw, 16px)",
+                fontSize: "14px",
                 lineHeight: "1.5"
               }}
             >
@@ -122,7 +121,7 @@ export default function CorporateTopbar({ toggleMobileMenu }) {
               style={{
                 fontFamily: "Poppins, sans-serif",
                 fontWeight: 400,
-                fontSize: "clamp(12px, 1.8vw, 14px)"
+                fontSize: "12px"
               }}
             >
               Admin

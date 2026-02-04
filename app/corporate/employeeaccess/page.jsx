@@ -42,22 +42,22 @@ export default function EmployeePassesPage() {
         <div 
           className="bg-white border border-[#D9D9D9] rounded-lg w-full"
           style={{ 
-            paddingTop: 'clamp(32px, 5vw, 64px)',
-            paddingBottom: 'clamp(32px, 5vw, 64px)',
-            paddingLeft: 'clamp(16px, 4vw, 48px)',
-            paddingRight: 'clamp(16px, 4vw, 48px)'
+            paddingTop: '24px',
+            paddingBottom: '24px',
+            paddingLeft: '24px',
+            paddingRight: '24px'
           }}
         >
           {/* Inner Frame - Responsive */}
-          <div className="flex flex-col gap-4 sm:gap-6 w-full max-w-3xl mx-auto">
+          <div className="flex flex-col gap-3 sm:gap-4 w-full max-w-3xl mx-auto">
             {/* First Row - Responsive */}
-            <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 w-full">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full">
               {/* First Name Input Field - Responsive */}
-              <div className="flex flex-col gap-2 w-full sm:w-1/2">
+              <div className="flex flex-col gap-1.5 w-full sm:w-1/2">
                 <label 
                   className="text-[#1E1E1E]"
                   style={{ 
-                    fontSize: 'clamp(14px, 2vw, 16px)',
+                    fontSize: '14px',
                     fontWeight: '400',
                     lineHeight: '140%',
                     fontFamily: 'system-ui, -apple-system, sans-serif'
@@ -70,10 +70,10 @@ export default function EmployeePassesPage() {
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   placeholder="Enter first name"
-                  className="border border-[#D9D9D9] rounded-lg px-3 sm:px-4 py-2 outline-none focus:border-[#5D5FEF] placeholder-[#B3B3B3] w-full"
+                  className="border border-[#D9D9D9] rounded-lg px-3 py-2 outline-none focus:border-[#5D5FEF] placeholder-[#B3B3B3] w-full"
                   style={{ 
-                    minHeight: '49px',
-                    fontSize: 'clamp(16px, 2.5vw, 18px)',
+                    minHeight: '40px',
+                    fontSize: '14px',
                     fontWeight: '500',
                     lineHeight: '140%',
                     fontFamily: 'Satoshi, system-ui, -apple-system, sans-serif'
@@ -82,11 +82,11 @@ export default function EmployeePassesPage() {
               </div>
 
               {/* Last Name Input Field - Responsive */}
-              <div className="flex flex-col gap-2 w-full sm:w-1/2">
+              <div className="flex flex-col gap-1.5 w-full sm:w-1/2">
                 <label 
                   className="text-[#1E1E1E]"
                   style={{ 
-                    fontSize: 'clamp(14px, 2vw, 16px)',
+                    fontSize: '14px',
                     fontWeight: '400',
                     lineHeight: '140%',
                     fontFamily: 'system-ui, -apple-system, sans-serif'
@@ -99,10 +99,10 @@ export default function EmployeePassesPage() {
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   placeholder="Enter last name"
-                  className="border border-[#D9D9D9] rounded-lg px-3 sm:px-4 py-2 outline-none focus:border-[#5D5FEF] placeholder-[#B3B3B3] w-full"
+                  className="border border-[#D9D9D9] rounded-lg px-3 py-2 outline-none focus:border-[#5D5FEF] placeholder-[#B3B3B3] w-full"
                   style={{ 
-                    minHeight: '49px',
-                    fontSize: 'clamp(16px, 2.5vw, 18px)',
+                    minHeight: '40px',
+                    fontSize: '14px',
                     fontWeight: '500',
                     lineHeight: '140%',
                     fontFamily: 'Satoshi, system-ui, -apple-system, sans-serif'
@@ -112,13 +112,13 @@ export default function EmployeePassesPage() {
             </div>
 
             {/* Second Row - Responsive */}
-            <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 w-full">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full">
               {/* Email Input Field - Responsive */}
-              <div className="flex flex-col gap-2 w-full sm:w-1/2">
+              <div className="flex flex-col gap-1.5 w-full sm:w-1/2">
                 <label 
                   className="text-[#1E1E1E]"
                   style={{ 
-                    fontSize: 'clamp(14px, 2vw, 16px)',
+                    fontSize: '14px',
                     fontWeight: '400',
                     lineHeight: '140%',
                     fontFamily: 'system-ui, -apple-system, sans-serif'
@@ -131,10 +131,10 @@ export default function EmployeePassesPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="Enter email address"
-                  className="border border-[#D9D9D9] rounded-lg px-3 sm:px-4 py-2 outline-none focus:border-[#5D5FEF] placeholder-[#B3B3B3] w-full"
+                  className="border border-[#D9D9D9] rounded-lg px-3 py-2 outline-none focus:border-[#5D5FEF] placeholder-[#B3B3B3] w-full"
                   style={{ 
-                    minHeight: '49px',
-                    fontSize: 'clamp(16px, 2.5vw, 18px)',
+                    minHeight: '40px',
+                    fontSize: '14px',
                     fontWeight: '500',
                     lineHeight: '140%',
                     fontFamily: 'Satoshi, system-ui, -apple-system, sans-serif'
@@ -143,11 +143,11 @@ export default function EmployeePassesPage() {
               </div>
 
               {/* Phone Number Input Field - Responsive */}
-              <div className="flex flex-col gap-2 w-full sm:w-1/2">
+              <div className="flex flex-col gap-1.5 w-full sm:w-1/2">
                 <label 
                   className="text-[#1E1E1E]"
                   style={{ 
-                    fontSize: 'clamp(14px, 2vw, 16px)',
+                    fontSize: '14px',
                     fontWeight: '400',
                     lineHeight: '140%',
                     fontFamily: 'system-ui, -apple-system, sans-serif'
@@ -160,18 +160,18 @@ export default function EmployeePassesPage() {
                     type="text"
                     value="+91"
                     disabled
-                    className="border border-[#D9D9D9] bg-gray-50 rounded-lg px-2 sm:px-3 text-center text-gray-700"
-                    style={{ width: 'clamp(50px, 10vw, 60px)', minHeight: '49px' }}
+                    className="border border-[#D9D9D9] bg-gray-50 rounded-lg px-2 text-center text-gray-700"
+                    style={{ width: '55px', minHeight: '40px' }}
                   />
                   <input
                     type="tel"
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value)}
                     placeholder="Enter phone number"
-                    className="border border-[#D9D9D9] rounded-lg px-3 sm:px-4 py-2 outline-none focus:border-[#5D5FEF] placeholder-[#B3B3B3] flex-1"
+                    className="border border-[#D9D9D9] rounded-lg px-3 py-2 outline-none focus:border-[#5D5FEF] placeholder-[#B3B3B3] flex-1"
                     style={{ 
-                      minHeight: '49px',
-                      fontSize: 'clamp(16px, 2.5vw, 18px)',
+                      minHeight: '40px',
+                      fontSize: '14px',
                       fontWeight: '500',
                       lineHeight: '140%',
                       fontFamily: 'Satoshi, system-ui, -apple-system, sans-serif'
@@ -183,20 +183,20 @@ export default function EmployeePassesPage() {
           </div>
 
           {/* Add Employee Button - Responsive */}
-          <div className="flex justify-center mt-6 sm:mt-8">
+          <div className="flex justify-center mt-4 sm:mt-5">
             <button
               onClick={handleAddEmployee}
               className="bg-[#5D5FEF] border border-[#2C2C2C] rounded-lg hover:bg-[#4D4FDF] focus:outline-none focus:ring-2 focus:ring-[#5D5FEF] focus:ring-offset-2 w-full sm:w-auto"
               style={{ 
-                maxWidth: '321px', 
-                minHeight: '52px',
-                padding: '12px 24px'
+                maxWidth: '240px', 
+                minHeight: '42px',
+                padding: '10px 20px'
               }}
             >
               <span 
                 className="text-white"
                 style={{ 
-                  fontSize: 'clamp(18px, 3vw, 23px)',
+                  fontSize: '16px',
                   fontWeight: '700',
                   lineHeight: '120%',
                   fontFamily: 'Satoshi, system-ui, -apple-system, sans-serif'
@@ -212,32 +212,32 @@ export default function EmployeePassesPage() {
         <div 
           className="bg-white border border-[#D9D9D9] rounded-lg w-full"
           style={{ 
-            paddingTop: 'clamp(32px, 5vw, 64px)',
-            paddingBottom: 'clamp(32px, 5vw, 64px)',
-            paddingLeft: 'clamp(16px, 4vw, 48px)',
-            paddingRight: 'clamp(16px, 4vw, 48px)'
+            paddingTop: '24px',
+            paddingBottom: '24px',
+            paddingLeft: '24px',
+            paddingRight: '24px'
           }}
         >
           <div
             onDragOver={handleDragOver}
             onDrop={handleDrop}
-            className="flex flex-col items-center justify-center space-y-3 sm:space-y-4 py-6 sm:py-8"
+            className="flex flex-col items-center justify-center space-y-3 py-4 sm:py-5"
           >
             {/* Upload Icon */}
             <div className="flex items-center justify-center rounded-full bg-indigo-100" 
               style={{ 
-                width: 'clamp(48px, 10vw, 64px)', 
-                height: 'clamp(48px, 10vw, 64px)' 
+                width: '52px', 
+                height: '52px' 
               }}
             >
               <Image
                 src="/upload.png"
                 alt="Upload"
-                width={32}
-                height={32}
+                width={28}
+                height={28}
                 style={{ 
-                  width: 'clamp(24px, 5vw, 32px)', 
-                  height: 'clamp(24px, 5vw, 32px)' 
+                  width: '28px', 
+                  height: '28px' 
                 }}
               />
             </div>
@@ -247,7 +247,7 @@ export default function EmployeePassesPage() {
               <h3 
                 className="text-[#1E1E1E]"
                 style={{ 
-                  fontSize: 'clamp(16px, 2.5vw, 18px)',
+                  fontSize: '16px',
                   fontWeight: '600',
                   lineHeight: '140%',
                   fontFamily: 'Satoshi, system-ui, -apple-system, sans-serif'
@@ -258,7 +258,7 @@ export default function EmployeePassesPage() {
               <p 
                 className="mt-1 text-[#757575]"
                 style={{ 
-                  fontSize: 'clamp(14px, 2vw, 16px)',
+                  fontSize: '14px',
                   fontWeight: '400',
                   lineHeight: '140%'
                 }}
@@ -280,15 +280,15 @@ export default function EmployeePassesPage() {
                 htmlFor="file-upload"
                 className="cursor-pointer bg-[#5D5FEF] border border-[#2C2C2C] rounded-lg hover:bg-[#4D4FDF] focus:outline-none focus:ring-2 focus:ring-[#5D5FEF] focus:ring-offset-2 inline-block w-full sm:w-auto text-center"
                 style={{ 
-                  maxWidth: '321px', 
-                  minHeight: '52px',
-                  padding: '12px 24px'
+                  maxWidth: '240px', 
+                  minHeight: '42px',
+                  padding: '10px 20px'
                 }}
               >
                 <span 
                   className="text-white"
                   style={{ 
-                    fontSize: 'clamp(18px, 3vw, 23px)',
+                    fontSize: '16px',
                     fontWeight: '700',
                     lineHeight: '120%',
                     fontFamily: 'Satoshi, system-ui, -apple-system, sans-serif'
@@ -300,7 +300,7 @@ export default function EmployeePassesPage() {
             </div>
 
             {/* File Requirements */}
-            <div className="text-center text-[#757575] px-4" style={{ fontSize: 'clamp(12px, 1.8vw, 14px)' }}>
+            <div className="text-center text-[#757575] px-4" style={{ fontSize: '13px' }}>
               <p>• Support .xlsx format only. Max file size 5MB</p>
               <p>• Upload a spreadsheet to add multiple employees at once</p>
             </div>

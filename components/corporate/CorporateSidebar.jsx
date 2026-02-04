@@ -65,11 +65,11 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
         "fixed lg:sticky top-0 h-screen bg-white z-50 transition-transform duration-300 overflow-y-auto",
         "lg:translate-x-0",
         isMobileOpen ? "translate-x-0" : "-translate-x-full"
-      ].join(" ")} style={{ width: "min(378px, 90vw)" }}>
+      ].join(" ")} style={{ width: "min(280px, 90vw)" }}>
       {/* Brand */}
-      <div className="pt-8 lg:pt-14 pb-6 lg:pb-10 px-6 lg:px-12 flex items-center justify-between">
+      <div className="pt-6 lg:pt-8 pb-4 lg:pb-6 px-4 lg:px-6 flex items-center justify-between">
         <h1 
-          className="font-bold text-3xl lg:text-[44px]" 
+          className="font-bold text-2xl lg:text-[32px]" 
           style={{ 
             lineHeight: "140%", 
             color: "#151D48",
@@ -93,7 +93,7 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
       </div>
 
       {/* Nav */}
-      <nav className="px-6 lg:px-12 space-y-4 lg:space-y-8 pb-8">
+      <nav className="px-4 lg:px-6 space-y-2 lg:space-y-3 pb-8">
         {menuItems.map((item) => {
           const active = activeMenu === item.id;
 
@@ -103,16 +103,14 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
               href={item.href}
               onClick={() => handleMenuClick(item.id)}
               className={[
-                "flex items-center gap-4 lg:gap-6 rounded-2xl px-4 lg:px-6 py-3 lg:py-4 transition-all",
+                "flex items-center gap-3 lg:gap-4 rounded-xl px-3 lg:px-4 py-2 lg:py-2.5 transition-all",
                 active
                   ? "bg-[#5D5FEF] text-white shadow-[0px_20px_50px_0px_rgba(55,69,87,0.1)]"
                   : "text-[#737791] hover:bg-gray-50",
               ].join(" ")}
               style={{
-                maxWidth: "252px",
-                minHeight: "56px",
-                fontSize: active ? "clamp(18px, 4vw, 23px)" : "clamp(16px, 3.5vw, 18px)",
-                fontWeight: active ? 700 : 500,
+                fontSize: active ? "15px" : "14px",
+                fontWeight: active ? 600 : 500,
                 lineHeight: "140%",
                 fontFamily: "Satoshi, sans-serif",
               }}
@@ -121,18 +119,16 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
               <div 
                 className="flex items-center justify-center flex-shrink-0" 
                 style={{ 
-                  width: "32px", 
-                  height: "32px",
-                  border: active && item.id === "dashboard" ? "2px solid #FFFFFF" : active ? "2px solid white" : "none",
-                  borderRadius: "50%"
+                  width: "24px", 
+                  height: "24px"
                 }}
               >
                 {item.id === "dashboard" && (
                   <Image 
                     src="/dashboard.png" 
                     alt="Dashboard" 
-                    width={28} 
-                    height={28}
+                    width={20} 
+                    height={20}
                     style={{
                       filter: active ? "brightness(0) invert(1)" : "none",
                       opacity: active ? 1 : 0.6
@@ -143,8 +139,8 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
                   <Image 
                     src="/employeepasses.png" 
                     alt="Employee Passes" 
-                    width={28} 
-                    height={28}
+                    width={20} 
+                    height={20}
                     style={{
                       filter: active ? "brightness(0) invert(1)" : "none",
                       opacity: active ? 1 : 0.6
@@ -155,8 +151,8 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
                   <Image 
                     src="/report.png" 
                     alt="Reports" 
-                    width={28} 
-                    height={28}
+                    width={20} 
+                    height={20}
                     style={{
                       filter: active ? "brightness(0) invert(1)" : "none",
                       opacity: active ? 1 : 0.6
@@ -167,8 +163,8 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
                   <Image 
                     src="/billings.png" 
                     alt="Billing & Payments" 
-                    width={28} 
-                    height={28}
+                    width={20} 
+                    height={20}
                     style={{
                       filter: active ? "brightness(0) invert(1)" : "none",
                       opacity: active ? 1 : 0.6
@@ -179,8 +175,8 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
                   <Image 
                     src="/settings.png" 
                     alt="Settings" 
-                    width={28} 
-                    height={28}
+                    width={20} 
+                    height={20}
                     style={{
                       filter: active ? "brightness(0) invert(1)" : "none",
                       opacity: active ? 1 : 0.6
@@ -191,8 +187,8 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
                   <Image 
                     src="/support.png" 
                     alt="Support" 
-                    width={28} 
-                    height={28}
+                    width={20} 
+                    height={20}
                     style={{
                       filter: active ? "brightness(0) invert(1)" : "none",
                       opacity: active ? 1 : 0.6
@@ -203,8 +199,8 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
                   <Image 
                     src="/signout.png" 
                     alt="Sign Out" 
-                    width={28} 
-                    height={28}
+                    width={20} 
+                    height={20}
                     style={{
                       filter: active ? "brightness(0) invert(1)" : "none",
                       opacity: active ? 1 : 0.6

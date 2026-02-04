@@ -106,7 +106,7 @@ export default function CorporateDashboardPage() {
           className="bg-white rounded-lg relative"
           style={{ 
             width: '100%',
-            height: '183px',
+            height: '140px',
             border: '1px solid #E5E7EB',
             boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.05)',
             position: 'relative'
@@ -118,11 +118,11 @@ export default function CorporateDashboardPage() {
             style={{
               fontFamily: 'Poppins, sans-serif',
               fontWeight: 600,
-              fontSize: '20px',
-              lineHeight: '32px',
+              fontSize: '16px',
+              lineHeight: '24px',
               color: '#05004E',
-              top: '33px',
-              left: '40px'
+              top: '20px',
+              left: '24px'
             }}
           >
             Total Employees
@@ -132,10 +132,10 @@ export default function CorporateDashboardPage() {
           <div 
             className="absolute flex items-center justify-center rounded-full"
             style={{
-              width: '53.98px',
-              height: '53.98px',
-              top: '80px',
-              left: '40px',
+              width: '42px',
+              height: '42px',
+              top: '56px',
+              left: '24px',
               background: 'linear-gradient(135deg, #E0D4F7 0%, #D4C5F9 100%)',
               border: '2px solid #B8A3E8'
             }}
@@ -143,8 +143,8 @@ export default function CorporateDashboardPage() {
             <Image 
               src="/totalemployess.png" 
               alt="Total Employees" 
-              width={44} 
-              height={44}
+              width={32} 
+              height={32}
             />
           </div>
           
@@ -154,11 +154,11 @@ export default function CorporateDashboardPage() {
             style={{
               fontFamily: 'Satoshi, sans-serif',
               fontWeight: 700,
-              fontSize: '55px',
+              fontSize: '36px',
               lineHeight: '120%',
               color: '#1B1C30',
-              top: '74px',
-              left: '116px'
+              top: '58px',
+              left: '80px'
             }}
           >
             40,689
@@ -170,7 +170,7 @@ export default function CorporateDashboardPage() {
           className="bg-white rounded-lg relative"
           style={{ 
             width: '100%',
-            height: '183px',
+            height: '140px',
             border: '1px solid #E5E7EB',
             boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.05)',
             position: 'relative'
@@ -182,11 +182,11 @@ export default function CorporateDashboardPage() {
             style={{
               fontFamily: 'Poppins, sans-serif',
               fontWeight: 600,
-              fontSize: '20px',
-              lineHeight: '32px',
+              fontSize: '16px',
+              lineHeight: '24px',
               color: '#05004E',
-              top: '33px',
-              left: '40px'
+              top: '20px',
+              left: '24px'
             }}
           >
             Total Passes
@@ -196,10 +196,10 @@ export default function CorporateDashboardPage() {
           <div 
             className="absolute flex items-center justify-center rounded-full"
             style={{
-              width: '53.98px',
-              height: '53.98px',
-              top: '80px',
-              left: '40px',
+              width: '42px',
+              height: '42px',
+              top: '56px',
+              left: '24px',
               background: 'linear-gradient(135deg, #E0D4F7 0%, #D4C5F9 100%)',
               border: '2px solid #B8A3E8'
             }}
@@ -207,8 +207,8 @@ export default function CorporateDashboardPage() {
             <Image 
               src="/totalpasses.png" 
               alt="Total Passes" 
-              width={44} 
-              height={44}
+              width={32} 
+              height={32}
             />
           </div>
           
@@ -218,11 +218,11 @@ export default function CorporateDashboardPage() {
             style={{
               fontFamily: 'Satoshi, sans-serif',
               fontWeight: 700,
-              fontSize: '55px',
+              fontSize: '36px',
               lineHeight: '120%',
               color: '#1B1C30',
-              top: '74px',
-              left: '116px'
+              top: '58px',
+              left: '80px'
             }}
           >
             10,200
@@ -234,7 +234,7 @@ export default function CorporateDashboardPage() {
           className="bg-white rounded-lg relative"
           style={{ 
             width: '100%',
-            height: '183px',
+            height: '140px',
             border: '1px solid #E5E7EB',
             boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.05)',
             position: 'relative'
@@ -246,11 +246,11 @@ export default function CorporateDashboardPage() {
             style={{
               fontFamily: 'Poppins, sans-serif',
               fontWeight: 600,
-              fontSize: '20px',
-              lineHeight: '32px',
+              fontSize: '16px',
+              lineHeight: '24px',
               color: '#05004E',
-              top: '33px',
-              left: '40px'
+              top: '20px',
+              left: '24px'
             }}
           >
             Active Gift Cards
@@ -260,10 +260,10 @@ export default function CorporateDashboardPage() {
           <div 
             className="absolute flex items-center justify-center rounded-full"
             style={{
-              width: '53.98px',
-              height: '53.98px',
-              top: '80px',
-              left: '40px',
+              width: '42px',
+              height: '42px',
+              top: '56px',
+              left: '24px',
               background: 'linear-gradient(135deg, #E0D4F7 0%, #D4C5F9 100%)',
               border: '2px solid #B8A3E8'
             }}
@@ -271,8 +271,8 @@ export default function CorporateDashboardPage() {
             <Image 
               src="/giftcards.png" 
               alt="Gift Cards" 
-              width={44} 
-              height={44}
+              width={32} 
+              height={32}
             />
           </div>
           
@@ -282,11 +282,11 @@ export default function CorporateDashboardPage() {
             style={{
               fontFamily: 'Satoshi, sans-serif',
               fontWeight: 700,
-              fontSize: '55px',
+              fontSize: '36px',
               lineHeight: '120%',
               color: '#1B1C30',
-              top: '74px',
-              left: '116px'
+              top: '58px',
+              left: '80px'
             }}
           >
             30,689
@@ -298,23 +298,23 @@ export default function CorporateDashboardPage() {
       <div 
         className="bg-white w-full"
         style={{
-          minHeight: "351px",
-          borderRadius: "20px",
+          minHeight: "280px",
+          borderRadius: "16px",
           border: "1px solid #F8F9FA",
           boxShadow: "0px 4px 20px 0px rgba(238, 238, 238, 0.5)",
-          padding: "clamp(16px, 3vw, 32px)"
+          padding: "clamp(16px, 2.5vw, 24px)"
         }}
       >
         <h3 
-          className="font-semibold text-gray-900 mb-4 sm:mb-6"
+          className="font-semibold text-gray-900 mb-3 sm:mb-4"
           style={{
-            fontSize: "clamp(16px, 2.5vw, 18px)",
+            fontSize: "16px",
             color: "#1F2937"
           }}
         >
           Customer Satisfaction
         </h3>
-        <div className="relative h-[200px] mb-4 sm:mb-6">
+        <div className="relative h-[180px] mb-3 sm:mb-4">
           <Line data={chartData} options={chartOptions} />
         </div>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-12 pt-4">
