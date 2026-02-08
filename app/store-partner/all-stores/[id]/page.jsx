@@ -473,7 +473,7 @@ export default function StoreDetailsPage() {
           ) : null}
 
           {!loading && !err && store ? (
-            <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm my-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-start gap-3">
                   <div className="h-12 w-12 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-center overflow-hidden">
