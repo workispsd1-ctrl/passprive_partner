@@ -62,7 +62,7 @@ const AuthCallbackPage = () => {
         }
 
         if (role === "storepartner") {
-          if (!cancelled) router.replace("/store/dashboard");
+          if (!cancelled) router.replace("/store-partner/dashboard");
           return;
         }
 

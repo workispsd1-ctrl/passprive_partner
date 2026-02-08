@@ -4,30 +4,43 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  ShoppingBag,
-  Package,
-  Boxes,
   Tag,
-  Users,
-  LineChart,
+  Boxes,
+  MessageSquareText,
   Wallet,
   Settings,
+  Store,
 } from "lucide-react";
 
+const BRAND_ACCENT = "#ff5a1f";
+const ACTIVE_ICON = "#ff5a1f";
+const INACTIVE_ICON = "#6b7280";
+
 const nav = [
-  { label: "Dashboard", href: "/store-dashboard", icon: LayoutDashboard },
-  { label: "Orders", href: "/store-dashboard/orders", icon: ShoppingBag },
-  { label: "Products", href: "/store-dashboard/products", icon: Package },
-  { label: "Inventory", href: "/store-dashboard/inventory", icon: Boxes },
-  { label: "Offers", href: "/store-dashboard/offers", icon: Tag },
-  { label: "Customers", href: "/store-dashboard/customers", icon: Users },
-  { label: "Analytics", href: "/store-dashboard/analytics", icon: LineChart },
-  { label: "Payouts", href: "/store-dashboard/payouts", icon: Wallet },
-  { label: "Settings", href: "/store-dashboard/settings", icon: Settings },
+  { label: "Dashboard", href: "/store-partner/dashboard", icon: LayoutDashboard },
+
+  // Multi-store (HQ / branches)
+  { label: "My Stores", href: "/store-partner/all-stores", icon: Store },
+
+  // District modules
+  { label: "Offers", href: "/store-partner/offers", icon: Tag },
+  { label: "Catalogue", href: "/store-partner/catalogue", icon: Boxes },
+
+  // New requested items
+  { label: "Reviews", href: "/store-partner/reviews", icon: MessageSquareText },
+  { label: "Payouts", href: "/store-partner/payouts", icon: Wallet },
+
+  // Settings includes store details, location, images, etc.
+  { label: "Settings", href: "/store-partner/settings", icon: Settings },
 ];
 
 export default function StoreSidebar() {
   const pathname = usePathname();
+
+  const isActive = (href) => {
+    if (href === "/store-partner/dashboard") return pathname === href;
+    return pathname === href || pathname.startsWith(href + "/");
+  };
 
   return (
     <aside className="hidden lg:flex lg:flex-col lg:w-[280px] lg:min-h-screen border-r border-gray-200 bg-white">
@@ -36,7 +49,7 @@ export default function StoreSidebar() {
         <div className="flex items-center gap-2">
           <div
             className="h-9 w-9 rounded-xl"
-            style={{ backgroundColor: "var(--accent)" }}
+            style={{ backgroundColor: BRAND_ACCENT }}
           />
           <div>
             <div className="font-bold leading-tight">Store Partner</div>
@@ -48,7 +61,7 @@ export default function StoreSidebar() {
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-1">
         {nav.map((item) => {
-          const active = pathname === item.href;
+          const active = isActive(item.href);
           const Icon = item.icon;
 
           return (
@@ -58,13 +71,13 @@ export default function StoreSidebar() {
               className={[
                 "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition",
                 active
-                  ? "bg-gray-100 text-gray-900"
+                  ? "bg-orange-50 text-gray-900 border border-orange-100"
                   : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
               ].join(" ")}
             >
               <Icon
                 className="h-4 w-4"
-                style={{ color: active ? "var(--accent)" : undefined }}
+                style={{ color: active ? ACTIVE_ICON : INACTIVE_ICON }}
               />
               {item.label}
             </Link>
@@ -77,15 +90,31 @@ export default function StoreSidebar() {
         <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
           <div className="text-sm font-semibold">Quick Actions</div>
           <div className="text-xs text-gray-600 mt-1">
-            Add products, manage inventory, run offers.
+            Add catalogue items, enable offers, manage branches.
           </div>
 
-          <button
-            className="mt-3 w-full rounded-xl border border-gray-200 bg-white py-2 text-sm font-medium hover:bg-gray-50"
-            type="button"
-          >
-            Add Product
-          </button>
+          <div className="mt-3 grid grid-cols-1 gap-2">
+            <Link
+              href="/store-partner/catalogue"
+              className="w-full rounded-xl border border-gray-200 bg-white py-2 text-center text-sm font-medium hover:bg-gray-50"
+            >
+              Add Catalogue Item
+            </Link>
+
+            <Link
+              href="/store-partner/offers"
+              className="w-full rounded-xl border border-gray-200 bg-white py-2 text-center text-sm font-medium hover:bg-gray-50"
+            >
+              Create Offer
+            </Link>
+
+            <Link
+              href="/store-partner/all-stores"
+              className="w-full rounded-xl border border-gray-200 bg-white py-2 text-center text-sm font-medium hover:bg-gray-50"
+            >
+              Manage Stores
+            </Link>
+          </div>
         </div>
       </div>
     </aside>
