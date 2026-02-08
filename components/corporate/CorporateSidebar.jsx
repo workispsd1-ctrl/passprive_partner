@@ -15,13 +15,13 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
     },
     {
       id: "employees",
-      label: "Employees Passes",
-      href: "/corporate/employeeaccess",
+      label: "Employee Management",
+      href: "/corporate/employee-management",
     },
     {
-      id: "reports",
-      label: "Reports",
-      href: "/corporate/reports",
+      id: "pass-management",
+      label: "Pass Management",
+      href: "/corporate/pass-management",
     },
     {
       id: "billing",
@@ -33,11 +33,7 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
       label: "Settings",
       href: "/corporate/settings",
     },
-    {
-      id: "support",
-      label: "Support",
-      href: "/corporate/support",
-    },
+    
     {
       id: "signout",
       label: "Sign Out",
@@ -138,7 +134,7 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
                 {item.id === "employees" && (
                   <Image 
                     src="/employeepasses.png" 
-                    alt="Employee Passes" 
+                    alt="Employee Management" 
                     width={20} 
                     height={20}
                     style={{
@@ -147,10 +143,10 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
                     }}
                   />
                 )}
-                {item.id === "reports" && (
+                {item.id === "pass-management" && (
                   <Image 
                     src="/report.png" 
-                    alt="Reports" 
+                    alt="Pass Management" 
                     width={20} 
                     height={20}
                     style={{
@@ -183,18 +179,7 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
                     }}
                   />
                 )}
-                {item.id === "support" && (
-                  <Image 
-                    src="/support.png" 
-                    alt="Support" 
-                    width={20} 
-                    height={20}
-                    style={{
-                      filter: active ? "brightness(0) invert(1)" : "none",
-                      opacity: active ? 1 : 0.6
-                    }}
-                  />
-                )}
+               
                 {item.id === "signout" && (
                   <Image 
                     src="/signout.png" 
