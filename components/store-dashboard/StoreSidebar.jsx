@@ -10,6 +10,7 @@ import {
   Wallet,
   Settings,
   Store,
+  ShoppingCart
 } from "lucide-react";
 
 const BRAND_ACCENT = "#ff5a1f";
@@ -18,6 +19,8 @@ const INACTIVE_ICON = "#6b7280";
 
 const nav = [
   { label: "Dashboard", href: "/store-partner/dashboard", icon: LayoutDashboard },
+
+    { label: "Orders", href: "/store-partner/orders", icon: ShoppingCart },
 
   // Multi-store (HQ / branches)
   { label: "My Stores", href: "/store-partner/all-stores", icon: Store },
