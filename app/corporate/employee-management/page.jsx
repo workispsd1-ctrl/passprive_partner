@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import * as XLSX from "xlsx";
 
 export default function EmployeeManagementPage() {
+  const [showAddForm, setShowAddForm] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -21,8 +22,64 @@ export default function EmployeeManagementPage() {
 
   const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
+  // Fetch employees from backend
+  const [employees, setEmployees] = useState([]);
+  const [fetchingEmployees, setFetchingEmployees] = useState(true);
+  const [fetchError, setFetchError] = useState("");
+
   // Authentication removed for now - using hardcoded corporate ID
   // TODO: Re-enable authentication when corporate login is implemented
+
+  // Fetch employees from backend
+  const fetchEmployees = async () => {
+    setFetchingEmployees(true);
+    setFetchError("");
+    
+    try {
+      const url = `${API_BASE}/api/corporates/${corporateId}/employees`;
+      console.log("Fetching employees from:", url);
+      
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Backend response error:", response.status, errorText);
+        throw new Error(
+          `Backend returned ${response.status}: ${errorText || "Failed to fetch employees"}. 
+          Please ensure the endpoint ${url} exists in your backend.`
+        );
+      }
+      
+      const data = await response.json();
+      console.log("Received employee data:", data);
+      
+      // Transform the data to match our UI format
+      const transformedEmployees = (data.employees || []).map((emp, index) => ({
+        id: index + 1,
+        name: emp.name || "N/A",
+        email: emp.email || "N/A",
+        phone: emp.phone || "N/A",
+        department: emp.department || "N/A",
+        designation: emp.designation || "N/A",
+        status: "Active",
+        joinedDate: emp.created_at ? new Date(emp.created_at).toISOString().split('T')[0] : "N/A"
+      }));
+      
+      setEmployees(transformedEmployees);
+    } catch (err) {
+      console.error("Error fetching employees:", err);
+      setFetchError(err.message || "Failed to load employees");
+    } finally {
+      setFetchingEmployees(false);
+    }
+  };
+
+  // Fetch employees on component mount
+  useEffect(() => {
+    if (corporateId) {
+      fetchEmployees();
+    }
+  }, [corporateId]);
 
   const handleAddEmployee = async () => {
     // Reset messages
@@ -140,7 +197,27 @@ export default function EmployeeManagementPage() {
         const failureReasons = failedUsers.map(f => `${f.email}: ${f.error || 'Unknown error'}`).join(', ');
         setError(`Failed to create employee(s): ${failureReasons}`);
       } else {
-        setSuccess(`Employee created successfully! ${createdUsers.length} created`);
+        // Add new employee to the local state
+        const newEmployee = {
+          id: employees.length + 1,
+          name: fullName,
+          email: email.trim(),
+          phone: `+91 ${phoneNumber.trim()}`,
+          department: department.trim(),
+          designation: designation.trim(),
+          status: "Active",
+          joinedDate: new Date().toISOString().split('T')[0]
+        };
+        setEmployees([...employees, newEmployee]);
+        
+        setSuccess(`Employee created successfully!`);
+        // Refresh employee list from backend
+        await fetchEmployees();
+        // Close form after 2 seconds
+        setTimeout(() => {
+          setShowAddForm(false);
+          setSuccess("");
+        }, 2000);
       }
     } catch (err) {
       setError(err.message || "Failed to add employee. Please try again.");
@@ -396,6 +473,9 @@ export default function EmployeeManagementPage() {
       
       setSuccess(message);
       setUploadProgress("");
+      
+      // Refresh employee list from backend
+      await fetchEmployees();
     } catch (err) {
       setError(err.message || "Failed to upload employees. Please try again.");
       setUploadProgress("");
@@ -407,7 +487,152 @@ export default function EmployeeManagementPage() {
   return (
     <div className="w-full min-h-screen bg-gray-50 py-6 sm:py-8 lg:py-10 px-4 sm:px-6 lg:px-8">
       {/* Whole Card Frame - Responsive */}
-      <div className="flex flex-col gap-5 sm:gap-6 max-w-5xl mx-auto w-full">
+      <div className="flex flex-col gap-5 sm:gap-6 max-w-7xl mx-auto w-full">
+        
+        {/* Header Section with Title and Add Employee Button */}
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-[#1E1E1E]">Employee Management</h1>
+          <button
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="bg-[#5D5FEF] hover:bg-[#4D4FDF] text-white rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#5D5FEF] focus:ring-offset-2 shadow-sm flex items-center gap-2"
+            style={{ 
+              padding: '10px 24px',
+              fontSize: '14px',
+              fontWeight: '600',
+              lineHeight: '1.2',
+              fontFamily: 'system-ui, -apple-system, sans-serif'
+            }}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={showAddForm ? "M6 18L18 6M6 6l12 12" : "M12 4v16m8-8H4"} />
+            </svg>
+            {showAddForm ? "Cancel" : "Add Employee"}
+          </button>
+        </div>
+
+        {/* Conditional Rendering: Show Form or Table */}
+        {!showAddForm ? (
+          /* Employee Table View */
+          <div className="bg-white border border-[#E5E5E5] rounded-xl shadow-sm w-full overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-[#E5E5E5]">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-[#6B6B6B] uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-[#6B6B6B] uppercase tracking-wider">
+                      Email
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-[#6B6B6B] uppercase tracking-wider">
+                      Phone
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-[#6B6B6B] uppercase tracking-wider">
+                      Department
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-[#6B6B6B] uppercase tracking-wider">
+                      Designation
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-[#6B6B6B] uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-[#6B6B6B] uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-[#E5E5E5]">
+                  {fetchingEmployees ? (
+                    <tr>
+                      <td colSpan="7" className="px-6 py-12 text-center">
+                        <div className="flex justify-center items-center gap-2 text-gray-500">
+                          <svg className="animate-spin h-5 w-5 text-[#5D5FEF]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Loading employees...
+                        </div>
+                      </td>
+                    </tr>
+                  ) : fetchError ? (
+                    <tr>
+                      <td colSpan="7" className="px-6 py-12 text-center">
+                        <div className="text-red-600 max-w-2xl mx-auto">
+                          <svg className="mx-auto h-12 w-12 text-red-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                          <p className="font-semibold text-lg mb-2">Error loading employees</p>
+                          <p className="text-sm text-gray-600 mb-3 whitespace-pre-line">{fetchError}</p>
+                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3 text-left">
+                            <p className="text-sm text-yellow-800">
+                              <strong>ℹ️ Backend Setup Required:</strong><br/>
+                              Create GET endpoint: <code className="bg-yellow-100 px-1 rounded">/api/corporates/{"{corporate_id}"}/employees</code><br/>
+                              Check <strong>BACKEND_ENDPOINT_NEEDED.md</strong> for implementation details.
+                            </p>
+                          </div>
+                          <button
+                            onClick={fetchEmployees}
+                            className="mt-2 bg-[#5D5FEF] hover:bg-[#4D4FDF] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                          >
+                            Try Again
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : employees.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
+                        No employees found. Click "Add Employee" to add your first employee.
+                      </td>
+                    </tr>
+                  ) : (
+                    employees.map((employee) => (
+                      <tr key={employee.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-10 w-10 bg-[#5D5FEF] rounded-full flex items-center justify-center text-white font-semibold">
+                              {employee.name.split(' ').map(n => n[0]).join('')}
+                            </div>
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-[#1E1E1E]">{employee.name}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-[#1E1E1E]">{employee.email}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-[#1E1E1E]">{employee.phone}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-[#1E1E1E]">{employee.department}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-[#1E1E1E]">{employee.designation}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                            {employee.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button className="text-[#5D5FEF] hover:text-[#4D4FDF] mr-4">
+                            Edit
+                          </button>
+                          <button className="text-red-600 hover:text-red-700">
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          /* Add Employee Form View */
+          <>
         {/* Upper Card - Responsive */}
         <div 
           className="bg-white border border-[#E5E5E5] rounded-xl shadow-sm w-full"
@@ -853,6 +1078,8 @@ export default function EmployeeManagementPage() {
             )}
           </div>
         </div>
+          </>
+        )}
       </div>
     </div>
   );
