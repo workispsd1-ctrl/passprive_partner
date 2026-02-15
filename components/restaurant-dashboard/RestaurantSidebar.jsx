@@ -13,6 +13,7 @@ import {
   Wallet,
   Settings,
   Soup,
+  Megaphone
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
@@ -25,6 +26,7 @@ const nav = [
   { label: "Reviews", href: "/restaurant/reviews", icon: Star },
   { label: "Analytics", href: "/restaurant/analytics", icon: LineChart },
   { label: "Payouts", href: "/restaurant/payouts", icon: Wallet },
+ { label: "Ads & Boost", href: "/restaurant/add-request", icon: Megaphone },
   { label: "Settings", href: "/restaurant/settings", icon: Settings },
 ];
 
