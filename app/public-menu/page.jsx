@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import {
@@ -15,7 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 
-const TAX_PERCENT = 15; 
+const TAX_PERCENT = 15;
 
 function getMenuImageUrls(menuObj) {
   if (!menuObj || typeof menuObj !== "object") return [];
@@ -70,7 +70,7 @@ function MenuSkeleton() {
   );
 }
 
-export default function PublicRestaurantMenuPage() {
+function PublicRestaurantMenuContent() {
   const searchParams = useSearchParams();
   const restaurantId = String(searchParams.get("id") || "").trim();
 
@@ -582,5 +582,13 @@ export default function PublicRestaurantMenuPage() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+export default function PublicRestaurantMenuPage() {
+  return (
+    <Suspense fallback={<MenuSkeleton />}>
+      <PublicRestaurantMenuContent />
+    </Suspense>
   );
 }
