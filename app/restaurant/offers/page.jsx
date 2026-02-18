@@ -10,6 +10,7 @@ const OFFER_KIND = {
   GENERAL: "GENERAL",
   TIME_SLOT: "TIME_SLOT",
   VISIT: "VISIT",
+  DISH: "DISH",
 };
 
 const WEEK_DAYS = [
@@ -22,10 +23,38 @@ const WEEK_DAYS = [
   { key: "SUN", label: "Sun" },
 ];
 
+const DEMO_CARD = {
+  number: "4242 4242 4242 4242",
+  expiry: "12/34",
+  cvv: "123",
+};
+
 function uid() {
   return typeof crypto !== "undefined" && crypto.randomUUID
     ? crypto.randomUUID()
     : `id_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+/* ----------------------------
+   CARD HELPERS (FIXED)
+-----------------------------*/
+function normalizeCardNumber(v) {
+  return String(v || "").replace(/\D/g, "");
+}
+
+function formatCardNumber(v) {
+  const digits = normalizeCardNumber(v).slice(0, 16);
+  return digits.replace(/(.{4})/g, "$1 ").trim();
+}
+
+function formatExpiry(v) {
+  const digits = String(v || "").replace(/\D/g, "").slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
+function formatCvv(v) {
+  return String(v || "").replace(/\D/g, "").slice(0, 4);
 }
 
 /* ----------------------------
@@ -34,7 +63,7 @@ function uid() {
 const EMPTY_TIER = () => ({
   id: uid(),
   visitCount: "",
-  rewardType: "FREE_ITEM", // FREE_ITEM | PERCENT | FLAT
+  rewardType: "FREE_ITEM",
   rewardLabel: "",
   rewardValue: "",
 });
@@ -43,11 +72,10 @@ const EMPTY_OFFER = (kind = OFFER_KIND.GENERAL) => ({
   id: uid(),
   offerKind: kind,
 
-  // NOTE: For VISIT offers we ignore title/promoCode/dates/isActive/conditions (standard program).
   title: "",
   promoCode: "",
 
-  discountType: "PERCENT", // PERCENT | FLAT
+  discountType: "PERCENT",
   discountValue: "",
 
   startDate: "",
@@ -57,10 +85,8 @@ const EMPTY_OFFER = (kind = OFFER_KIND.GENERAL) => ({
   slotEnd: "",
   weekdays: [],
 
-  // For VISIT offers: treated as always active (standard).
   isActive: true,
 
-  // For VISIT offers: not used (we will strip on save and hide in UI).
   conditions: {
     minGuests: "",
     minBillAmount: "",
@@ -70,6 +96,13 @@ const EMPTY_OFFER = (kind = OFFER_KIND.GENERAL) => ({
   visitRewards: {
     enabled: kind === OFFER_KIND.VISIT,
     tiers: [EMPTY_TIER()],
+  },
+
+  dishDiscount: {
+    dishId: "",
+    dishName: "",
+    sectionId: "",
+    sectionName: "",
   },
 });
 
@@ -86,6 +119,7 @@ function normalizeOffers(rawOffer) {
 function inferKind(o) {
   if (o?.offerKind && Object.values(OFFER_KIND).includes(o.offerKind)) return o.offerKind;
   if (o?.visitRewards?.enabled) return OFFER_KIND.VISIT;
+  if (o?.dishDiscount?.dishId || o?.dishId) return OFFER_KIND.DISH;
   if (o?.slotStart || o?.slotEnd || (Array.isArray(o?.weekdays) && o.weekdays.length > 0))
     return OFFER_KIND.TIME_SLOT;
   return OFFER_KIND.GENERAL;
@@ -118,11 +152,6 @@ function sanitizeTier(t) {
 function sanitizeOffer(o) {
   const kind = inferKind(o);
 
-  // VISIT: Standard loyalty program (tiers only)
-  // - no title / promo code
-  // - no date validity
-  // - no active/inactive toggle
-  // - no conditions
   if (kind === OFFER_KIND.VISIT) {
     const rawTiers = Array.isArray(o?.visitRewards?.tiers) ? o.visitRewards.tiers : [];
     const tiers = rawTiers.map(sanitizeTier);
@@ -130,12 +159,7 @@ function sanitizeOffer(o) {
     return {
       id: o.id || uid(),
       offerKind: OFFER_KIND.VISIT,
-      visitRewards: {
-        enabled: true,
-        tiers,
-      },
-
-      // enforce always active & strip irrelevant fields
+      visitRewards: { enabled: true, tiers },
       isActive: true,
       title: "",
       promoCode: "",
@@ -147,10 +171,10 @@ function sanitizeOffer(o) {
       slotEnd: "",
       weekdays: [],
       conditions: null,
+      dishDiscount: null,
     };
   }
 
-  // GENERAL / TIME_SLOT (campaign style)
   const discountValue =
     o.discountValue === "" || o.discountValue == null ? "" : Number(o.discountValue);
 
@@ -164,8 +188,30 @@ function sanitizeOffer(o) {
       ? ""
       : Number(o.conditions.minBillAmount);
 
-  const rawTiers = Array.isArray(o?.visitRewards?.tiers) ? o.visitRewards.tiers : [];
-  const tiers = rawTiers.map(sanitizeTier);
+  if (kind === OFFER_KIND.DISH) {
+    return {
+      id: o.id || uid(),
+      offerKind: OFFER_KIND.DISH,
+      title: String(o.title || "").trim(),
+      promoCode: String(o.promoCode || "").toUpperCase(),
+      discountType: o.discountType || "PERCENT",
+      discountValue,
+      startDate: o.startDate || "",
+      endDate: o.endDate || "",
+      isActive: Boolean(o.isActive),
+      dishDiscount: {
+        dishId: o?.dishDiscount?.dishId || o?.dishId || "",
+        dishName: o?.dishDiscount?.dishName || o?.dishName || "",
+        sectionId: o?.dishDiscount?.sectionId || "",
+        sectionName: o?.dishDiscount?.sectionName || "",
+      },
+      slotStart: "",
+      slotEnd: "",
+      weekdays: [],
+      conditions: null,
+      visitRewards: { enabled: false, tiers: [] },
+    };
+  }
 
   return {
     ...o,
@@ -180,17 +226,14 @@ function sanitizeOffer(o) {
       minBillAmount,
       newUsersOnly: Boolean(o.conditions?.newUsersOnly),
     },
-    visitRewards: {
-      enabled: Boolean(o?.visitRewards?.enabled),
-      tiers,
-    },
+    visitRewards: { enabled: false, tiers: [] },
+    dishDiscount: null,
   };
 }
 
 function normalizeOneOffer(o) {
   const offerKind = inferKind(o);
 
-  // VISIT: tiers only
   if (offerKind === OFFER_KIND.VISIT) {
     const tiers = Array.isArray(o?.visitRewards?.tiers)
       ? o.visitRewards.tiers.map(normalizeTier)
@@ -210,17 +253,35 @@ function normalizeOneOffer(o) {
       weekdays: [],
       isActive: true,
       conditions: null,
-      visitRewards: {
-        enabled: true,
-        tiers,
-      },
+      visitRewards: { enabled: true, tiers },
+      dishDiscount: { dishId: "", dishName: "", sectionId: "", sectionName: "" },
     };
   }
 
-  // GENERAL / TIME_SLOT
-  const tiers = Array.isArray(o?.visitRewards?.tiers)
-    ? o.visitRewards.tiers.map(normalizeTier)
-    : [EMPTY_TIER()];
+  if (offerKind === OFFER_KIND.DISH) {
+    return {
+      id: o.id || uid(),
+      offerKind: OFFER_KIND.DISH,
+      title: o.title || "",
+      promoCode: (o.promoCode || "").toUpperCase(),
+      discountType: o.discountType || "PERCENT",
+      discountValue: o.discountValue ?? "",
+      startDate: o.startDate || "",
+      endDate: o.endDate || "",
+      slotStart: "",
+      slotEnd: "",
+      weekdays: [],
+      isActive: typeof o.isActive === "boolean" ? o.isActive : true,
+      conditions: null,
+      visitRewards: { enabled: false, tiers: [] },
+      dishDiscount: {
+        dishId: o?.dishDiscount?.dishId || o?.dishId || "",
+        dishName: o?.dishDiscount?.dishName || o?.dishName || "",
+        sectionId: o?.dishDiscount?.sectionId || "",
+        sectionName: o?.dishDiscount?.sectionName || "",
+      },
+    };
+  }
 
   return {
     id: o.id || uid(),
@@ -240,10 +301,8 @@ function normalizeOneOffer(o) {
       minBillAmount: o.conditions?.minBillAmount ?? "",
       newUsersOnly: Boolean(o.conditions?.newUsersOnly),
     },
-    visitRewards: {
-      enabled: offerKind === OFFER_KIND.VISIT ? true : Boolean(o?.visitRewards?.enabled),
-      tiers,
-    },
+    visitRewards: { enabled: false, tiers: [] },
+    dishDiscount: { dishId: "", dishName: "", sectionId: "", sectionName: "" },
   };
 }
 
@@ -292,6 +351,11 @@ function formatOfferLine(o) {
     return `${amt} • ${datePart} • ${dayPart} • ${slotPart}`;
   }
 
+  if (o.offerKind === OFFER_KIND.DISH) {
+    const dishName = o?.dishDiscount?.dishName || "Selected dish";
+    return `${dishName} • ${amt} • ${datePart}`;
+  }
+
   return `${amt} • ${datePart}`;
 }
 
@@ -332,10 +396,21 @@ export default function OffersPage() {
 
   const [restaurantId, setRestaurantId] = useState(null);
   const [offers, setOffers] = useState([]);
+  const [menuItems, setMenuItems] = useState([]);
+
+  const [isSubscribed, setIsSubscribed] = useState(false);
 
   const [openModal, setOpenModal] = useState(false);
   const [editingOfferId, setEditingOfferId] = useState(null);
   const [formOffer, setFormOffer] = useState(EMPTY_OFFER());
+
+  const [openPaymentModal, setOpenPaymentModal] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
+  const [cardName, setCardName] = useState("");
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardCvv, setCardCvv] = useState("");
 
   const [lastError, setLastError] = useState("");
 
@@ -359,7 +434,7 @@ export default function OffersPage() {
 
     const { data, error } = await supabaseBrowser
       .from("restaurants")
-      .select("id, offer")
+      .select("id, offer, menu, subscribed")
       .eq("owner_user_id", user.id)
       .single();
 
@@ -372,6 +447,21 @@ export default function OffersPage() {
     if (data) {
       setRestaurantId(data.id);
       setOffers(normalizeOffers(data.offer).map(normalizeOneOffer));
+      setIsSubscribed(Boolean(data.subscribed));
+
+      const sections = Array.isArray(data?.menu?.sections) ? data.menu.sections : [];
+      const items = [];
+      sections.forEach((s) => {
+        (Array.isArray(s?.items) ? s.items : []).forEach((i) => {
+          items.push({
+            sectionId: s.id || "",
+            sectionName: s.name || "",
+            dishId: i.id || "",
+            dishName: i.name || "",
+          });
+        });
+      });
+      setMenuItems(items);
     }
 
     setLoading(false);
@@ -399,7 +489,69 @@ export default function OffersPage() {
     return true;
   }
 
+  async function activatePremiumSubscription() {
+    if (!restaurantId) return false;
+    const { error } = await supabaseBrowser
+      .from("restaurants")
+      .update({ subscribed: true })
+      .eq("id", restaurantId);
+
+    if (error) {
+      setPaymentError(error.message || "Failed to activate premium.");
+      return false;
+    }
+
+    setIsSubscribed(true);
+    return true;
+  }
+
+  function openPayment() {
+    setPaymentError("");
+    setCardName("");
+    setCardNumber("");
+    setCardExpiry("");
+    setCardCvv("");
+    setOpenPaymentModal(true);
+  }
+
+  async function onPayAndUnlock() {
+    setPaymentError("");
+
+    const isDemoNumber = normalizeCardNumber(cardNumber) === normalizeCardNumber(DEMO_CARD.number);
+    const isDemoExpiry = cardExpiry === DEMO_CARD.expiry;
+    const isDemoCvv = cardCvv === DEMO_CARD.cvv;
+
+    if (!cardName.trim()) {
+      setPaymentError("Enter cardholder name.");
+      return;
+    }
+    if (!isDemoNumber || !isDemoExpiry || !isDemoCvv) {
+      setPaymentError("Use demo card details exactly to unlock premium.");
+      return;
+    }
+
+    setPaying(true);
+    await new Promise((r) => setTimeout(r, 900));
+    const ok = await activatePremiumSubscription();
+    setPaying(false);
+
+    if (ok) {
+      setOpenPaymentModal(false);
+      await loadData();
+    }
+  }
+
+  function ensurePremium(kind) {
+    if (kind === OFFER_KIND.GENERAL) return true;
+    if (!isSubscribed) {
+      openPayment();
+      return false;
+    }
+    return true;
+  }
+
   function openCreate(kind = OFFER_KIND.GENERAL) {
+    if (!ensurePremium(kind)) return;
     setEditingOfferId(null);
     setFormOffer(EMPTY_OFFER(kind));
     setOpenModal(true);
@@ -409,9 +561,12 @@ export default function OffersPage() {
     const found = offers.find((o) => o.id === id);
     if (!found) return;
 
+    const kind = found.offerKind || inferKind(found);
+    if (!ensurePremium(kind)) return;
+
     setEditingOfferId(id);
 
-    if ((found.offerKind || inferKind(found)) === OFFER_KIND.VISIT) {
+    if (kind === OFFER_KIND.VISIT) {
       setFormOffer({
         ...EMPTY_OFFER(OFFER_KIND.VISIT),
         ...found,
@@ -434,7 +589,7 @@ export default function OffersPage() {
     }
 
     setFormOffer({
-      ...EMPTY_OFFER(found.offerKind || OFFER_KIND.GENERAL),
+      ...EMPTY_OFFER(kind),
       ...found,
       conditions: {
         minGuests: found.conditions?.minGuests ?? "",
@@ -446,6 +601,12 @@ export default function OffersPage() {
         tiers: Array.isArray(found?.visitRewards?.tiers)
           ? found.visitRewards.tiers.map(normalizeTier)
           : [EMPTY_TIER()],
+      },
+      dishDiscount: {
+        dishId: found?.dishDiscount?.dishId || "",
+        dishName: found?.dishDiscount?.dishName || "",
+        sectionId: found?.dishDiscount?.sectionId || "",
+        sectionName: found?.dishDiscount?.sectionName || "",
       },
     });
     setOpenModal(true);
@@ -498,6 +659,8 @@ export default function OffersPage() {
     const cleaned = sanitizeOffer(formOffer);
     const kind = cleaned.offerKind || inferKind(cleaned) || OFFER_KIND.GENERAL;
 
+    if (!ensurePremium(kind)) return;
+
     if (kind === OFFER_KIND.VISIT) {
       const tiers = Array.isArray(cleaned.visitRewards?.tiers) ? cleaned.visitRewards.tiers : [];
       if (!tiers.length) return alert("Add at least one visit reward tier.");
@@ -525,6 +688,28 @@ export default function OffersPage() {
       }
 
       cleaned.visitRewards.enabled = true;
+
+      const next = (() => {
+        const exists = offers.some((o) => o.id === cleaned.id);
+        if (exists) return offers.map((o) => (o.id === cleaned.id ? cleaned : o));
+        return [cleaned, ...offers];
+      })();
+
+      setOffers(next);
+      const ok = await saveOffersOnly(next);
+      if (ok) setOpenModal(false);
+      return;
+    }
+
+    if (kind === OFFER_KIND.DISH) {
+      if (!cleaned.dishDiscount?.dishId || !cleaned.dishDiscount?.dishName) {
+        return alert("Please select a dish.");
+      }
+      if (!cleaned.title?.trim()) return alert("Please enter an offer title.");
+      if (!cleaned.promoCode?.trim()) return alert("Please enter a promo code.");
+      if (cleaned.discountValue === "" || Number.isNaN(Number(cleaned.discountValue))) {
+        return alert("Please enter a valid discount value.");
+      }
 
       const next = (() => {
         const exists = offers.some((o) => o.id === cleaned.id);
@@ -566,6 +751,10 @@ export default function OffersPage() {
 
   async function removeOffer(id) {
     if (!confirm("Delete this offer?")) return;
+    const target = offers.find((o) => o.id === id);
+    if (!target) return;
+    if (!ensurePremium(target.offerKind || inferKind(target))) return;
+
     const next = offers.filter((o) => o.id !== id);
     setOffers(next);
     await saveOffersOnly(next);
@@ -574,6 +763,7 @@ export default function OffersPage() {
   async function toggleOfferActive(id) {
     const target = offers.find((o) => o.id === id);
     if (!target) return;
+    if (!ensurePremium(target.offerKind || inferKind(target))) return;
 
     if ((target.offerKind || inferKind(target)) === OFFER_KIND.VISIT) return;
 
@@ -597,6 +787,11 @@ export default function OffersPage() {
     [offers]
   );
 
+  const dishOffers = useMemo(
+    () => offers.filter((o) => (o.offerKind || inferKind(o)) === OFFER_KIND.DISH),
+    [offers]
+  );
+
   const activeOffers = useMemo(
     () =>
       offers.filter((o) => {
@@ -607,7 +802,9 @@ export default function OffersPage() {
     [offers]
   );
 
-  function renderSection(title, sectionOffers, kind, hint) {
+  function renderSection(title, sectionOffers, kind, hint, premium = false) {
+    const locked = premium && !isSubscribed;
+
     return (
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
@@ -616,7 +813,14 @@ export default function OffersPage() {
             <p className="text-xs text-slate-500">{hint}</p>
           </div>
 
-          {kind === OFFER_KIND.VISIT ? (
+          {locked ? (
+            <button
+              onClick={openPayment}
+              className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100 cursor-pointer"
+            >
+              Unlock Premium
+            </button>
+          ) : kind === OFFER_KIND.VISIT ? (
             <button
               onClick={() => {
                 if (sectionOffers?.length) openEdit(sectionOffers[0].id);
@@ -624,7 +828,7 @@ export default function OffersPage() {
               }}
               className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
             >
-              {sectionOffers?.length ? "Edit program" : "+ Setup"}
+              {sectionOffers?.length ? "Edit Program" : "+ Setup Program"}
             </button>
           ) : (
             <button
@@ -636,7 +840,11 @@ export default function OffersPage() {
           )}
         </div>
 
-        {sectionOffers.length === 0 ? (
+        {locked ? (
+          <div className="px-6 py-8 text-sm text-slate-500">
+            This section is available for Premium partners only.
+          </div>
+        ) : sectionOffers.length === 0 ? (
           <div className="px-6 py-8 text-sm text-slate-500">No {title.toLowerCase()} yet.</div>
         ) : (
           <div className="divide-y divide-slate-100">
@@ -733,7 +941,9 @@ export default function OffersPage() {
 
   if (loading) return <Skeleton />;
 
-  const isVisitForm = (formOffer.offerKind || inferKind(formOffer)) === OFFER_KIND.VISIT;
+  const currentKind = formOffer.offerKind || inferKind(formOffer);
+  const isVisitForm = currentKind === OFFER_KIND.VISIT;
+  const isDishForm = currentKind === OFFER_KIND.DISH;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -753,26 +963,147 @@ export default function OffersPage() {
 
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
         <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <p className="text-xs text-slate-500">Offer campaigns</p>
-          <p className="text-2xl font-semibold text-slate-900 mt-1">{activeOffers.length} active</p>
+          <p className="text-xs text-slate-500">Partner Offer Center</p>
+          <p className="text-2xl font-semibold text-slate-900 mt-1">{activeOffers.length} active campaigns</p>
           <p className="text-sm text-slate-600 mt-1">
-            Manage three sections: General offers, Time slot offers, and a standard Repeat Rewards program.
+            General offers are available for all partners. Time-slot, repeat rewards, and dish discounts are premium features.
+          </p>
+          <p className="text-xs mt-2">
+            {isSubscribed ? (
+              <span className="rounded-full bg-emerald-50 text-emerald-700 px-2 py-1">Premium Active</span>
+            ) : (
+              <span className="rounded-full bg-amber-50 text-amber-700 px-2 py-1">Premium Locked</span>
+            )}
           </p>
         </div>
 
-        {renderSection("General Offers", generalOffers, OFFER_KIND.GENERAL, "Anytime flat/percent campaign")}
-        {renderSection("Time Slot Offers", timeSlotOffers, OFFER_KIND.TIME_SLOT, "Day and slot-specific discounts")}
-        {renderSection("Repeat Rewards", visitOffers, OFFER_KIND.VISIT, "Standard loyalty program to increase repeats")}
+        {renderSection(
+          "General Offers",
+          generalOffers,
+          OFFER_KIND.GENERAL,
+          "Standard campaigns available to every partner",
+          false
+        )}
+        {renderSection(
+          "Time Slot Offers",
+          timeSlotOffers,
+          OFFER_KIND.TIME_SLOT,
+          "Day and time-specific premium campaigns",
+          true
+        )}
+        {renderSection(
+          "Repeat Rewards",
+          visitOffers,
+          OFFER_KIND.VISIT,
+          "Premium loyalty rewards program for repeat visits",
+          true
+        )}
+        {renderSection(
+          "Dish Discounts",
+          dishOffers,
+          OFFER_KIND.DISH,
+          "Premium dish-level discounts on specific menu items",
+          true
+        )}
       </div>
 
       <button
         type="button"
         onClick={() => openCreate(OFFER_KIND.GENERAL)}
         className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-[#DA3224] text-white text-3xl flex items-center justify-center shadow-lg hover:opacity-95 active:scale-95 transition"
-        title="Create offer"
+        title="Create general offer"
       >
         +
       </button>
+
+      {openPaymentModal && (
+        <div className="fixed inset-0 z-[90] p-4 sm:p-6">
+          <div className="absolute inset-0 bg-black/40" onClick={() => !paying && setOpenPaymentModal(false)} />
+          <div className="relative mx-auto w-full max-w-lg rounded-2xl bg-white border border-slate-200 shadow-xl overflow-hidden">
+            <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
+              <p className="text-sm font-semibold text-slate-900">Premium Payment</p>
+              <button
+                onClick={() => !paying && setOpenPaymentModal(false)}
+                className="rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="px-6 py-6 space-y-4">
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700">
+                Demo card: {DEMO_CARD.number} | {DEMO_CARD.expiry} | {DEMO_CARD.cvv}
+              </div>
+
+              {paymentError ? (
+                <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-700">
+                  {paymentError}
+                </div>
+              ) : null}
+
+              <div>
+                <p className="text-xs text-slate-600 mb-2">Cardholder name</p>
+                <input
+                  value={cardName}
+                  onChange={(e) => setCardName(e.target.value)}
+                  placeholder="Demo User"
+                  className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm outline-none border border-slate-200"
+                />
+              </div>
+
+              <div>
+                <p className="text-xs text-slate-600 mb-2">Card number</p>
+                <input
+                  value={cardNumber}
+                  onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
+                  placeholder="4242 4242 4242 4242"
+                  inputMode="numeric"
+                  className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm outline-none border border-slate-200"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-slate-600 mb-2">Expiry</p>
+                  <input
+                    value={cardExpiry}
+                    onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
+                    placeholder="12/34"
+                    inputMode="numeric"
+                    className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm outline-none border border-slate-200"
+                  />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-600 mb-2">CVV</p>
+                  <input
+                    value={cardCvv}
+                    onChange={(e) => setCardCvv(formatCvv(e.target.value))}
+                    placeholder="123"
+                    inputMode="numeric"
+                    className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm outline-none border border-slate-200"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-5 border-t border-slate-200 flex justify-end gap-3 bg-white">
+              <button
+                onClick={() => !paying && setOpenPaymentModal(false)}
+                className="rounded-xl px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onPayAndUnlock}
+                disabled={paying}
+                className="rounded-xl bg-[#DA3224] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {paying ? "Processing..." : "Pay & Unlock Premium"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {openModal && (
         <div className="fixed inset-0 z-[60] p-4 sm:p-6">
@@ -780,7 +1111,13 @@ export default function OffersPage() {
           <div className="relative mx-auto w-full max-w-2xl max-h-[90vh] rounded-2xl bg-white border border-slate-200 shadow-xl flex flex-col">
             <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between shrink-0">
               <p className="text-sm font-semibold text-slate-900">
-                {isVisitForm ? "Repeat Rewards Program" : editingOfferId ? "Edit offer" : "Create offer"}
+                {isVisitForm
+                  ? "Repeat Rewards Program"
+                  : isDishForm
+                  ? "Dish Discount Offer"
+                  : editingOfferId
+                  ? "Edit offer"
+                  : "Create offer"}
               </p>
               <button
                 onClick={() => setOpenModal(false)}
@@ -793,46 +1130,61 @@ export default function OffersPage() {
             <div className="px-6 py-6 space-y-6 overflow-y-auto">
               {!isVisitForm ? (
                 <div>
-                  <p className="text-xs text-slate-600 mb-2">Offer section</p>
+                  <p className="text-xs text-slate-600 mb-2">Offer type</p>
                   <select
                     value={formOffer.offerKind}
                     onChange={(e) => {
                       const kind = e.target.value;
+                      if (!ensurePremium(kind)) return;
                       setFormOffer((prev) => ({
                         ...prev,
                         offerKind: kind,
-                        visitRewards: {
-                          enabled: kind === OFFER_KIND.VISIT,
-                          tiers:
-                            prev.visitRewards?.tiers?.length > 0 ? prev.visitRewards.tiers : [EMPTY_TIER()],
-                        },
                         weekdays: kind === OFFER_KIND.TIME_SLOT ? prev.weekdays || [] : [],
                         slotStart: kind === OFFER_KIND.TIME_SLOT ? prev.slotStart || "" : "",
                         slotEnd: kind === OFFER_KIND.TIME_SLOT ? prev.slotEnd || "" : "",
+                        dishDiscount:
+                          kind === OFFER_KIND.DISH
+                            ? prev.dishDiscount || {
+                                dishId: "",
+                                dishName: "",
+                                sectionId: "",
+                                sectionName: "",
+                              }
+                            : {
+                                dishId: "",
+                                dishName: "",
+                                sectionId: "",
+                                sectionName: "",
+                              },
                       }));
                     }}
                     className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
                   >
                     <option value={OFFER_KIND.GENERAL}>General Offer</option>
-                    <option value={OFFER_KIND.TIME_SLOT}>Time Slot Offer</option>
+                    <option value={OFFER_KIND.TIME_SLOT} disabled={!isSubscribed}>
+                      Time Slot Offer (Premium)
+                    </option>
+                    <option value={OFFER_KIND.DISH} disabled={!isSubscribed}>
+                      Dish Discount (Premium)
+                    </option>
                   </select>
                 </div>
               ) : (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-sm font-semibold text-slate-900">Standard program</p>
+                  <p className="text-sm font-semibold text-slate-900">Standard loyalty program</p>
                   <p className="text-xs text-slate-600 mt-1">
-                    This rewards setup applies to all customers to increase repeat visits.
+                    This reward setup applies to all customers and encourages repeat dining.
                   </p>
                 </div>
               )}
 
-              {!isVisitForm ? (
+              {!isVisitForm && (
                 <>
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
                       <p className="text-xs text-slate-600 mb-2">Offer title</p>
                       <input
-                        placeholder="e.g. Happy Hour Boost"
+                        placeholder="e.g. Lunch Deal"
                         value={formOffer.title}
                         onChange={(e) => setFormOffer({ ...formOffer, title: e.target.value })}
                         className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
@@ -842,13 +1194,44 @@ export default function OffersPage() {
                     <div>
                       <p className="text-xs text-slate-600 mb-2">Promo code</p>
                       <input
-                        placeholder="e.g. SLOT20"
+                        placeholder="e.g. SAVE20"
                         value={formOffer.promoCode}
                         onChange={(e) => setFormOffer({ ...formOffer, promoCode: e.target.value.toUpperCase() })}
                         className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm font-mono outline-none focus:ring-2 focus:ring-slate-200"
                       />
                     </div>
                   </div>
+
+                  {isDishForm && (
+                    <div>
+                      <p className="text-xs text-slate-600 mb-2">Select dish</p>
+                      <select
+                        value={formOffer?.dishDiscount?.dishId || ""}
+                        onChange={(e) => {
+                          const dishId = e.target.value;
+                          const found = menuItems.find((m) => m.dishId === dishId);
+                          setFormOffer((prev) => ({
+                            ...prev,
+                            dishDiscount: {
+                              dishId: found?.dishId || "",
+                              dishName: found?.dishName || "",
+                              sectionId: found?.sectionId || "",
+                              sectionName: found?.sectionName || "",
+                            },
+                          }));
+                        }}
+                        className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
+                      >
+                        <option value="">Select a dish</option>
+                        {menuItems.map((m) => (
+                          <option key={m.dishId} value={m.dishId}>
+                            {m.sectionName ? `${m.sectionName} -> ` : ""}
+                            {m.dishName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   <div className="grid md:grid-cols-3 gap-4">
                     <div>
@@ -910,7 +1293,7 @@ export default function OffersPage() {
                     </div>
                   </div>
 
-                  {formOffer.offerKind === OFFER_KIND.TIME_SLOT ? (
+                  {formOffer.offerKind === OFFER_KIND.TIME_SLOT && (
                     <>
                       <div className="grid md:grid-cols-2 gap-4">
                         <div>
@@ -957,12 +1340,11 @@ export default function OffersPage() {
                         </div>
                       </div>
                     </>
-                  ) : null}
+                  )}
                 </>
-              ) : null}
+              )}
 
-              {/* VISIT rewards editor */}
-              {isVisitForm ? (
+              {isVisitForm && (
                 <div className="rounded-2xl border border-slate-200 p-5 space-y-4">
                   <p className="text-sm font-semibold text-slate-900">Visit rewards (1 to 10)</p>
 
@@ -1051,7 +1433,7 @@ export default function OffersPage() {
                     + Add Visit Reward Tier
                   </button>
                 </div>
-              ) : null}
+              )}
             </div>
 
             <div className="px-6 py-5 border-t border-slate-200 flex justify-end gap-3 shrink-0 bg-white">

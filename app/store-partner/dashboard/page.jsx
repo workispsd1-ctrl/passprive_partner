@@ -234,7 +234,7 @@ export default function StorePartnerDashboardPage() {
         </div>
 
         {/* Middle grid */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="">
           <div className="xl:col-span-2">
             <CardShell
               title="Sales Overview"
@@ -287,31 +287,7 @@ export default function StorePartnerDashboardPage() {
             </CardShell>
           </div>
 
-          <CardShell title="Top Products">
-            {loading ? (
-              <div className="space-y-3">
-                <SkeletonBlock className="h-16" />
-                <SkeletonBlock className="h-16" />
-                <SkeletonBlock className="h-16" />
-                <SkeletonBlock className="h-16" />
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {topProducts.map((p) => (
-                  <div
-                    key={p.name}
-                    className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white p-4"
-                  >
-                    <div>
-                      <div className="text-sm font-semibold text-gray-900">{p.name}</div>
-                      <div className="text-xs text-gray-500">{p.sold} sold</div>
-                    </div>
-                    <div className="text-sm font-semibold text-gray-900">{p.revenue}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardShell>
+          
         </div>
 
         {/* Recent Orders */}

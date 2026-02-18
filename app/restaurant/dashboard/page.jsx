@@ -202,7 +202,68 @@ export default function RestaurantDashboardPage() {
   }, [reviews]);
 
   if (loading) {
-    return <div className="p-6 text-sm text-gray-500">Loading dashboard...</div>;
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div />
+          <div className="h-10 w-full sm:w-44 rounded-xl bg-gray-200" />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="h-4 w-20 rounded bg-gray-200" />
+              <div className="mt-3 h-8 w-24 rounded bg-gray-200" />
+              <div className="mt-3 h-3 w-28 rounded bg-gray-200" />
+              <div className="mt-4 h-1.5 w-16 rounded-full bg-gray-200" />
+            </div>
+          ))}
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="h-5 w-36 rounded bg-gray-200" />
+            <div className="mt-4 h-64 rounded-xl border border-gray-200 bg-gray-100" />
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="h-5 w-32 rounded bg-gray-200" />
+            <div className="mt-4 space-y-3">
+              <div className="h-16 rounded-xl bg-gray-100" />
+              <div className="h-16 rounded-xl bg-gray-100" />
+              <div className="h-16 rounded-xl bg-gray-100" />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="h-5 w-44 rounded bg-gray-200" />
+            <div className="mt-4 space-y-2 rounded-xl border border-gray-200 p-3">
+              <div className="h-12 rounded bg-gray-100" />
+              <div className="h-12 rounded bg-gray-100" />
+              <div className="h-12 rounded bg-gray-100" />
+            </div>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="h-5 w-36 rounded bg-gray-200" />
+            <div className="mt-4 space-y-3">
+              <div className="h-16 rounded-xl bg-gray-100" />
+              <div className="h-16 rounded-xl bg-gray-100" />
+              <div className="h-16 rounded-xl bg-gray-100" />
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <div className="h-5 w-32 rounded bg-gray-200" />
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="h-20 rounded-xl bg-gray-100" />
+            <div className="h-20 rounded-xl bg-gray-100" />
+            <div className="h-20 rounded-xl bg-gray-100" />
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

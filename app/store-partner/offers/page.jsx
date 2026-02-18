@@ -500,16 +500,7 @@ export default function CreateOfferPage() {
                   />
                 </Field>
 
-                <Field label="Stackable">
-                  <label className="h-11 inline-flex items-center gap-2 text-sm text-gray-700">
-                    <input
-                      type="checkbox"
-                      checked={stackable}
-                      onChange={(e) => setStackable(e.target.checked)}
-                    />
-                    Allow stacking with other offers
-                  </label>
-                </Field>
+                
               </div>
 
               <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
