@@ -211,20 +211,11 @@ export default function Page() {
   const [contactPerson, setContactPerson] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [countryCode, setCountryCode] = useState("+91");
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [pincode, setPincode] = useState("");
-  
-  const [registrationNumber, setRegistrationNumber] = useState("");
-  const [gstNumber, setGstNumber] = useState("");
-  const [panNumber, setPanNumber] = useState("");
-  
-  const [maxEmployees, setMaxEmployees] = useState("");
-  const [passValidity, setPassValidity] = useState("30");
-  
-  const [isActive, setIsActive] = useState(true);
-  const [autoApprove, setAutoApprove] = useState(false);
 
   // Logo
   const [logoUrl, setLogoUrl] = useState("");
@@ -294,16 +285,6 @@ export default function Page() {
     setState(data.state || "");
     setPincode(data.pincode || "");
     
-    setRegistrationNumber(data.registration_number || "");
-    setGstNumber(data.gst_number || "");
-    setPanNumber(data.pan_number || "");
-    
-    setMaxEmployees(data.max_employees != null ? String(data.max_employees) : "");
-    setPassValidity(data.pass_validity_days != null ? String(data.pass_validity_days) : "30");
-    
-    setIsActive(Boolean(data.is_active));
-    setAutoApprove(Boolean(data.auto_approve_employees));
-    
     setLogoUrl(data.logo_url || "");
     
     setNewLogoFile(null);
@@ -326,13 +307,6 @@ export default function Page() {
       (corporate.city || "") !== city ||
       (corporate.state || "") !== state ||
       (corporate.pincode || "") !== pincode ||
-      (corporate.registration_number || "") !== registrationNumber ||
-      (corporate.gst_number || "") !== gstNumber ||
-      (corporate.pan_number || "") !== panNumber ||
-      String(corporate.max_employees ?? "") !== String(maxEmployees ?? "") ||
-      String(corporate.pass_validity_days ?? "30") !== String(passValidity ?? "30") ||
-      Boolean(corporate.is_active) !== Boolean(isActive) ||
-      Boolean(corporate.auto_approve_employees) !== Boolean(autoApprove) ||
       (corporate.logo_url || "") !== logoUrl
     );
   }, [
@@ -345,13 +319,6 @@ export default function Page() {
     city,
     state,
     pincode,
-    registrationNumber,
-    gstNumber,
-    panNumber,
-    maxEmployees,
-    passValidity,
-    isActive,
-    autoApprove,
     logoUrl,
     newLogoFile,
   ]);
@@ -398,13 +365,6 @@ export default function Page() {
         city: city.trim() || null,
         state: state.trim() || null,
         pincode: pincode.trim() || null,
-        registration_number: registrationNumber.trim() || null,
-        gst_number: gstNumber.trim() || null,
-        pan_number: panNumber.trim() || null,
-        max_employees: maxEmployees === "" ? null : safeNum(maxEmployees, null),
-        pass_validity_days: passValidity === "" ? 30 : safeNum(passValidity, 30),
-        is_active: Boolean(isActive),
-        auto_approve_employees: Boolean(autoApprove),
         logo_url: finalLogo || null,
       };
 
@@ -475,22 +435,6 @@ export default function Page() {
             <p className="text-base font-semibold text-slate-900">Corporate settings</p>
 
             <div className="mt-3 flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
-                <Switch checked={isActive} disabled={saving} onChange={setIsActive} />
-                <div className="leading-tight">
-                  <p className="text-sm font-semibold text-slate-900">
-                    {isActive ? "Active" : "Inactive"}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {isActive ? "Corporate account is active." : "Account is disabled."}
-                  </p>
-                </div>
-              </div>
-
-              <Badge tone={autoApprove ? "indigo" : "slate"}>
-                Auto-approve {autoApprove ? "On" : "Off"}
-              </Badge>
-
               {saving ? (
                 <Badge tone="amber">Saving…</Badge>
               ) : dirty ? (
@@ -535,7 +479,75 @@ export default function Page() {
 
             <div>
               <Label>Phone</Label>
-              <Input value={phone} onChange={setPhone} placeholder="+91…" />
+              <div className="flex gap-2">
+                <select
+                  value={countryCode}
+                  onChange={(e) => setCountryCode(e.target.value)}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-200 max-h-60 overflow-y-auto"
+                  style={{ minWidth: '160px' }}
+                >
+                  <option value="+1">🇺🇸 +1 USA</option>
+                  <option value="+44">🇬🇧 +44 UK</option>
+                  <option value="+91">🇮🇳 +91 India</option>
+                  <option value="+61">🇦🇺 +61 Australia</option>
+                  <option value="+81">🇯🇵 +81 Japan</option>
+                  <option value="+86">🇨🇳 +86 China</option>
+                  <option value="+33">🇫🇷 +33 France</option>
+                  <option value="+49">🇩🇪 +49 Germany</option>
+                  <option value="+39">🇮🇹 +39 Italy</option>
+                  <option value="+34">🇪🇸 +34 Spain</option>
+                  <option value="+7">🇷🇺 +7 Russia</option>
+                  <option value="+55">🇧🇷 +55 Brazil</option>
+                  <option value="+82">🇰🇷 +82 South Korea</option>
+                  <option value="+65">🇸🇬 +65 Singapore</option>
+                  <option value="+971">🇦🇪 +971 UAE</option>
+                  <option value="+966">🇸🇦 +966 Saudi Arabia</option>
+                  <option value="+27">🇿🇦 +27 South Africa</option>
+                  <option value="+52">🇲🇽 +52 Mexico</option>
+                  <option value="+62">🇮🇩 +62 Indonesia</option>
+                  <option value="+60">🇲🇾 +60 Malaysia</option>
+                  <option value="+63">🇵🇭 +63 Philippines</option>
+                  <option value="+64">🇳🇿 +64 New Zealand</option>
+                  <option value="+66">🇹🇭 +66 Thailand</option>
+                  <option value="+84">🇻🇳 +84 Vietnam</option>
+                  <option value="+92">🇵🇰 +92 Pakistan</option>
+                  <option value="+94">🇱🇰 +94 Sri Lanka</option>
+                  <option value="+880">🇧🇩 +880 Bangladesh</option>
+                  <option value="+977">🇳🇵 +977 Nepal</option>
+                  <option value="+230">🇲🇺 +230 Mauritius</option>
+                  <option value="+254">🇰🇪 +254 Kenya</option>
+                  <option value="+234">🇳🇬 +234 Nigeria</option>
+                  <option value="+20">🇪🇬 +20 Egypt</option>
+                  <option value="+212">🇲🇦 +212 Morocco</option>
+                  <option value="+213">🇩🇿 +213 Algeria</option>
+                  <option value="+216">🇹🇳 +216 Tunisia</option>
+                  <option value="+90">🇹🇷 +90 Turkey</option>
+                  <option value="+98">🇮🇷 +98 Iran</option>
+                  <option value="+972">🇮🇱 +972 Israel</option>
+                  <option value="+974">🇶🇦 +974 Qatar</option>
+                  <option value="+965">🇰🇼 +965 Kuwait</option>
+                  <option value="+968">🇴🇲 +968 Oman</option>
+                  <option value="+973">🇧🇭 +973 Bahrain</option>
+                  <option value="+961">🇱🇧 +961 Lebanon</option>
+                  <option value="+962">🇯🇴 +962 Jordan</option>
+                  <option value="+41">🇨🇭 +41 Switzerland</option>
+                  <option value="+43">🇦🇹 +43 Austria</option>
+                  <option value="+45">🇩🇰 +45 Denmark</option>
+                  <option value="+46">🇸🇪 +46 Sweden</option>
+                  <option value="+47">🇳🇴 +47 Norway</option>
+                  <option value="+48">🇵🇱 +48 Poland</option>
+                  <option value="+351">🇵🇹 +351 Portugal</option>
+                  <option value="+353">🇮🇪 +353 Ireland</option>
+                  <option value="+358">🇫🇮 +358 Finland</option>
+                  <option value="+32">🇧🇪 +32 Belgium</option>
+                  <option value="+31">🇳🇱 +31 Netherlands</option>
+                  <option value="+30">🇬🇷 +30 Greece</option>
+                  <option value="+420">🇨🇿 +420 Czech Republic</option>
+                  <option value="+36">🇭🇺 +36 Hungary</option>
+                  <option value="+40">🇷🇴 +40 Romania</option>
+                </select>
+                <Input value={phone} onChange={setPhone} placeholder="Enter phone number" />
+              </div>
             </div>
 
             <div className="md:col-span-2">
@@ -565,79 +577,10 @@ export default function Page() {
           </div>
         </Section>
 
-        {/* 2) Legal & Compliance */}
-        <Section
-          title="Legal & compliance"
-          subtitle="Registration and tax information"
-          right={<Badge tone="slate">Private</Badge>}
-        >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div>
-              <Label>Registration number</Label>
-              <Input
-                value={registrationNumber}
-                onChange={setRegistrationNumber}
-                placeholder="Company registration number"
-              />
-              <Hint>Certificate of Incorporation number</Hint>
-            </div>
+       
+             
 
-            <div>
-              <Label>GST number</Label>
-              <Input value={gstNumber} onChange={setGstNumber} placeholder="GST number" />
-            </div>
-
-            <div>
-              <Label>PAN number</Label>
-              <Input value={panNumber} onChange={setPanNumber} placeholder="PAN number" />
-            </div>
-          </div>
-        </Section>
-
-        {/* 3) Pass Management */}
-        <Section title="Pass management" subtitle="Configure employee pass settings">
-          <div className="grid grid-cols-1 gap-4">
-            <Toggle
-              checked={autoApprove}
-              onChange={setAutoApprove}
-              label="Auto-approve employees"
-              desc="Automatically approve employee registrations without manual review."
-            />
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div>
-                <Label>Maximum employees</Label>
-                <Input
-                  value={maxEmployees}
-                  onChange={setMaxEmployees}
-                  type="number"
-                  placeholder="e.g. 100"
-                />
-                <Hint>Leave empty for unlimited employees.</Hint>
-              </div>
-
-              <div>
-                <Label>Pass validity (days)</Label>
-                <Input
-                  value={passValidity}
-                  onChange={setPassValidity}
-                  type="number"
-                  placeholder="30"
-                />
-                <Hint>Default validity period for employee passes.</Hint>
-              </div>
-            </div>
-
-            <Toggle
-              checked={isActive}
-              onChange={setIsActive}
-              label="Corporate account status"
-              desc="If off, corporate account will be disabled and employees won't be able to use passes."
-            />
-          </div>
-        </Section>
-
-        {/* 4) Branding */}
+        {/* 3) Branding */}
         <Section title="Branding" subtitle="Upload your company logo">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="md:col-span-1">

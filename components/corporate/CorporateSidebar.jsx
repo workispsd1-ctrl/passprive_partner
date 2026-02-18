@@ -14,11 +14,6 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
       href: "/corporate/dashboard",
     },
     {
-      id: "employees",
-      label: "Employee Management",
-      href: "/corporate/employee-management",
-    },
-    {
       id: "gift-cards",
       label: "Gift Card Management",
       href: "/corporate/gift-card-management",
@@ -128,18 +123,6 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
                   <Image 
                     src="/dashboard.png" 
                     alt="Dashboard" 
-                    width={20} 
-                    height={20}
-                    style={{
-                      filter: active ? "brightness(0) invert(1)" : "none",
-                      opacity: active ? 1 : 0.6
-                    }}
-                  />
-                )}
-                {item.id === "employees" && (
-                  <Image 
-                    src="/employeepasses.png" 
-                    alt="Employee Management" 
                     width={20} 
                     height={20}
                     style={{
