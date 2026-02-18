@@ -1,4 +1,4 @@
-import CorporateShell from "@/components/corporate-dashboard/CorporateShell";
+import CorporateShell from "@/components/corporate/CorporateShell";
 
 export default function CorporateDashboardLayout({ children }) {
   return <CorporateShell>{children}</CorporateShell>;
