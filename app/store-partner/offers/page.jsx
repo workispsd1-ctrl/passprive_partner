@@ -383,9 +383,9 @@ export default function CreateOfferPage() {
 
       await Promise.all(targets.map((s) => upsertVisitOfferAndUpdateStore(s, visitOffer)));
 
-      setOk(`Visit offer saved for ${targets.length} store(s).`);
+      setOk(`Digital Loyalty Stamp saved for ${targets.length} store(s).`);
     } catch (e) {
-      setErr(e?.message || "Failed to save visit offer.");
+      setErr(e?.message || "Failed to save Digital Loyalty Stamp.");
     } finally {
       setSavingVisit(false);
     }
@@ -536,8 +536,8 @@ export default function CreateOfferPage() {
             </Card>
 
             <Card
-              title="Visit Offer"
-              subtitle="Configure reward per visit: flat discount, percent discount, or custom free gift/service."
+              title="Digital Loyalty Stamp (rewards for repeat visits)"
+              subtitle="Configure reward for repeat visits: flat discount, percent discount, or custom free gift/service."
             >
               <div className="grid grid-cols-1 gap-5">
                 <Field label="Stores" required>
@@ -663,7 +663,7 @@ export default function CreateOfferPage() {
                   style={{ background: "linear-gradient(90deg, #2563eb 0%, #0ea5e9 100%)" }}
                 >
                   {savingVisit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Gift className="h-4 w-4" />}
-                  Save Visit Offer
+                  Save Digital Loyalty Stamp
                 </button>
               </div>
             </Card>

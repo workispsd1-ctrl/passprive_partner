@@ -23,7 +23,7 @@ const INACTIVE_ICON = "#6b7280";
 
 const nav = [
   { label: "Dashboard", href: "/store-partner/dashboard", icon: LayoutDashboard },
-  { label: "Orders", href: "/store-partner/orders", icon: ShoppingCart },
+  { label: "Pick and Collect", href: "/store-partner/orders", icon: ShoppingCart },
   { label: "My Stores", href: "/store-partner/all-stores", icon: Store },
   { label: "Offers", href: "/store-partner/offers", icon: Tag },
   { label: "Catalogue", href: "/store-partner/catalogue", icon: Boxes },
@@ -138,6 +138,9 @@ export default function StoreSidebar() {
     if (!selectedStoreId || statusSaving) return;
 
     const previous = selectedStore?.is_active !== false;
+    const action = nextValue ? "activate" : "deactivate";
+    const confirmMsg = `Are you sure you want to ${action} this store?`;
+    if (!window.confirm(confirmMsg)) return;
 
     setStatusSaving(true);
     setStatusError("");

@@ -104,10 +104,21 @@ export default function StorePartnerDashboardPage() {
     return () => clearTimeout(t);
   }, []);
 
+  // Sample recent payments data (replace with real data as needed)
+  const recentPayments = useMemo(
+    () => [
+      { id: 'PAY-1001', date: '2026-02-19', amount: 'MUR 2,500', method: 'Card', status: 'Completed' },
+      { id: 'PAY-1000', date: '2026-02-18', amount: 'MUR 1,200', method: 'Cash', status: 'Completed' },
+      { id: 'PAY-0999', date: '2026-02-17', amount: 'MUR 3,000', method: 'UPI', status: 'Pending' },
+      { id: 'PAY-0998', date: '2026-02-16', amount: 'MUR 1,800', method: 'Card', status: 'Failed' },
+    ],
+    []
+  );
+
   const stats = useMemo(
     () => [
       {
-        title: "Orders",
+        title: "Pick and Collect",
         value: "128",
         change: "+12.4%",
         changeType: "up",
@@ -290,9 +301,9 @@ export default function StorePartnerDashboardPage() {
           
         </div>
 
-        {/* Recent Orders */}
+        {/* Recent Pick and Collect */}
         <CardShell
-          title="Recent Orders"
+          title="Recent Pick and Collect"
           right={
             <button
               className="h-9 rounded-full border border-gray-200 bg-white px-4 text-sm font-semibold hover:bg-gray-50"
@@ -331,6 +342,45 @@ export default function StorePartnerDashboardPage() {
                         <StatusPill status={o.status} />
                       </td>
                       <td className="py-3 pr-0 text-gray-500">{o.time}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardShell>
+
+        {/* Recent Payments */}
+        <CardShell
+          title="Recent Payments"
+        >
+          {loading ? (
+            <div className="space-y-2 animate-pulse">
+              <SkeletonRow />
+              <SkeletonRow />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500">
+                    <th className="py-2 pr-4 font-medium">Payment ID</th>
+                    <th className="py-2 pr-4 font-medium">Date</th>
+                    <th className="py-2 pr-4 font-medium">Amount</th>
+                    <th className="py-2 pr-4 font-medium">Method</th>
+                    <th className="py-2 pr-0 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentPayments.map((p) => (
+                    <tr key={p.id} className="border-t border-gray-100 hover:bg-gray-50/60 transition-colors">
+                      <td className="py-3 pr-4 font-semibold text-gray-900">{p.id}</td>
+                      <td className="py-3 pr-4 text-gray-700">{p.date}</td>
+                      <td className="py-3 pr-4 text-gray-700">{p.amount}</td>
+                      <td className="py-3 pr-4 text-gray-700">{p.method}</td>
+                      <td className="py-3 pr-0">
+                        <StatusPill status={p.status} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>

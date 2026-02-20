@@ -14,8 +14,8 @@ import {
   Sparkles,
 } from "lucide-react";
 
-const STORE_ROLE = "storepartner";
-const MANAGER_ROLE = "manager";
+const STORE_ROLE = "outletpartner";
+const MANAGER_ROLE = "outletmanager";
 
 const slugify = (str) =>
   str
@@ -199,8 +199,8 @@ export default function AddStoreBranchPage() {
       }
 
       const { error: memberErr } = await supabaseBrowser.from("store_members").insert([
-        { store_id: storeId, user_id: ownerUserId, role: "owner" },
-        { store_id: storeId, user_id: manager.userId, role: "manager" },
+        { store_id: storeId, user_id: ownerUserId, role: "outletowner" },
+        { store_id: storeId, user_id: manager.userId, role: "outletmanager" },
       ]);
       if (memberErr) throw memberErr;
 

@@ -505,7 +505,7 @@ export default function CatalogueImagesPage() {
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-gray-900">Catalogue Preview</div>
+                  <div className="text-sm font-semibold text-gray-900">How this looks on the app</div>
                   <button
                     type="button"
                     onClick={() => previewStoreId && loadCatalogueForStore(previewStoreId)}
@@ -557,8 +557,8 @@ export default function CatalogueImagesPage() {
         </Card>
 
         <Card
-          title="Add Individual Catalogue Item"
-          subtitle="Create a proper item with image, title, price, SKU, and description."
+          title="Catalogue for Pick and Collect Service"
+          subtitle="This will enable you to create individual catalogue items that customer can order for ‘pick and collect’ as a service."
         >
           {loadingStores ? (
             <div className="rounded-2xl border border-gray-200 bg-white p-6 animate-pulse space-y-3">
@@ -610,24 +610,39 @@ export default function CatalogueImagesPage() {
                     />
                   </div>
 
-                  <div className="md:col-span-2">
-                    <div className="text-xs font-semibold text-gray-600 mb-2">Category Title</div>
-                    <input
-                      value={itemCategoryTitle}
-                      onChange={(e) => setItemCategoryTitle(e.target.value)}
-                      className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                      placeholder="e.g. Burgers"
-                    />
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <div className="text-xs font-semibold text-gray-600 mb-2">Description</div>
-                    <textarea
-                      value={itemDescription}
-                      onChange={(e) => setItemDescription(e.target.value)}
-                      className="min-h-[100px] w-full rounded-2xl border border-gray-200 bg-white px-3 py-3 text-sm outline-none focus:border-gray-300"
-                      placeholder="Short item description..."
-                    />
+                  {/* Image upload and description below */}
+                  <div className="md:col-span-2 mt-4">
+                    {files.length ? (
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-4">
+                        {files.map((file, idx) => (
+                          <div key={`${file.name}_${file.size}_${idx}`} className="rounded-2xl border border-gray-200 bg-white p-2">
+                            <div className="aspect-square rounded-xl overflow-hidden bg-gray-100">
+                              <img src={URL.createObjectURL(file)} alt={file.name} className="h-full w-full object-cover" />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeFile(idx)}
+                              className="mt-2 h-8 w-full rounded-xl border border-gray-200 text-xs font-medium hover:bg-gray-50"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600 mt-4">
+                        No images selected.
+                      </div>
+                    )}
+                    <div className="mt-4">
+                      <label className="block text-xs font-semibold text-gray-600 mb-2">Description</label>
+                      <textarea
+                        className="min-h-[80px] w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-gray-300"
+                        placeholder="Add a description for your catalogue image..."
+                        value={itemDescription}
+                        onChange={e => setItemDescription(e.target.value)}
+                      />
+                    </div>
                   </div>
 
                   <div className="md:col-span-2">
