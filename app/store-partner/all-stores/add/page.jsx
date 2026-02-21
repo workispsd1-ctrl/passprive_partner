@@ -14,8 +14,8 @@ import {
   Sparkles,
 } from "lucide-react";
 
-const STORE_ROLE = "outletpartner";
-const MANAGER_ROLE = "outletmanager";
+const STORE_ROLE = "storepartner";
+const MANAGER_ROLE = "storemanager";
 
 const slugify = (str) =>
   str
