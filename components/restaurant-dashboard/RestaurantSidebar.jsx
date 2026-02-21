@@ -118,6 +118,20 @@ export default function RestaurantSidebar() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingStatus, setPendingStatus] = useState(null);
 
+  const [unreadTableOrders, setUnreadTableOrders] = useState(0);
+
+  const tableOrdersSeenKey = useMemo(() => {
+    if (!restaurantId) return null;
+    return `restaurant_table_orders_last_seen_${restaurantId}`;
+  }, [restaurantId]);
+
+  const filteredNav = useMemo(() => {
+    return nav.filter((item) => {
+      if (item.key === "table_orders") return tablesSubscribed === true;
+      return true;
+    });
+  }, [tablesSubscribed]);
+
   useEffect(() => {
     let mounted = true;
 
@@ -134,7 +148,6 @@ export default function RestaurantSidebar() {
         return;
       }
 
-      // OLD FLOW (kept): status from id + is_active only
       const { data, error } = await supabaseBrowser
         .from("restaurants")
         .select("id, is_active")
@@ -166,12 +179,82 @@ export default function RestaurantSidebar() {
     };
   }, []);
 
-  const filteredNav = useMemo(() => {
-    return nav.filter((item) => {
-      if (item.key === "table_orders") return tablesSubscribed === true;
-      return true;
-    });
-  }, [tablesSubscribed]);
+  useEffect(() => {
+    if (!tableOrdersSeenKey) return;
+    if (pathname === "/restaurant/table-orders" || pathname.startsWith("/restaurant/table-orders/")) {
+      localStorage.setItem(tableOrdersSeenKey, new Date().toISOString());
+      setUnreadTableOrders(0);
+    }
+  }, [pathname, tableOrdersSeenKey]);
+
+  useEffect(() => {
+    if (!restaurantId || !tableOrdersSeenKey) return;
+    let mounted = true;
+
+    const isOnTableOrdersPage =
+      pathname === "/restaurant/table-orders" ||
+      pathname.startsWith("/restaurant/table-orders/");
+
+    async function loadUnreadCount() {
+      const lastSeenAt =
+        localStorage.getItem(tableOrdersSeenKey) || "1970-01-01T00:00:00.000Z";
+
+      const { count, error } = await supabaseBrowser
+        .from("restaurant_table_orders")
+        .select("id", { count: "exact", head: true })
+        .eq("restaurant_id", restaurantId)
+        .eq("status", "PLACED")
+        .gt("created_at", lastSeenAt);
+
+      if (!mounted) return;
+      if (!error) setUnreadTableOrders(count ?? 0);
+    }
+
+    loadUnreadCount();
+
+    // Realtime + polling fallback so badge updates without page refresh.
+    const channel = supabaseBrowser
+      .channel(`restaurant_table_orders_badge_${restaurantId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "restaurant_table_orders",
+          filter: `restaurant_id=eq.${restaurantId}`,
+        },
+        () => {
+          if (isOnTableOrdersPage) {
+            localStorage.setItem(tableOrdersSeenKey, new Date().toISOString());
+            setUnreadTableOrders(0);
+            return;
+          }
+          loadUnreadCount();
+        }
+      )
+      .subscribe();
+
+    const pollId = window.setInterval(loadUnreadCount, 5000);
+
+    const onFocus = () => {
+      loadUnreadCount();
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") loadUnreadCount();
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      mounted = false;
+      clearInterval(pollId);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      supabaseBrowser.removeChannel(channel);
+    };
+  }, [restaurantId, tableOrdersSeenKey, pathname]);
 
   function onToggleActive(nextValue) {
     if (!restaurantId || statusSaving) return;
@@ -188,7 +271,6 @@ export default function RestaurantSidebar() {
     setIsActive(nextValue);
     setStatusSaving(true);
 
-    // OLD FLOW (kept): update only by id
     const { error } = await supabaseBrowser
       .from("restaurants")
       .update({ is_active: nextValue })
@@ -232,13 +314,14 @@ export default function RestaurantSidebar() {
           {filteredNav.map((item) => {
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
             const Icon = item.icon;
+            const showTableOrderBadge = item.key === "table_orders" && unreadTableOrders > 0;
 
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={[
-                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition",
+                  "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition",
                   active
                     ? "bg-gray-100 text-gray-900"
                     : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
@@ -249,6 +332,12 @@ export default function RestaurantSidebar() {
                   style={{ color: active ? "var(--accent)" : undefined }}
                 />
                 {item.label}
+
+                {showTableOrderBadge ? (
+                  <span className="absolute right-3 top-1.5 min-w-[20px] h-5 px-1 rounded-full bg-[#DA3224] text-white text-[11px] font-semibold flex items-center justify-center">
+                    {unreadTableOrders > 99 ? "99+" : unreadTableOrders}
+                  </span>
+                ) : null}
               </Link>
             );
           })}

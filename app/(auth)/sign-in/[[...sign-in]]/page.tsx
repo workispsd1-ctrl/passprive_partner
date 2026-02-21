@@ -7,7 +7,7 @@ import Image from "next/image";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { Eye, EyeOff } from "lucide-react";
 
-const ALLOWED_ROLES = new Set(["storepartner", "restaurantpartner"]);
+const ALLOWED_ROLES = new Set(["storepartner", "restaurantpartner", "corporateadmin"]);
 
 const SignInPage = () => {
   const [step, setStep] = useState<

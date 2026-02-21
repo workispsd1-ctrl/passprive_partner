@@ -200,14 +200,6 @@ function PublicRestaurantMenuContent() {
     setOrderError("");
     setOrderSuccess("");
 
-    if (!customerName.trim()) {
-      setOrderError("Please enter your name.");
-      return;
-    }
-    if (!customerPhone.trim()) {
-      setOrderError("Please enter your phone number.");
-      return;
-    }
     if (cartItems.length === 0) {
       setOrderError("Your cart is empty.");
       return;
@@ -217,8 +209,8 @@ function PublicRestaurantMenuContent() {
 
     const payload = {
       restaurant_id: restaurantId,
-      customer_name: customerName.trim(),
-      customer_phone: customerPhone.trim(),
+      customer_name: customerName.trim() || "Guest",
+      customer_phone: customerPhone.trim() || "N/A",
       table_no: tableNo.trim() || null,
       notes: notes.trim() || null,
       items: cartItems.map((it) => ({
@@ -525,7 +517,7 @@ function PublicRestaurantMenuContent() {
 
                 <div className="rounded-lg border border-slate-200 p-3 space-y-2.5 bg-slate-50">
                   <div>
-                    <label className="text-[11px] text-slate-600">Name</label>
+                    <label className="text-[11px] text-slate-600">Name (optional)</label>
                     <input
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
@@ -534,7 +526,7 @@ function PublicRestaurantMenuContent() {
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] text-slate-600">Phone</label>
+                    <label className="text-[11px] text-slate-600">Phone (optional)</label>
                     <input
                       value={customerPhone}
                       onChange={(e) => setCustomerPhone(e.target.value)}

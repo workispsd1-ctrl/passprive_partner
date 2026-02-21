@@ -13,6 +13,13 @@ const OFFER_KIND = {
   DISH: "DISH",
 };
 
+const PLAN_KEY = {
+  ALL: "ALL",
+  TIME_SLOT: "TIME_SLOT",
+  REPEAT_REWARDS: "REPEAT_REWARDS",
+  DISCOUNTS: "DISCOUNTS",
+};
+
 const WEEK_DAYS = [
   { key: "MON", label: "Mon" },
   { key: "TUE", label: "Tue" },
@@ -29,6 +36,62 @@ const DEMO_CARD = {
   cvv: "123",
 };
 
+const PREMIUM_PRICING = {
+  timeSlotOffers: 2000,
+  repeatRewards: 5000,
+  discounts: 3000,
+  unlockAllOriginal: 10000,
+  unlockAllOffer: 2000,
+};
+
+const PREMIUM_PLANS = [
+  {
+    key: PLAN_KEY.ALL,
+    title: "Unlock All Premium",
+    price: PREMIUM_PRICING.unlockAllOffer,
+    originalPrice: PREMIUM_PRICING.unlockAllOriginal,
+    unlocks: [OFFER_KIND.TIME_SLOT, OFFER_KIND.VISIT, OFFER_KIND.DISH],
+    description: "Unlock all premium features at Rs. 2,000/month (80% off from Rs. 10,000).",
+    features: [
+      "Time Slot Offers",
+      "Repeat Rewards",
+      "Dish Discounts",
+      "Single plan to unlock everything",
+    ],
+  },
+  {
+    key: PLAN_KEY.TIME_SLOT,
+    title: "Time Slot Offers",
+    price: PREMIUM_PRICING.timeSlotOffers,
+    originalPrice: null,
+    unlocks: [OFFER_KIND.TIME_SLOT],
+    description: "Run offers for selected days and time windows.",
+    features: ["Day-wise offer schedules", "Time-window targeting", "Peak-hour campaign control"],
+  },
+  {
+    key: PLAN_KEY.REPEAT_REWARDS,
+    title: "Repeat Rewards",
+    price: PREMIUM_PRICING.repeatRewards,
+    originalPrice: null,
+    unlocks: [OFFER_KIND.VISIT],
+    description: "Reward repeat customers by visit milestones.",
+    features: ["Visit-based rewards", "Flat/%/Free item rewards", "Loyalty retention setup"],
+  },
+  {
+    key: PLAN_KEY.DISCOUNTS,
+    title: "Dish Discounts",
+    price: PREMIUM_PRICING.discounts,
+    originalPrice: null,
+    unlocks: [OFFER_KIND.DISH],
+    description: "Create discount offers on specific dishes.",
+    features: ["Dish-level promotions", "Promo-code discounting", "Target specific menu items"],
+  },
+];
+
+function formatInr(value) {
+  return `Rs. ${Number(value).toLocaleString("en-IN")}`;
+}
+
 function uid() {
   return typeof crypto !== "undefined" && crypto.randomUUID
     ? crypto.randomUUID()
@@ -36,23 +99,20 @@ function uid() {
 }
 
 /* ----------------------------
-   CARD HELPERS (FIXED)
+   CARD HELPERS
 -----------------------------*/
 function normalizeCardNumber(v) {
   return String(v || "").replace(/\D/g, "");
 }
-
 function formatCardNumber(v) {
   const digits = normalizeCardNumber(v).slice(0, 16);
   return digits.replace(/(.{4})/g, "$1 ").trim();
 }
-
 function formatExpiry(v) {
   const digits = String(v || "").replace(/\D/g, "").slice(0, 4);
   if (digits.length <= 2) return digits;
   return `${digits.slice(0, 2)}/${digits.slice(2)}`;
 }
-
 function formatCvv(v) {
   return String(v || "").replace(/\D/g, "").slice(0, 4);
 }
@@ -71,33 +131,25 @@ const EMPTY_TIER = () => ({
 const EMPTY_OFFER = (kind = OFFER_KIND.GENERAL) => ({
   id: uid(),
   offerKind: kind,
-
   title: "",
   promoCode: "",
-
   discountType: "PERCENT",
   discountValue: "",
-
   startDate: "",
   endDate: "",
-
   slotStart: "",
   slotEnd: "",
   weekdays: [],
-
   isActive: true,
-
   conditions: {
     minGuests: "",
     minBillAmount: "",
     newUsersOnly: false,
   },
-
   visitRewards: {
     enabled: kind === OFFER_KIND.VISIT,
     tiers: [EMPTY_TIER()],
   },
-
   dishDiscount: {
     dishId: "",
     dishName: "",
@@ -120,8 +172,7 @@ function inferKind(o) {
   if (o?.offerKind && Object.values(OFFER_KIND).includes(o.offerKind)) return o.offerKind;
   if (o?.visitRewards?.enabled) return OFFER_KIND.VISIT;
   if (o?.dishDiscount?.dishId || o?.dishId) return OFFER_KIND.DISH;
-  if (o?.slotStart || o?.slotEnd || (Array.isArray(o?.weekdays) && o.weekdays.length > 0))
-    return OFFER_KIND.TIME_SLOT;
+  if (o?.slotStart || o?.slotEnd || (Array.isArray(o?.weekdays) && o.weekdays.length > 0)) return OFFER_KIND.TIME_SLOT;
   return OFFER_KIND.GENERAL;
 }
 
@@ -137,9 +188,7 @@ function normalizeTier(t) {
 
 function sanitizeTier(t) {
   const visitCount = Number(t.visitCount);
-  const rewardValue =
-    t.rewardValue === "" || t.rewardValue == null ? "" : Number(t.rewardValue);
-
+  const rewardValue = t.rewardValue === "" || t.rewardValue == null ? "" : Number(t.rewardValue);
   return {
     id: t.id || uid(),
     visitCount: Number.isFinite(visitCount) ? Math.max(1, Math.min(10, visitCount)) : "",
@@ -155,7 +204,6 @@ function sanitizeOffer(o) {
   if (kind === OFFER_KIND.VISIT) {
     const rawTiers = Array.isArray(o?.visitRewards?.tiers) ? o.visitRewards.tiers : [];
     const tiers = rawTiers.map(sanitizeTier);
-
     return {
       id: o.id || uid(),
       offerKind: OFFER_KIND.VISIT,
@@ -175,18 +223,9 @@ function sanitizeOffer(o) {
     };
   }
 
-  const discountValue =
-    o.discountValue === "" || o.discountValue == null ? "" : Number(o.discountValue);
-
-  const minGuests =
-    o.conditions?.minGuests === "" || o.conditions?.minGuests == null
-      ? ""
-      : Number(o.conditions.minGuests);
-
-  const minBillAmount =
-    o.conditions?.minBillAmount === "" || o.conditions?.minBillAmount == null
-      ? ""
-      : Number(o.conditions.minBillAmount);
+  const discountValue = o.discountValue === "" || o.discountValue == null ? "" : Number(o.discountValue);
+  const minGuests = o.conditions?.minGuests === "" || o.conditions?.minGuests == null ? "" : Number(o.conditions.minGuests);
+  const minBillAmount = o.conditions?.minBillAmount === "" || o.conditions?.minBillAmount == null ? "" : Number(o.conditions.minBillAmount);
 
   if (kind === OFFER_KIND.DISH) {
     return {
@@ -235,10 +274,7 @@ function normalizeOneOffer(o) {
   const offerKind = inferKind(o);
 
   if (offerKind === OFFER_KIND.VISIT) {
-    const tiers = Array.isArray(o?.visitRewards?.tiers)
-      ? o.visitRewards.tiers.map(normalizeTier)
-      : [EMPTY_TIER()];
-
+    const tiers = Array.isArray(o?.visitRewards?.tiers) ? o.visitRewards.tiers.map(normalizeTier) : [EMPTY_TIER()];
     return {
       id: o.id || uid(),
       offerKind: OFFER_KIND.VISIT,
@@ -337,13 +373,8 @@ function formatVisitRewards(offer) {
 function formatOfferLine(o) {
   if (o.offerKind === OFFER_KIND.VISIT) return formatVisitRewards(o);
 
-  const amt =
-    o.discountType === "PERCENT"
-      ? `${o.discountValue || 0}% OFF`
-      : `Rs ${o.discountValue || 0} OFF`;
-
-  const datePart =
-    o.startDate || o.endDate ? `Valid ${o.startDate || "-"} -> ${o.endDate || "-"}` : "No date range";
+  const amt = o.discountType === "PERCENT" ? `${o.discountValue || 0}% OFF` : `Rs ${o.discountValue || 0} OFF`;
+  const datePart = o.startDate || o.endDate ? `Valid ${o.startDate || "-"} -> ${o.endDate || "-"}` : "No date range";
 
   if (o.offerKind === OFFER_KIND.TIME_SLOT) {
     const slotPart = o.slotStart && o.slotEnd ? `${o.slotStart} - ${o.slotEnd}` : "No time slot";
@@ -357,6 +388,13 @@ function formatOfferLine(o) {
   }
 
   return `${amt} • ${datePart}`;
+}
+
+function planForKind(kind) {
+  if (kind === OFFER_KIND.TIME_SLOT) return PLAN_KEY.TIME_SLOT;
+  if (kind === OFFER_KIND.VISIT) return PLAN_KEY.REPEAT_REWARDS;
+  if (kind === OFFER_KIND.DISH) return PLAN_KEY.DISCOUNTS;
+  return PLAN_KEY.ALL;
 }
 
 /* ----------------------------
@@ -398,13 +436,19 @@ export default function OffersPage() {
   const [offers, setOffers] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
 
-  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [premiumAccess, setPremiumAccess] = useState({
+    unlockAll: false,
+    timeSlot: false,
+    repeatRewards: false,
+    discounts: false,
+  });
 
   const [openModal, setOpenModal] = useState(false);
   const [editingOfferId, setEditingOfferId] = useState(null);
   const [formOffer, setFormOffer] = useState(EMPTY_OFFER());
 
   const [openPaymentModal, setOpenPaymentModal] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState(PLAN_KEY.ALL);
   const [paying, setPaying] = useState(false);
   const [paymentError, setPaymentError] = useState("");
   const [cardName, setCardName] = useState("");
@@ -413,6 +457,24 @@ export default function OffersPage() {
   const [cardCvv, setCardCvv] = useState("");
 
   const [lastError, setLastError] = useState("");
+
+  const isSubscribed = useMemo(
+    () => premiumAccess.unlockAll || premiumAccess.timeSlot || premiumAccess.repeatRewards || premiumAccess.discounts,
+    [premiumAccess]
+  );
+
+  const selectedPlanObj = useMemo(
+    () => PREMIUM_PLANS.find((p) => p.key === selectedPlan) || PREMIUM_PLANS[0],
+    [selectedPlan]
+  );
+
+  function hasPremiumForKind(kind) {
+    if (kind === OFFER_KIND.GENERAL) return true;
+    if (kind === OFFER_KIND.TIME_SLOT) return premiumAccess.unlockAll || premiumAccess.timeSlot;
+    if (kind === OFFER_KIND.VISIT) return premiumAccess.unlockAll || premiumAccess.repeatRewards;
+    if (kind === OFFER_KIND.DISH) return premiumAccess.unlockAll || premiumAccess.discounts;
+    return false;
+  }
 
   useEffect(() => {
     loadData();
@@ -434,7 +496,9 @@ export default function OffersPage() {
 
     const { data, error } = await supabaseBrowser
       .from("restaurants")
-      .select("id, offer, menu, subscribed")
+      .select(
+        "id, offer, menu, subscribed, subscribed_plan, premium_unlock_all, premium_time_slot_enabled, premium_repeat_rewards_enabled, premium_dish_discounts_enabled"
+      )
       .eq("owner_user_id", user.id)
       .single();
 
@@ -447,7 +511,13 @@ export default function OffersPage() {
     if (data) {
       setRestaurantId(data.id);
       setOffers(normalizeOffers(data.offer).map(normalizeOneOffer));
-      setIsSubscribed(Boolean(data.subscribed));
+
+      const unlockAll = Boolean(data.premium_unlock_all);
+      const timeSlot = Boolean(data.premium_time_slot_enabled || unlockAll);
+      const repeatRewards = Boolean(data.premium_repeat_rewards_enabled || unlockAll);
+      const discounts = Boolean(data.premium_dish_discounts_enabled || unlockAll);
+
+      setPremiumAccess({ unlockAll, timeSlot, repeatRewards, discounts });
 
       const sections = Array.isArray(data?.menu?.sections) ? data.menu.sections : [];
       const items = [];
@@ -489,23 +559,49 @@ export default function OffersPage() {
     return true;
   }
 
-  async function activatePremiumSubscription() {
+  function nextAccessForPlan(current, planKey) {
+    const next = { ...current };
+
+    if (planKey === PLAN_KEY.ALL) {
+      return { unlockAll: true, timeSlot: true, repeatRewards: true, discounts: true };
+    }
+    if (planKey === PLAN_KEY.TIME_SLOT) next.timeSlot = true;
+    if (planKey === PLAN_KEY.REPEAT_REWARDS) next.repeatRewards = true;
+    if (planKey === PLAN_KEY.DISCOUNTS) next.discounts = true;
+
+    if (next.timeSlot && next.repeatRewards && next.discounts) next.unlockAll = true;
+    return next;
+  }
+
+  async function activatePremiumSubscription(planKey) {
     if (!restaurantId) return false;
-    const { error } = await supabaseBrowser
-      .from("restaurants")
-      .update({ subscribed: true })
-      .eq("id", restaurantId);
+
+    const nextAccess = nextAccessForPlan(premiumAccess, planKey);
+    const subscribedPlan = nextAccess.unlockAll ? PLAN_KEY.ALL : planKey;
+
+    const payload = {
+      subscribed: true,
+      subscribed_plan: subscribedPlan,
+      premium_unlock_all: nextAccess.unlockAll,
+      premium_time_slot_enabled: nextAccess.timeSlot,
+      premium_repeat_rewards_enabled: nextAccess.repeatRewards,
+      premium_dish_discounts_enabled: nextAccess.discounts,
+      premium_unlocked_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabaseBrowser.from("restaurants").update(payload).eq("id", restaurantId);
 
     if (error) {
       setPaymentError(error.message || "Failed to activate premium.");
       return false;
     }
 
-    setIsSubscribed(true);
+    setPremiumAccess(nextAccess);
     return true;
   }
 
-  function openPayment() {
+  function openPayment(plan = PLAN_KEY.ALL) {
+    setSelectedPlan(plan);
     setPaymentError("");
     setCardName("");
     setCardNumber("");
@@ -532,7 +628,7 @@ export default function OffersPage() {
 
     setPaying(true);
     await new Promise((r) => setTimeout(r, 900));
-    const ok = await activatePremiumSubscription();
+    const ok = await activatePremiumSubscription(selectedPlan);
     setPaying(false);
 
     if (ok) {
@@ -542,12 +638,9 @@ export default function OffersPage() {
   }
 
   function ensurePremium(kind) {
-    if (kind === OFFER_KIND.GENERAL) return true;
-    if (!isSubscribed) {
-      openPayment();
-      return false;
-    }
-    return true;
+    if (hasPremiumForKind(kind)) return true;
+    openPayment(planForKind(kind));
+    return false;
   }
 
   function openCreate(kind = OFFER_KIND.GENERAL) {
@@ -668,12 +761,8 @@ export default function OffersPage() {
       const seen = new Set();
       for (const t of tiers) {
         const vc = Number(t.visitCount);
-        if (!Number.isFinite(vc) || vc < 1 || vc > 10) {
-          return alert("Visit count must be between 1 and 10.");
-        }
-        if (seen.has(vc)) {
-          return alert(`Duplicate visit number ${vc}. Each visit milestone must be unique.`);
-        }
+        if (!Number.isFinite(vc) || vc < 1 || vc > 10) return alert("Visit count must be between 1 and 10.");
+        if (seen.has(vc)) return alert(`Duplicate visit number ${vc}. Each visit milestone must be unique.`);
         seen.add(vc);
 
         if (t.rewardType === "FREE_ITEM" && !String(t.rewardLabel || "").trim()) {
@@ -688,12 +777,9 @@ export default function OffersPage() {
       }
 
       cleaned.visitRewards.enabled = true;
-
-      const next = (() => {
-        const exists = offers.some((o) => o.id === cleaned.id);
-        if (exists) return offers.map((o) => (o.id === cleaned.id ? cleaned : o));
-        return [cleaned, ...offers];
-      })();
+      const next = offers.some((o) => o.id === cleaned.id)
+        ? offers.map((o) => (o.id === cleaned.id ? cleaned : o))
+        : [cleaned, ...offers];
 
       setOffers(next);
       const ok = await saveOffersOnly(next);
@@ -702,20 +788,14 @@ export default function OffersPage() {
     }
 
     if (kind === OFFER_KIND.DISH) {
-      if (!cleaned.dishDiscount?.dishId || !cleaned.dishDiscount?.dishName) {
-        return alert("Please select a dish.");
-      }
+      if (!cleaned.dishDiscount?.dishId || !cleaned.dishDiscount?.dishName) return alert("Please select a dish.");
       if (!cleaned.title?.trim()) return alert("Please enter an offer title.");
       if (!cleaned.promoCode?.trim()) return alert("Please enter a promo code.");
-      if (cleaned.discountValue === "" || Number.isNaN(Number(cleaned.discountValue))) {
-        return alert("Please enter a valid discount value.");
-      }
+      if (cleaned.discountValue === "" || Number.isNaN(Number(cleaned.discountValue))) return alert("Please enter a valid discount value.");
 
-      const next = (() => {
-        const exists = offers.some((o) => o.id === cleaned.id);
-        if (exists) return offers.map((o) => (o.id === cleaned.id ? cleaned : o));
-        return [cleaned, ...offers];
-      })();
+      const next = offers.some((o) => o.id === cleaned.id)
+        ? offers.map((o) => (o.id === cleaned.id ? cleaned : o))
+        : [cleaned, ...offers];
 
       setOffers(next);
       const ok = await saveOffersOnly(next);
@@ -725,24 +805,16 @@ export default function OffersPage() {
 
     if (!cleaned.title?.trim()) return alert("Please enter an offer title.");
     if (!cleaned.promoCode?.trim()) return alert("Please enter a promo code.");
-    if (cleaned.discountValue === "" || Number.isNaN(Number(cleaned.discountValue))) {
-      return alert("Please enter a valid discount value.");
-    }
+    if (cleaned.discountValue === "" || Number.isNaN(Number(cleaned.discountValue))) return alert("Please enter a valid discount value.");
 
     if (kind === OFFER_KIND.TIME_SLOT) {
-      if (!cleaned.slotStart || !cleaned.slotEnd) {
-        return alert("Please select slot start and end time.");
-      }
-      if (cleaned.weekdays.length === 0) {
-        return alert("Please select at least one day.");
-      }
+      if (!cleaned.slotStart || !cleaned.slotEnd) return alert("Please select slot start and end time.");
+      if (cleaned.weekdays.length === 0) return alert("Please select at least one day.");
     }
 
-    const next = (() => {
-      const exists = offers.some((o) => o.id === cleaned.id);
-      if (exists) return offers.map((o) => (o.id === cleaned.id ? cleaned : o));
-      return [cleaned, ...offers];
-    })();
+    const next = offers.some((o) => o.id === cleaned.id)
+      ? offers.map((o) => (o.id === cleaned.id ? cleaned : o))
+      : [cleaned, ...offers];
 
     setOffers(next);
     const ok = await saveOffersOnly(next);
@@ -764,7 +836,6 @@ export default function OffersPage() {
     const target = offers.find((o) => o.id === id);
     if (!target) return;
     if (!ensurePremium(target.offerKind || inferKind(target))) return;
-
     if ((target.offerKind || inferKind(target)) === OFFER_KIND.VISIT) return;
 
     const next = offers.map((o) => (o.id === id ? { ...o, isActive: !o.isActive } : o));
@@ -772,38 +843,18 @@ export default function OffersPage() {
     await saveOffersOnly(next);
   }
 
-  const generalOffers = useMemo(
-    () => offers.filter((o) => (o.offerKind || inferKind(o)) === OFFER_KIND.GENERAL),
-    [offers]
-  );
-
-  const timeSlotOffers = useMemo(
-    () => offers.filter((o) => (o.offerKind || inferKind(o)) === OFFER_KIND.TIME_SLOT),
-    [offers]
-  );
-
-  const visitOffers = useMemo(
-    () => offers.filter((o) => (o.offerKind || inferKind(o)) === OFFER_KIND.VISIT),
-    [offers]
-  );
-
-  const dishOffers = useMemo(
-    () => offers.filter((o) => (o.offerKind || inferKind(o)) === OFFER_KIND.DISH),
-    [offers]
-  );
+  const generalOffers = useMemo(() => offers.filter((o) => (o.offerKind || inferKind(o)) === OFFER_KIND.GENERAL), [offers]);
+  const timeSlotOffers = useMemo(() => offers.filter((o) => (o.offerKind || inferKind(o)) === OFFER_KIND.TIME_SLOT), [offers]);
+  const visitOffers = useMemo(() => offers.filter((o) => (o.offerKind || inferKind(o)) === OFFER_KIND.VISIT), [offers]);
+  const dishOffers = useMemo(() => offers.filter((o) => (o.offerKind || inferKind(o)) === OFFER_KIND.DISH), [offers]);
 
   const activeOffers = useMemo(
-    () =>
-      offers.filter((o) => {
-        const k = o.offerKind || inferKind(o);
-        if (k === OFFER_KIND.VISIT) return false;
-        return Boolean(o.isActive);
-      }),
+    () => offers.filter((o) => (o.offerKind || inferKind(o)) !== OFFER_KIND.VISIT && Boolean(o.isActive)),
     [offers]
   );
 
   function renderSection(title, sectionOffers, kind, hint, premium = false) {
-    const locked = premium && !isSubscribed;
+    const locked = premium && !hasPremiumForKind(kind);
 
     return (
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
@@ -815,10 +866,10 @@ export default function OffersPage() {
 
           {locked ? (
             <button
-              onClick={openPayment}
+              onClick={() => openPayment(planForKind(kind))}
               className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100 cursor-pointer"
             >
-              Unlock Premium
+              Unlock {formatInr(PREMIUM_PLANS.find((p) => p.key === planForKind(kind))?.price || 0)}/mo
             </button>
           ) : kind === OFFER_KIND.VISIT ? (
             <button
@@ -841,9 +892,7 @@ export default function OffersPage() {
         </div>
 
         {locked ? (
-          <div className="px-6 py-8 text-sm text-slate-500">
-            This section is available for Premium partners only.
-          </div>
+          <div className="px-6 py-8 text-sm text-slate-500">This section is available for Premium partners only.</div>
         ) : sectionOffers.length === 0 ? (
           <div className="px-6 py-8 text-sm text-slate-500">No {title.toLowerCase()} yet.</div>
         ) : (
@@ -853,10 +902,7 @@ export default function OffersPage() {
               const isVisit = k === OFFER_KIND.VISIT;
 
               return (
-                <div
-                  key={o.id}
-                  className="px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3"
-                >
+                <div key={o.id} className="px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-semibold text-slate-900 truncate">
@@ -871,18 +917,12 @@ export default function OffersPage() {
 
                       {!isVisit ? (
                         o.isActive ? (
-                          <span className="text-xs rounded-full bg-emerald-50 text-emerald-700 px-2 py-1">
-                            Active
-                          </span>
+                          <span className="text-xs rounded-full bg-emerald-50 text-emerald-700 px-2 py-1">Active</span>
                         ) : (
-                          <span className="text-xs rounded-full bg-slate-100 text-slate-700 px-2 py-1">
-                            Inactive
-                          </span>
+                          <span className="text-xs rounded-full bg-slate-100 text-slate-700 px-2 py-1">Inactive</span>
                         )
                       ) : (
-                        <span className="text-xs rounded-full bg-slate-900 text-white px-2 py-1">
-                          Standard
-                        </span>
+                        <span className="text-xs rounded-full bg-slate-900 text-white px-2 py-1">Standard</span>
                       )}
                     </div>
 
@@ -892,41 +932,16 @@ export default function OffersPage() {
                   <div className="flex items-center gap-2">
                     {isVisit ? (
                       <>
-                        <button
-                          onClick={() => openEdit(o.id)}
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => removeOffer(o.id)}
-                          className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 hover:bg-rose-100"
-                        >
-                          Remove
-                        </button>
+                        <button onClick={() => openEdit(o.id)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">Edit</button>
+                        <button onClick={() => removeOffer(o.id)} className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 hover:bg-rose-100">Remove</button>
                       </>
                     ) : (
                       <>
-                        <button
-                          onClick={() => toggleOfferActive(o.id)}
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
-                        >
+                        <button onClick={() => toggleOfferActive(o.id)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">
                           {o.isActive ? "Deactivate" : "Activate"}
                         </button>
-
-                        <button
-                          onClick={() => openEdit(o.id)}
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
-                        >
-                          Edit
-                        </button>
-
-                        <button
-                          onClick={() => removeOffer(o.id)}
-                          className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 hover:bg-rose-100"
-                        >
-                          Delete
-                        </button>
+                        <button onClick={() => openEdit(o.id)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">Edit</button>
+                        <button onClick={() => removeOffer(o.id)} className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 hover:bg-rose-100">Delete</button>
                       </>
                     )}
                   </div>
@@ -949,16 +964,12 @@ export default function OffersPage() {
     <div className="min-h-screen bg-slate-50">
       {lastError ? (
         <div className="max-w-6xl mx-auto px-6 pt-6">
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {lastError}
-          </div>
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{lastError}</div>
         </div>
       ) : null}
 
       {saving ? (
-        <div className="fixed top-4 right-4 z-[80] rounded-xl bg-slate-900 text-white px-4 py-2 text-sm shadow-lg">
-          Saving...
-        </div>
+        <div className="fixed top-4 right-4 z-[80] rounded-xl bg-slate-900 text-white px-4 py-2 text-sm shadow-lg">Saving...</div>
       ) : null}
 
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
@@ -966,7 +977,10 @@ export default function OffersPage() {
           <p className="text-xs text-slate-500">Partner Offer Center</p>
           <p className="text-2xl font-semibold text-slate-900 mt-1">{activeOffers.length} active campaigns</p>
           <p className="text-sm text-slate-600 mt-1">
-            General offers are available for all partners. Time-slot, repeat rewards, and dish discounts are premium features.
+            Time Slot Offers ({formatInr(PREMIUM_PRICING.timeSlotOffers)}/month), Repeat Rewards ({formatInr(PREMIUM_PRICING.repeatRewards)}/month), Dish Discounts ({formatInr(PREMIUM_PRICING.discounts)}/month). Unlock all at{" "}
+            <span className="line-through text-slate-400">{formatInr(PREMIUM_PRICING.unlockAllOriginal)}/month</span>{" "}
+            <span className="font-semibold text-emerald-700">{formatInr(PREMIUM_PRICING.unlockAllOffer)}/month</span>{" "}
+            (80% off).
           </p>
           <p className="text-xs mt-2">
             {isSubscribed ? (
@@ -975,36 +989,52 @@ export default function OffersPage() {
               <span className="rounded-full bg-amber-50 text-amber-700 px-2 py-1">Premium Locked</span>
             )}
           </p>
+
+          <div className="mt-4 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <button
+              onClick={() => openPayment(PLAN_KEY.ALL)}
+              className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-left hover:bg-emerald-100"
+            >
+              <p className="text-sm font-semibold text-emerald-800">Unlock All</p>
+              <p className="text-xs mt-1">
+                <span className="line-through text-emerald-700/70">{formatInr(PREMIUM_PRICING.unlockAllOriginal)}</span>{" "}
+                <span className="font-bold">{formatInr(PREMIUM_PRICING.unlockAllOffer)}/mo</span>
+              </p>
+            </button>
+
+            <button
+              onClick={() => openPayment(PLAN_KEY.TIME_SLOT)}
+              disabled={hasPremiumForKind(OFFER_KIND.TIME_SLOT)}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-left hover:bg-slate-50 disabled:opacity-50"
+            >
+              <p className="text-sm font-semibold text-slate-900">Time Slot Offers</p>
+              <p className="text-xs mt-1 text-slate-600">{formatInr(PREMIUM_PRICING.timeSlotOffers)}/mo</p>
+            </button>
+
+            <button
+              onClick={() => openPayment(PLAN_KEY.REPEAT_REWARDS)}
+              disabled={hasPremiumForKind(OFFER_KIND.VISIT)}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-left hover:bg-slate-50 disabled:opacity-50"
+            >
+              <p className="text-sm font-semibold text-slate-900">Repeat Rewards</p>
+              <p className="text-xs mt-1 text-slate-600">{formatInr(PREMIUM_PRICING.repeatRewards)}/mo</p>
+            </button>
+
+            <button
+              onClick={() => openPayment(PLAN_KEY.DISCOUNTS)}
+              disabled={hasPremiumForKind(OFFER_KIND.DISH)}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-left hover:bg-slate-50 disabled:opacity-50"
+            >
+              <p className="text-sm font-semibold text-slate-900">Dish Discounts</p>
+              <p className="text-xs mt-1 text-slate-600">{formatInr(PREMIUM_PRICING.discounts)}/mo</p>
+            </button>
+          </div>
         </div>
 
-        {renderSection(
-          "General Offers",
-          generalOffers,
-          OFFER_KIND.GENERAL,
-          "Standard campaigns available to every partner",
-          false
-        )}
-        {renderSection(
-          "Time Slot Offers",
-          timeSlotOffers,
-          OFFER_KIND.TIME_SLOT,
-          "Day and time-specific premium campaigns",
-          true
-        )}
-        {renderSection(
-          "Repeat Rewards",
-          visitOffers,
-          OFFER_KIND.VISIT,
-          "Premium loyalty rewards program for repeat visits",
-          true
-        )}
-        {renderSection(
-          "Dish Discounts",
-          dishOffers,
-          OFFER_KIND.DISH,
-          "Premium dish-level discounts on specific menu items",
-          true
-        )}
+        {renderSection("General Offers", generalOffers, OFFER_KIND.GENERAL, "Standard campaigns available to every partner", false)}
+        {renderSection("Time Slot Offers", timeSlotOffers, OFFER_KIND.TIME_SLOT, "Day and time-specific premium campaigns", true)}
+        {renderSection("Repeat Rewards", visitOffers, OFFER_KIND.VISIT, "Premium loyalty rewards program for repeat visits", true)}
+        {renderSection("Dish Discounts", dishOffers, OFFER_KIND.DISH, "Premium dish-level discounts on specific menu items", true)}
       </div>
 
       <button
@@ -1019,26 +1049,54 @@ export default function OffersPage() {
       {openPaymentModal && (
         <div className="fixed inset-0 z-[90] p-4 sm:p-6">
           <div className="absolute inset-0 bg-black/40" onClick={() => !paying && setOpenPaymentModal(false)} />
-          <div className="relative mx-auto w-full max-w-lg rounded-2xl bg-white border border-slate-200 shadow-xl overflow-hidden">
+          <div className="relative mx-auto w-full max-w-2xl rounded-2xl bg-white border border-slate-200 shadow-xl overflow-hidden">
             <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
-              <p className="text-sm font-semibold text-slate-900">Premium Payment</p>
-              <button
-                onClick={() => !paying && setOpenPaymentModal(false)}
-                className="rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100"
-              >
+              <p className="text-sm font-semibold text-slate-900">Premium Subscription Checkout</p>
+              <button onClick={() => !paying && setOpenPaymentModal(false)} className="rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100">
                 Close
               </button>
             </div>
 
-            <div className="px-6 py-6 space-y-4">
+            <div className="px-6 py-6 space-y-4 max-h-[72vh] overflow-y-auto">
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-sm font-semibold text-amber-900">Select Plan</p>
+                <div className="mt-3 grid sm:grid-cols-2 gap-2">
+                  {PREMIUM_PLANS.map((p) => (
+                    <button
+                      key={p.key}
+                      type="button"
+                      onClick={() => setSelectedPlan(p.key)}
+                      className={`text-left rounded-xl border p-3 ${
+                        selectedPlan === p.key ? "border-slate-900 bg-white" : "border-amber-200 bg-amber-50/50 hover:bg-amber-50"
+                      }`}
+                    >
+                      <p className="text-xs font-semibold text-slate-900">{p.title}</p>
+                      <p className="text-xs mt-1">
+                        {p.originalPrice ? <span className="line-through text-slate-400 mr-2">{formatInr(p.originalPrice)}/mo</span> : null}
+                        <span className="font-semibold text-emerald-700">{formatInr(p.price)}/mo</span>
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-sm font-semibold text-slate-900">Before Payment</p>
+                <p className="text-xs text-slate-600 mt-1">{selectedPlanObj.description}</p>
+                <ul className="mt-2 list-disc pl-5 space-y-1 text-xs text-slate-700">
+                  {selectedPlanObj.features.map((f) => (
+                    <li key={f}>{f}</li>
+                  ))}
+                  
+                </ul>
+              </div>
+
               <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700">
                 Demo card: {DEMO_CARD.number} | {DEMO_CARD.expiry} | {DEMO_CARD.cvv}
               </div>
 
               {paymentError ? (
-                <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-700">
-                  {paymentError}
-                </div>
+                <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-700">{paymentError}</div>
               ) : null}
 
               <div>
@@ -1087,10 +1145,7 @@ export default function OffersPage() {
             </div>
 
             <div className="px-6 py-5 border-t border-slate-200 flex justify-end gap-3 bg-white">
-              <button
-                onClick={() => !paying && setOpenPaymentModal(false)}
-                className="rounded-xl px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
-              >
+              <button onClick={() => !paying && setOpenPaymentModal(false)} className="rounded-xl px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
                 Cancel
               </button>
               <button
@@ -1098,7 +1153,7 @@ export default function OffersPage() {
                 disabled={paying}
                 className="rounded-xl bg-[#DA3224] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
               >
-                {paying ? "Processing..." : "Pay & Unlock Premium"}
+                {paying ? "Processing..." : `Pay ${formatInr(selectedPlanObj.price)} & Unlock`}
               </button>
             </div>
           </div>
@@ -1119,10 +1174,7 @@ export default function OffersPage() {
                   ? "Edit offer"
                   : "Create offer"}
               </p>
-              <button
-                onClick={() => setOpenModal(false)}
-                className="rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100"
-              >
+              <button onClick={() => setOpenModal(false)} className="rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100">
                 Close
               </button>
             </div>
@@ -1144,27 +1196,17 @@ export default function OffersPage() {
                         slotEnd: kind === OFFER_KIND.TIME_SLOT ? prev.slotEnd || "" : "",
                         dishDiscount:
                           kind === OFFER_KIND.DISH
-                            ? prev.dishDiscount || {
-                                dishId: "",
-                                dishName: "",
-                                sectionId: "",
-                                sectionName: "",
-                              }
-                            : {
-                                dishId: "",
-                                dishName: "",
-                                sectionId: "",
-                                sectionName: "",
-                              },
+                            ? prev.dishDiscount || { dishId: "", dishName: "", sectionId: "", sectionName: "" }
+                            : { dishId: "", dishName: "", sectionId: "", sectionName: "" },
                       }));
                     }}
                     className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
                   >
                     <option value={OFFER_KIND.GENERAL}>General Offer</option>
-                    <option value={OFFER_KIND.TIME_SLOT} disabled={!isSubscribed}>
+                    <option value={OFFER_KIND.TIME_SLOT} disabled={!hasPremiumForKind(OFFER_KIND.TIME_SLOT)}>
                       Time Slot Offer (Premium)
                     </option>
-                    <option value={OFFER_KIND.DISH} disabled={!isSubscribed}>
+                    <option value={OFFER_KIND.DISH} disabled={!hasPremiumForKind(OFFER_KIND.DISH)}>
                       Dish Discount (Premium)
                     </option>
                   </select>
@@ -1172,9 +1214,7 @@ export default function OffersPage() {
               ) : (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <p className="text-sm font-semibold text-slate-900">Standard loyalty program</p>
-                  <p className="text-xs text-slate-600 mt-1">
-                    This reward setup applies to all customers and encourages repeat dining.
-                  </p>
+                  <p className="text-xs text-slate-600 mt-1">This reward setup applies to all customers and encourages repeat dining.</p>
                 </div>
               )}
 
@@ -1247,9 +1287,7 @@ export default function OffersPage() {
                     </div>
 
                     <div>
-                      <p className="text-xs text-slate-600 mb-2">
-                        {formOffer.discountType === "PERCENT" ? "% OFF" : "Rs OFF"}
-                      </p>
+                      <p className="text-xs text-slate-600 mb-2">{formOffer.discountType === "PERCENT" ? "% OFF" : "Rs OFF"}</p>
                       <input
                         type="number"
                         placeholder={formOffer.discountType === "PERCENT" ? "20" : "200"}
@@ -1437,10 +1475,7 @@ export default function OffersPage() {
             </div>
 
             <div className="px-6 py-5 border-t border-slate-200 flex justify-end gap-3 shrink-0 bg-white">
-              <button
-                onClick={() => setOpenModal(false)}
-                className="rounded-xl px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
-              >
+              <button onClick={() => setOpenModal(false)} className="rounded-xl px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
                 Cancel
               </button>
 

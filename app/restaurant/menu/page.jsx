@@ -799,7 +799,7 @@ export default function RestaurantMenuPage() {
             ))}
           </div>
         ) : (
-          <div className="mt-3 text-xs text-gray-500">No menu card images found in menu JSON yet.</div>
+          <div className="mt-3 text-xs text-gray-500">No menu card images found.</div>
         )}
       </div>
 
@@ -853,7 +853,7 @@ export default function RestaurantMenuPage() {
               Add section
             </button>
 
-            <button
+            {/*<button
               type="button"
               disabled={!isSubscribed || !hasChanges || saving}
               onClick={() => saveMenu(menu)}
@@ -861,7 +861,7 @@ export default function RestaurantMenuPage() {
             >
               <Save className="h-4 w-4" />
               {saving ? "Saving..." : "Save changes"}
-            </button>
+            </button> */}
           </div>
         </div>
 
@@ -872,7 +872,7 @@ export default function RestaurantMenuPage() {
           </div>
 
           <div className="mt-2 text-xs text-gray-500">
-            {isSubscribed ? "QR opens digital catalogue." : "QR opens first uploaded menu image."}
+            {isSubscribed ? "Scan the QR code to browse the digital catalogue and order from your table." : "QR opens first uploaded menu image."}
           </div>
 
           <div className="mt-3">
@@ -1413,3 +1413,4 @@ export default function RestaurantMenuPage() {
     </div>
   );
 }
+ 
