@@ -20,6 +20,7 @@ import {
   Crown,
   CreditCard,
   Package,
+  ArrowUpRight,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
@@ -56,7 +57,7 @@ function normalizeMemberStore(storesField) {
   return storesField || null;
 }
 
-// Fixed StatusSwitch: icons stay inside the thumb at all times
+// unchanged switch UI
 function StatusSwitch({ checked, onChange, disabled = false }) {
   return (
     <button
@@ -82,7 +83,6 @@ function StatusSwitch({ checked, onChange, disabled = false }) {
       aria-pressed={checked}
       aria-label="Toggle store active"
     >
-      {/* Thumb */}
       <span
         style={{
           position: "absolute",
@@ -180,6 +180,7 @@ export default function StoreSidebar() {
   const [statusLoading, setStatusLoading] = useState(true);
   const [statusSaving, setStatusSaving] = useState(false);
   const [statusError, setStatusError] = useState("");
+  const [userRole, setUserRole] = useState("manager"); // owner | manager
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingStatus, setPendingStatus] = useState(null);
@@ -198,6 +199,8 @@ export default function StoreSidebar() {
   const nav = useMemo(() => {
     return baseNav.filter((n) => !n.premium || selectedStoreHasPremium);
   }, [selectedStoreHasPremium]);
+
+  const showStoreSwitcher = userRole === "owner" && stores.length > 1;
 
   const isActiveRoute = (href) => {
     if (href === "/store-partner/dashboard") return pathname === href;
@@ -227,6 +230,7 @@ export default function StoreSidebar() {
       if (raw.selectedStoreId) setSelectedStoreId(String(raw.selectedStoreId));
       if (typeof raw.pickupOrderCount === "number") setPickupOrderCount(raw.pickupOrderCount);
       if (typeof raw.paymentOnlyCount === "number") setPaymentOnlyCount(raw.paymentOnlyCount);
+      if (raw.userRole) setUserRole(raw.userRole);
     } catch {}
   };
 
@@ -328,26 +332,36 @@ export default function StoreSidebar() {
 
         const memberRes = await supabaseBrowser
           .from("store_members")
-          .select("store_id, stores:store_id(id,name,city,is_active,pickup_premium_enabled,pickup_premium_expires_at)")
+          .select("store_id,role,stores:store_id(id,name,city,is_active,pickup_premium_enabled,pickup_premium_expires_at)")
           .eq("user_id", userId);
         if (memberRes.error) throw memberRes.error;
 
         const ownerStores = ownerRes.data || [];
-        const memberStores = (memberRes.data || [])
-          .map((r) => normalizeMemberStore(r.stores))
-          .filter(Boolean);
+        const memberRows = memberRes.data || [];
+        const memberStores = memberRows.map((r) => normalizeMemberStore(r.stores)).filter(Boolean);
 
         const merged = new Map();
         [...ownerStores, ...memberStores].forEach((s) => merged.set(String(s.id), s));
-
         const allStores = Array.from(merged.values()).sort((a, b) =>
           String(a.name || "").localeCompare(String(b.name || ""))
         );
 
+        const roleFromMeta = String(sess?.session?.user?.user_metadata?.role || "").toLowerCase();
+        const isManagerMeta = roleFromMeta === "storemanager" || roleFromMeta === "manager";
+        const isOwnerMeta = roleFromMeta === "storeowner" || roleFromMeta === "owner";
+
+        const derivedRole =
+          isOwnerMeta || ownerStores.length > 0
+            ? "owner"
+            : isManagerMeta || memberRows.some((r) => String(r.role || "").toLowerCase() === "manager")
+            ? "manager"
+            : "manager";
+
         if (cancelled) return;
 
+        setUserRole(derivedRole);
         setStores(allStores);
-        writeCache({ stores: allStores });
+        writeCache({ stores: allStores, userRole: derivedRole });
 
         if (allStores.length) {
           const cachedSession = (() => {
@@ -533,62 +547,91 @@ export default function StoreSidebar() {
         </nav>
 
         <div className="p-4 shrink-0 border-t border-gray-200">
-          <div className="rounded-2xl border border-gray-200 bg-white p-4">
-            <div className="text-sm font-semibold">Store Visibility</div>
+          {showStoreSwitcher ? (
+            <div className="rounded-2xl border border-gray-200 bg-white p-4">
+              <div className="text-sm font-semibold">Store Visibility</div>
 
-            <div className="mt-3">
-              <select
-                value={selectedStoreId}
-                onChange={(e) => handleStoreSelectChange(e.target.value)}
-                disabled={statusLoading || !stores.length}
-                className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300 disabled:opacity-60"
-              >
-                {!stores.length ? (
-                  <option value="">No stores found</option>
-                ) : (
-                  stores.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} {s.city ? `• ${s.city}` : ""}
-                    </option>
-                  ))
-                )}
-              </select>
-            </div>
-
-            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
-              <Crown className="h-3.5 w-3.5" />
-              {selectedStoreHasPremium ? "Pickup Premium Active" : "Pickup Premium Locked"}
-            </div>
-
-            <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
-              <div>
-                <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
-                  <span
-                    className={[
-                      "inline-block h-2.5 w-2.5 rounded-full",
-                      selectedStore?.is_active !== false ? "bg-emerald-500" : "bg-gray-400",
-                    ].join(" ")}
-                  />
-                  {selectedStore?.is_active !== false ? "Active" : "Inactive"}
-                </div>
-                <div className="text-xs text-gray-500 mt-0.5">
-                  {selectedStore?.is_active !== false ? "Customers can view this store." : "Hidden from customers."}
-                </div>
+              <div className="mt-3">
+                <select
+                  value={selectedStoreId}
+                  onChange={(e) => handleStoreSelectChange(e.target.value)}
+                  disabled={statusLoading || !stores.length}
+                  className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300 disabled:opacity-60"
+                >
+                  {!stores.length ? (
+                    <option value="">No stores found</option>
+                  ) : (
+                    stores.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} {s.city ? `• ${s.city}` : ""}
+                      </option>
+                    ))
+                  )}
+                </select>
               </div>
 
-              {statusSaving ? (
-                <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
-              ) : (
-                <StatusSwitch
-                  checked={selectedStore?.is_active !== false}
-                  onChange={handleToggleStore}
-                  disabled={statusLoading || !selectedStore}
-                />
-              )}
-            </div>
+              <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                <Crown className="h-3.5 w-3.5" />
+                {selectedStoreHasPremium ? "Pickup Premium Active" : "Pickup Premium Locked"}
+              </div>
 
-            {statusError ? <div className="mt-2 text-xs text-red-600">{statusError}</div> : null}
-          </div>
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
+                <div>
+                  <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                    <span
+                      className={[
+                        "inline-block h-2.5 w-2.5 rounded-full",
+                        selectedStore?.is_active !== false ? "bg-emerald-500" : "bg-gray-400",
+                      ].join(" ")}
+                    />
+                    {selectedStore?.is_active !== false ? "Active" : "Inactive"}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-0.5">
+                    {selectedStore?.is_active !== false ? "Customers can view this store." : "Hidden from customers."}
+                  </div>
+                </div>
+
+                {statusSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+                ) : (
+                  <StatusSwitch
+                    checked={selectedStore?.is_active !== false}
+                    onChange={handleToggleStore}
+                    disabled={statusLoading || !selectedStore}
+                  />
+                )}
+              </div>
+
+              {statusError ? <div className="mt-2 text-xs text-red-600">{statusError}</div> : null}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-gray-200 bg-white p-4">
+              <div className="text-sm font-semibold text-gray-900">Quick Actions</div>
+              <div className="mt-3 space-y-2">
+                <Link
+                  href="/store-partner/pickup-orders"
+                  className="h-9 px-3 rounded-xl border border-gray-200 bg-white text-sm inline-flex items-center justify-between w-full hover:bg-gray-50"
+                >
+                  <span>Pickup Orders</span>
+                  <ArrowUpRight className="h-4 w-4 text-gray-500" />
+                </Link>
+                <Link
+                  href="/store-partner/payment-orders"
+                  className="h-9 px-3 rounded-xl border border-gray-200 bg-white text-sm inline-flex items-center justify-between w-full hover:bg-gray-50"
+                >
+                  <span>Payment Orders</span>
+                  <ArrowUpRight className="h-4 w-4 text-gray-500" />
+                </Link>
+                <Link
+                  href="/store-partner/catalogue"
+                  className="h-9 px-3 rounded-xl border border-gray-200 bg-white text-sm inline-flex items-center justify-between w-full hover:bg-gray-50"
+                >
+                  <span>Catalogue</span>
+                  <ArrowUpRight className="h-4 w-4 text-gray-500" />
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
       </aside>
 
