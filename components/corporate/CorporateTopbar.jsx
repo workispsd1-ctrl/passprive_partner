@@ -1,10 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
+
 
 export default function CorporateTopbar({ toggleMobileMenu }) {
   const [searchQuery, setSearchQuery] = useState("");
+  // Simulate user info (replace with real user data as needed)
+  const user = {
+    name: "John Doe", // Replace with dynamic user name
+    role: "Corporate", // Set role as Corporate for now
+    avatar: "", // Replace with dynamic avatar URL or leave blank for placeholder
+  };
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  const router = useRouter();
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false);
+      }
+    }
+    if (dropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    } else {
+      document.removeEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [dropdownOpen]);
 
   return (
     <header 
@@ -87,51 +113,74 @@ export default function CorporateTopbar({ toggleMobileMenu }) {
 
         {/* User Profile */}
         <div 
-          className="flex items-center gap-2 lg:gap-3 flex-shrink-0"
+          className="relative flex items-center gap-2 lg:gap-3 flex-shrink-0"
+          ref={dropdownRef}
         >
-          {/* Profile Image */}
-          <Image
-            src="/Rectangle 1393.png"
-            alt="Profile"
-            width={40}
-            height={40}
-            className="object-cover flex-shrink-0"
-            style={{
-              width: "40px",
-              height: "40px",
-              borderRadius: "10px"
-            }}
-          />
-          
+          {/* Profile Image or Placeholder */}
+          {user.avatar ? (
+            <Image
+              src={user.avatar}
+              alt="Profile"
+              width={40}
+              height={40}
+              className="object-cover flex-shrink-0"
+              style={{ width: "40px", height: "40px", borderRadius: "10px" }}
+            />
+          ) : (
+            <div
+              className="flex items-center justify-center bg-gray-200 text-gray-500 font-bold flex-shrink-0"
+              style={{ width: "40px", height: "40px", borderRadius: "10px", fontSize: "18px" }}
+            >
+              {user.name?.[0] || "U"}
+            </div>
+          )}
+
           {/* User Info */}
           <div className="hidden sm:flex flex-col justify-center min-w-0">
             <p 
               className="text-gray-900 truncate"
-              style={{
-                fontFamily: "Poppins, sans-serif",
-                fontWeight: 500,
-                fontSize: "14px",
-                lineHeight: "1.5"
-              }}
+              style={{ fontFamily: "Poppins, sans-serif", fontWeight: 500, fontSize: "14px", lineHeight: "1.5" }}
             >
-              Bharat
+              {user.name}
             </p>
             <p 
               className="text-gray-500 truncate"
-              style={{
-                fontFamily: "Poppins, sans-serif",
-                fontWeight: 400,
-                fontSize: "12px"
-              }}
+              style={{ fontFamily: "Poppins, sans-serif", fontWeight: 400, fontSize: "12px" }}
             >
-              Admin
+              {user.role}
             </p>
           </div>
 
           {/* Dropdown Arrow */}
-          <svg className="hidden sm:block flex-shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path d="M6 9l6 6 6-6" stroke="#737791" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
+          <button
+            className="hidden sm:block flex-shrink-0 focus:outline-none"
+            style={{ background: "none", border: "none", padding: 0, margin: 0 }}
+            onClick={() => setDropdownOpen((v) => !v)}
+            tabIndex={0}
+            aria-label="Open user menu"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M6 9l6 6 6-6" stroke="#737791" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+
+          {/* Dropdown Menu */}
+          {dropdownOpen && (
+            <div className="absolute right-0 top-12 mt-2 w-40 rounded-xl shadow-lg bg-white border border-gray-100 z-50 animate-fade-in">
+              <button
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-xl"
+                onClick={() => { setDropdownOpen(false); router.push("/corporate/settings"); }}
+              >
+                Settings
+              </button>
+              <button
+                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-50 rounded-b-xl"
+                onClick={() => { setDropdownOpen(false); router.push("/sign-out"); }}
+              >
+                Sign Out
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>
