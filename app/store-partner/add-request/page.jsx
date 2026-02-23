@@ -28,6 +28,38 @@ function Field({ label, required = false, children }) {
   );
 }
 
+function normalizeMemberStores(rows) {
+  const out = [];
+  (rows || []).forEach((row) => {
+    const linked = row?.stores;
+    if (!linked) return;
+    if (Array.isArray(linked)) {
+      linked.forEach((s) => {
+        if (s?.id) out.push(s);
+      });
+      return;
+    }
+    if (linked?.id) out.push(linked);
+  });
+  return out;
+}
+
+function normalizeMauritiusPhone(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+
+  if (digits.startsWith("230")) {
+    return `+${digits.slice(0, 11)}`;
+  }
+
+  return `+230${digits.slice(0, 8)}`;
+}
+
+function isValidMauritiusPhone(value) {
+  if (!value) return true;
+  return /^\+230\d{8}$/.test(String(value).trim());
+}
+
 export default function StorePartnerAdsRequestPage() {
   const router = useRouter();
 
@@ -36,26 +68,43 @@ export default function StorePartnerAdsRequestPage() {
 
   const [err, setErr] = useState("");
   const [ok, setOk] = useState("");
+  const [userId, setUserId] = useState("");
 
   const [stores, setStores] = useState([]);
   const [selectedStoreId, setSelectedStoreId] = useState("");
 
-  const [placement, setPlacement] = useState("TOP_LISTING"); // TOP_LISTING | HOME_BANNER | SEARCH_SPONSORED
+  const [placement, setPlacement] = useState("TOP_LISTING");
   const [budget, setBudget] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [notes, setNotes] = useState("");
-  const [contactPhone, setContactPhone] = useState("");
+  const [contactPhone, setContactPhone] = useState("+230");
   const [contactEmail, setContactEmail] = useState("");
 
+  const today = useMemo(() => new Date().toISOString().split("T")[0], []);
+
+  const minEndDate = useMemo(() => {
+    if (!startDate) return today;
+    return startDate > today ? startDate : today;
+  }, [startDate, today]);
+
   const canSubmit = useMemo(() => {
+    if (!userId) return false;
     if (!selectedStoreId) return false;
     if (!placement) return false;
-    if (!budget || Number(budget) <= 0) return false;
+
+    const b = Number(budget);
+    if (!budget || !Number.isFinite(b) || b <= 0) return false;
+
     if (!startDate || !endDate) return false;
+    if (startDate < today) return false;
+    if (endDate < today) return false;
     if (new Date(endDate).getTime() < new Date(startDate).getTime()) return false;
+
+    if (!isValidMauritiusPhone(contactPhone)) return false;
+
     return true;
-  }, [selectedStoreId, placement, budget, startDate, endDate]);
+  }, [userId, selectedStoreId, placement, budget, startDate, endDate, today, contactPhone]);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +123,7 @@ export default function StorePartnerAdsRequestPage() {
           router.replace("/sign-in");
           return;
         }
+        if (!cancelled) setUserId(String(userId));
 
         const ownerRes = await supabaseBrowser
           .from("stores")
@@ -84,13 +134,13 @@ export default function StorePartnerAdsRequestPage() {
 
         const memberRes = await supabaseBrowser
           .from("store_members")
-          .select("store_id, stores:store_id (id,name,city,is_active)")
+          .select("store_id, stores:store_id(id,name,city,is_active)")
           .eq("user_id", userId);
 
         if (memberRes.error) throw memberRes.error;
 
         const ownerStores = ownerRes.data || [];
-        const memberStores = (memberRes.data || []).map((r) => r.stores).filter(Boolean);
+        const memberStores = normalizeMemberStores(memberRes.data || []);
 
         const merged = new Map();
         [...ownerStores, ...memberStores].forEach((s) => merged.set(String(s.id), s));
@@ -115,6 +165,31 @@ export default function StorePartnerAdsRequestPage() {
     };
   }, [router]);
 
+  const handleBudgetChange = (e) => {
+    const value = e.target.value;
+    if (value === "") {
+      setBudget("");
+      return;
+    }
+
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0) return;
+    setBudget(String(Math.floor(n)));
+  };
+
+  const handleStartDateChange = (e) => {
+    const value = e.target.value;
+    setStartDate(value);
+    if (endDate && value && endDate < value) {
+      setEndDate(value);
+    }
+  };
+
+  const handlePhoneChange = (e) => {
+    const normalized = normalizeMauritiusPhone(e.target.value);
+    setContactPhone(normalized);
+  };
+
   const handleSubmit = async () => {
     if (!canSubmit || saving) return;
 
@@ -124,6 +199,7 @@ export default function StorePartnerAdsRequestPage() {
       setOk("");
 
       const payload = {
+        user_id: userId,
         store_id: selectedStoreId,
         placement,
         budget_mur: Number(budget),
@@ -206,8 +282,13 @@ export default function StorePartnerAdsRequestPage() {
                 <input
                   type="number"
                   min="1"
+                  step="1"
+                  inputMode="numeric"
                   value={budget}
-                  onChange={(e) => setBudget(e.target.value)}
+                  onChange={handleBudgetChange}
+                  onKeyDown={(e) => {
+                    if (["-", "+", "e", "E", "."].includes(e.key)) e.preventDefault();
+                  }}
                   className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
                   placeholder="e.g. 5000"
                 />
@@ -216,8 +297,9 @@ export default function StorePartnerAdsRequestPage() {
               <Field label="Start Date" required>
                 <input
                   type="date"
+                  min={today}
                   value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  onChange={handleStartDateChange}
                   className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
                 />
               </Field>
@@ -225,19 +307,21 @@ export default function StorePartnerAdsRequestPage() {
               <Field label="End Date" required>
                 <input
                   type="date"
+                  min={minEndDate}
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
                   className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
                 />
               </Field>
 
-              <Field label="Contact Phone">
+              <Field label="Contact Phone (Mauritius)">
                 <input
                   value={contactPhone}
-                  onChange={(e) => setContactPhone(e.target.value)}
+                  onChange={handlePhoneChange}
                   className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                  placeholder="+230..."
+                  placeholder="+230XXXXXXXX"
                 />
+                <div className="mt-1 text-[11px] text-gray-500">Format: +230 followed by 8 digits</div>
               </Field>
 
               <Field label="Contact Email">
