@@ -64,6 +64,41 @@ const PAYMENT_DEFAULTS = {
   notes: "",
 };
 
+const CATEGORY_OPTIONS = {
+  "Food & Beverage": ["Restaurant", "Cafe", "Bakery", "Fast Food", "Cloud Kitchen"],
+  Retail: ["Grocery", "Fashion", "Electronics", "Home Goods", "Pharmacy"],
+  Services: ["Salon", "Spa", "Repair", "Laundry", "Professional Services"],
+  "Health & Fitness": ["Gym", "Clinic", "Wellness Center", "Yoga Studio"],
+  Hospitality: ["Hotel", "Guest House", "Resort", "Travel Services"],
+  Entertainment: ["Event", "Cinema", "Gaming", "Kids Activity"],
+  Other: ["General"],
+};
+
+function normalizeInput(v) {
+  return String(v || "").replace(/\s+/g, " ").trim();
+}
+
+function looksLikeJunk(v) {
+  const value = normalizeInput(v);
+  if (!value) return false;
+
+  const compact = value.replace(/\s/g, "");
+  const alphaNumCount = (compact.match(/[A-Za-z0-9]/g) || []).length;
+  const symbolCount = compact.length - alphaNumCount;
+
+  if (compact.length >= 4 && alphaNumCount / compact.length < 0.5) return true;
+  if (symbolCount >= 4 && alphaNumCount <= 2) return true;
+  if (/(.)\1{4,}/.test(value)) return true;
+  return false;
+}
+
+function findInvalidField(entries) {
+  for (const [label, value] of entries) {
+    if (looksLikeJunk(value)) return label;
+  }
+  return "";
+}
+
 function normalizeMemberStores(rows) {
   const out = [];
   (rows || []).forEach((row) => {
@@ -221,6 +256,9 @@ export default function StorePartnerSettingsPage() {
   );
 
   const canSaveStore = useMemo(() => !!form.name.trim(), [form.name]);
+  const subcategoryOptions = useMemo(() => {
+    return CATEGORY_OPTIONS[form.category] || [];
+  }, [form.category]);
 
   const canSavePayment = useMemo(() => {
     if (!paymentForm.legal_business_name.trim()) return false;
@@ -258,6 +296,37 @@ export default function StorePartnerSettingsPage() {
       setOk("");
 
       const tagsArray = form.tags ? form.tags.split(",").map((x) => x.trim()).filter(Boolean) : [];
+      const invalidStoreField = findInvalidField([
+        ["Store Name", form.name],
+        ["Tags", form.tags],
+        ["Description", form.description],
+        ["Phone", form.phone],
+        ["WhatsApp", form.whatsapp],
+        ["Email", form.email],
+        ["Website", form.website],
+        ["Location Name", form.location_name],
+        ["Address Line 1", form.address_line1],
+        ["Address Line 2", form.address_line2],
+        ["City", form.city],
+        ["Region", form.region],
+        ["Country", form.country],
+        ["Postal Code", form.postal_code],
+        ["Google Place ID", form.google_place_id],
+        ["Instagram", form.instagram],
+        ["Facebook", form.facebook],
+        ["TikTok", form.tiktok],
+        ["Maps URL", form.maps],
+      ]);
+      if (invalidStoreField) {
+        throw new Error(`Invalid value in ${invalidStoreField}. Please remove junk/special characters.`);
+      }
+
+      if (form.category && !CATEGORY_OPTIONS[form.category]) {
+        throw new Error("Please select a valid Category from dropdown.");
+      }
+      if (form.subcategory && !(CATEGORY_OPTIONS[form.category] || []).includes(form.subcategory)) {
+        throw new Error("Please select a valid Subcategory from dropdown.");
+      }
 
       const social_links = {
         instagram: form.instagram || undefined,
@@ -268,26 +337,26 @@ export default function StorePartnerSettingsPage() {
       };
 
       const payload = {
-        name: form.name.trim(),
-        category: form.category.trim() || null,
-        subcategory: form.subcategory.trim() || null,
+        name: normalizeInput(form.name),
+        category: normalizeInput(form.category) || null,
+        subcategory: normalizeInput(form.subcategory) || null,
         tags: tagsArray,
-        description: form.description.trim() || null,
-        phone: form.phone.trim() || null,
-        whatsapp: form.whatsapp.trim() || null,
-        email: form.email.trim() || null,
-        website: form.website.trim() || null,
+        description: normalizeInput(form.description) || null,
+        phone: normalizeInput(form.phone) || null,
+        whatsapp: normalizeInput(form.whatsapp) || null,
+        email: normalizeInput(form.email) || null,
+        website: normalizeInput(form.website) || null,
         social_links,
-        location_name: form.location_name.trim() || null,
-        address_line1: form.address_line1.trim() || null,
-        address_line2: form.address_line2.trim() || null,
-        city: form.city.trim() || null,
-        region: form.region.trim() || null,
-        country: form.country.trim() || "Mauritius",
-        postal_code: form.postal_code.trim() || null,
+        location_name: normalizeInput(form.location_name) || null,
+        address_line1: normalizeInput(form.address_line1) || null,
+        address_line2: normalizeInput(form.address_line2) || null,
+        city: normalizeInput(form.city) || null,
+        region: normalizeInput(form.region) || null,
+        country: normalizeInput(form.country) || "Mauritius",
+        postal_code: normalizeInput(form.postal_code) || null,
         lat: safeNum(form.lat),
         lng: safeNum(form.lng),
-        google_place_id: form.google_place_id.trim() || null,
+        google_place_id: normalizeInput(form.google_place_id) || null,
         is_active: !!form.is_active,
         is_featured: !!form.is_featured,
       };
@@ -312,25 +381,44 @@ export default function StorePartnerSettingsPage() {
       setErr("");
       setOk("");
 
+      const invalidPaymentField = findInvalidField([
+        ["Legal Business Name", paymentForm.legal_business_name],
+        ["Display Name on Invoice", paymentForm.display_name_on_invoice],
+        ["Beneficiary Name", paymentForm.beneficiary_name],
+        ["Bank Name", paymentForm.bank_name],
+        ["Account Number", paymentForm.account_number],
+        ["IFSC", paymentForm.ifsc],
+        ["IBAN", paymentForm.iban],
+        ["SWIFT", paymentForm.swift],
+        ["Payout UPI ID", paymentForm.payout_upi_id],
+        ["Tax Number", paymentForm.tax_id_value],
+        ["Billing Email", paymentForm.billing_email],
+        ["Billing Phone", paymentForm.billing_phone],
+        ["Notes", paymentForm.notes],
+      ]);
+      if (invalidPaymentField) {
+        throw new Error(`Invalid value in ${invalidPaymentField}. Please remove junk/special characters.`);
+      }
+
       const payload = {
         store_id: selectedStoreId,
-        legal_business_name: paymentForm.legal_business_name.trim(),
-        display_name_on_invoice: asText(paymentForm.display_name_on_invoice),
+        legal_business_name: normalizeInput(paymentForm.legal_business_name),
+        display_name_on_invoice: asText(normalizeInput(paymentForm.display_name_on_invoice)),
         payout_method: paymentForm.payout_method,
-        beneficiary_name: asText(paymentForm.beneficiary_name),
-        bank_name: asText(paymentForm.bank_name),
-        account_number: asText(paymentForm.account_number),
-        ifsc: asText(paymentForm.ifsc),
-        iban: asText(paymentForm.iban),
-        swift: asText(paymentForm.swift),
-        payout_upi_id: asText(paymentForm.payout_upi_id),
+        beneficiary_name: asText(normalizeInput(paymentForm.beneficiary_name)),
+        bank_name: asText(normalizeInput(paymentForm.bank_name)),
+        account_number: asText(normalizeInput(paymentForm.account_number)),
+        ifsc: asText(normalizeInput(paymentForm.ifsc)),
+        iban: asText(normalizeInput(paymentForm.iban)),
+        swift: asText(normalizeInput(paymentForm.swift)),
+        payout_upi_id: asText(normalizeInput(paymentForm.payout_upi_id)),
         settlement_cycle: "T+1",
         currency: "MUR",
         tax_id_label: paymentForm.tax_id_label || "BRN",
-        tax_id_value: asText(paymentForm.tax_id_value),
-        billing_email: asText(paymentForm.billing_email),
-        billing_phone: asText(paymentForm.billing_phone),
-        notes: asText(paymentForm.notes),
+        tax_id_value: asText(normalizeInput(paymentForm.tax_id_value)),
+        billing_email: asText(normalizeInput(paymentForm.billing_email)),
+        billing_phone: asText(normalizeInput(paymentForm.billing_phone)),
+        notes: asText(normalizeInput(paymentForm.notes)),
       };
 
       const { data, error } = await supabaseBrowser
@@ -480,18 +568,40 @@ export default function StorePartnerSettingsPage() {
                     />
                   </Field>
                   <Field label="Category">
-                    <input
+                    <select
                       value={form.category}
-                      onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          category: e.target.value,
+                          subcategory:
+                            (CATEGORY_OPTIONS[e.target.value] || []).includes(p.subcategory) ? p.subcategory : "",
+                        }))
+                      }
                       className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                    />
+                    >
+                      <option value="">Select category</option>
+                      {Object.keys(CATEGORY_OPTIONS).map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
                   </Field>
                   <Field label="Subcategory">
-                    <input
+                    <select
                       value={form.subcategory}
                       onChange={(e) => setForm((p) => ({ ...p, subcategory: e.target.value }))}
+                      disabled={!form.category}
                       className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                    />
+                    >
+                      <option value="">{form.category ? "Select subcategory" : "Select category first"}</option>
+                      {subcategoryOptions.map((sub) => (
+                        <option key={sub} value={sub}>
+                          {sub}
+                        </option>
+                      ))}
+                    </select>
                   </Field>
                   <Field label="Tags (comma separated)">
                     <input
@@ -577,48 +687,7 @@ export default function StorePartnerSettingsPage() {
                       className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
                     />
                   </Field>
-                  <Field label="Latitude">
-                    <input
-                      value={form.lat}
-                      onChange={(e) => setForm((p) => ({ ...p, lat: e.target.value }))}
-                      className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                    />
-                  </Field>
-                  <Field label="Longitude">
-                    <input
-                      value={form.lng}
-                      onChange={(e) => setForm((p) => ({ ...p, lng: e.target.value }))}
-                      className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                    />
-                  </Field>
-                  <Field label="Google Place ID">
-                    <input
-                      value={form.google_place_id}
-                      onChange={(e) => setForm((p) => ({ ...p, google_place_id: e.target.value }))}
-                      className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                    />
-                  </Field>
-                  <Field label="Instagram">
-                    <input
-                      value={form.instagram}
-                      onChange={(e) => setForm((p) => ({ ...p, instagram: e.target.value }))}
-                      className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                    />
-                  </Field>
-                  <Field label="Facebook">
-                    <input
-                      value={form.facebook}
-                      onChange={(e) => setForm((p) => ({ ...p, facebook: e.target.value }))}
-                      className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                    />
-                  </Field>
-                  <Field label="TikTok">
-                    <input
-                      value={form.tiktok}
-                      onChange={(e) => setForm((p) => ({ ...p, tiktok: e.target.value }))}
-                      className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                    />
-                  </Field>
+                 
                   <Field label="Maps URL">
                     <input
                       value={form.maps}
