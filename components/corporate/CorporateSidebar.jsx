@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
-  const [activeMenu, setActiveMenu] = useState("dashboard");
+  const pathname = usePathname();
   const router = useRouter();
 
   const menuItems = [
@@ -19,6 +19,14 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
     { id: "signout", label: "Sign Out" },
   ];
 
+  // Determine active menu from current pathname
+  const getActiveMenu = () => {
+    const item = menuItems.find(item => item.href && pathname === item.href);
+    return item ? item.id : "dashboard";
+  };
+
+  const activeMenu = getActiveMenu();
+
   const onLogout = async () => {
     await supabaseBrowser.auth.signOut();
     if (closeMobileMenu) closeMobileMenu();
@@ -26,8 +34,6 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
   };
 
   const handleMenuClick = async (itemId) => {
-    setActiveMenu(itemId);
-
     if (itemId === "signout") {
       await onLogout();
       return;
@@ -45,7 +51,7 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
     ].join(" ");
 
   const itemStyle = (active) => ({
-    fontSize: active ? "15px" : "14px",
+    fontSize: "14px",
     fontWeight: active ? 600 : 500,
     lineHeight: "140%",
     fontFamily: "Satoshi, sans-serif",
@@ -96,7 +102,15 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
               <>
                 <div className="flex items-center justify-center flex-shrink-0" style={{ width: "24px", height: "24px" }}>
                   {item.id === "dashboard" && (
-                    <Image src="/dashboard.png" alt="Dashboard" width={20} height={20} style={{ filter: active ? "brightness(0) invert(1)" : "none", opacity: active ? 1 : 0.6 }} />
+                    <Image 
+                      src="/dashboard.png" 
+                      alt="Dashboard" 
+                      width={20} 
+                      height={20} 
+                      style={{ 
+                        filter: active ? "brightness(0) invert(1)" : "grayscale(1) brightness(0.5) opacity(0.6)"
+                      }} 
+                    />
                   )}
                   {item.id === "gift-cards" && (
                     <svg
@@ -111,16 +125,48 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
                     </svg>
                   )}
                   {item.id === "pass-management" && (
-                    <Image src="/report.png" alt="Pass Management" width={20} height={20} style={{ filter: active ? "brightness(0) invert(1)" : "none", opacity: active ? 1 : 0.6 }} />
+                    <Image 
+                      src="/report.png" 
+                      alt="Pass Management" 
+                      width={20} 
+                      height={20} 
+                      style={{ 
+                        filter: active ? "brightness(0) invert(1)" : "grayscale(1) brightness(0.5) opacity(0.6)"
+                      }} 
+                    />
                   )}
                   {item.id === "billing" && (
-                    <Image src="/billings.png" alt="Billing & Payments" width={20} height={20} style={{ filter: active ? "brightness(0) invert(1)" : "none", opacity: active ? 1 : 0.6 }} />
+                    <Image 
+                      src="/billings.png" 
+                      alt="Billing & Payments" 
+                      width={20} 
+                      height={20} 
+                      style={{ 
+                        filter: active ? "brightness(0) invert(1)" : "grayscale(1) brightness(0.5) opacity(0.6)"
+                      }} 
+                    />
                   )}
                   {item.id === "settings" && (
-                    <Image src="/settings.png" alt="Settings" width={20} height={20} style={{ filter: active ? "brightness(0) invert(1)" : "none", opacity: active ? 1 : 0.6 }} />
+                    <Image 
+                      src="/settings.png" 
+                      alt="Settings" 
+                      width={20} 
+                      height={20} 
+                      style={{ 
+                        filter: active ? "brightness(0) invert(1)" : "grayscale(1) brightness(0.5) opacity(0.6)"
+                      }} 
+                    />
                   )}
                   {item.id === "signout" && (
-                    <Image src="/signout.png" alt="Sign Out" width={20} height={20} style={{ filter: active ? "brightness(0) invert(1)" : "none", opacity: active ? 1 : 0.6 }} />
+                    <Image 
+                      src="/signout.png" 
+                      alt="Sign Out" 
+                      width={20} 
+                      height={20} 
+                      style={{ 
+                        filter: active ? "brightness(0) invert(1)" : "grayscale(1) brightness(0.5) opacity(0.6)"
+                      }} 
+                    />
                   )}
                 </div>
                 {item.label}
@@ -134,7 +180,7 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
                   type="button"
                   onClick={() => handleMenuClick(item.id)}
                   className={itemClass(active)}
-                  style={itemStyle(active)}
+                  style={{ ...itemStyle(active), cursor: "pointer" }}
                 >
                   {content}
                 </button>
