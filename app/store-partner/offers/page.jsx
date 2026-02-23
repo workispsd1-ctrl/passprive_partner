@@ -106,6 +106,53 @@ function StoreSelector({
   );
 }
 
+function normalizeMemberStores(rows) {
+  const out = [];
+  (rows || []).forEach((row) => {
+    const linked = row?.stores;
+    if (!linked) return;
+    if (Array.isArray(linked)) {
+      linked.forEach((s) => {
+        if (s?.id) out.push(s);
+      });
+      return;
+    }
+    if (linked?.id) out.push(linked);
+  });
+  return out;
+}
+
+function toLocalDateTimeInput(d) {
+  const pad = (n) => String(n).padStart(2, "0");
+  const date = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}`;
+}
+
+function isPastDateTime(dt) {
+  if (!dt) return false;
+  const t = new Date(dt).getTime();
+  if (!Number.isFinite(t)) return true;
+  return t < Date.now();
+}
+
+function isPositiveNumberString(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0;
+}
+
+function preventInvalidNumberKeys(e) {
+  if (["-", "+", "e", "E"].includes(e.key)) e.preventDefault();
+}
+
+function sanitizeNonNegative(v) {
+  if (v === "") return "";
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) return "";
+  return String(n);
+}
+
 export default function CreateOfferPage() {
   const router = useRouter();
 
@@ -136,6 +183,12 @@ export default function CreateOfferPage() {
   );
 
   const [visitRewards, setVisitRewards] = useState(createDefaultVisitRewards);
+
+  const minDateTime = useMemo(() => toLocalDateTimeInput(new Date()), []);
+  const endMinDateTime = useMemo(() => {
+    if (!startAt) return minDateTime;
+    return startAt > minDateTime ? startAt : minDateTime;
+  }, [startAt, minDateTime]);
 
   const allTermsAccepted = useMemo(
     () => TERMS.every((t) => acceptedTerms[t.id]),
@@ -197,15 +250,32 @@ export default function CreateOfferPage() {
     [visitRewardRows]
   );
 
-  const canSubmitStandard = useMemo(() => {
-    if (!title.trim()) return false;
-    if (!value || Number(value) <= 0) return false;
-    if (!startAt || !endAt) return false;
-    if (new Date(endAt).getTime() <= new Date(startAt).getTime()) return false;
-    if (!effectiveStoreIds.length) return false;
-    if (!allTermsAccepted) return false;
-    return true;
-  }, [title, value, startAt, endAt, effectiveStoreIds, allTermsAccepted]);
+  const standardValidationError = useMemo(() => {
+    if (!title.trim()) return "Offer title is required.";
+    if (!isPositiveNumberString(value)) return "Discount amount must be greater than 0.";
+
+    if (discountType === "PERCENT" && Number(value) > 100) {
+      return "Discount percent cannot exceed 100.";
+    }
+
+    if (minBill !== "" && Number(minBill) < 0) {
+      return "Minimum bill cannot be negative.";
+    }
+
+    if (!startAt || !endAt) return "Start and end date/time are required.";
+    if (isPastDateTime(startAt)) return "Start date/time cannot be in the past.";
+    if (isPastDateTime(endAt)) return "End date/time cannot be in the past.";
+    if (new Date(endAt).getTime() <= new Date(startAt).getTime()) {
+      return "End date/time must be after start date/time.";
+    }
+
+    if (!effectiveStoreIds.length) return "Select at least one store.";
+    if (!allTermsAccepted) return "Accept all terms and conditions.";
+
+    return "";
+  }, [title, value, discountType, minBill, startAt, endAt, effectiveStoreIds, allTermsAccepted]);
+
+  const canSubmitStandard = useMemo(() => !standardValidationError, [standardValidationError]);
 
   const canSubmitVisit = useMemo(() => {
     if (!effectiveVisitStoreIds.length) return false;
@@ -246,7 +316,7 @@ export default function CreateOfferPage() {
         if (memberRes.error) throw memberRes.error;
 
         const ownerStores = ownerRes.data || [];
-        const memberStores = (memberRes.data || []).map((r) => r.stores).filter(Boolean);
+        const memberStores = normalizeMemberStores(memberRes.data || []);
 
         const mergedMap = new Map();
         [...ownerStores, ...memberStores].forEach((s) => {
@@ -345,7 +415,10 @@ export default function CreateOfferPage() {
   };
 
   const handleSubmitStandard = async () => {
-    if (!canSubmitStandard || savingStandard) return;
+    if (!canSubmitStandard || savingStandard) {
+      if (standardValidationError) setErr(standardValidationError);
+      return;
+    }
 
     try {
       setSavingStandard(true);
@@ -456,7 +529,8 @@ export default function CreateOfferPage() {
                     type="number"
                     min="0"
                     value={value}
-                    onChange={(e) => setValue(e.target.value)}
+                    onChange={(e) => setValue(sanitizeNonNegative(e.target.value))}
+                    onKeyDown={preventInvalidNumberKeys}
                     className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
                     placeholder={discountType === "PERCENT" ? "10" : "50"}
                   />
@@ -467,7 +541,8 @@ export default function CreateOfferPage() {
                     type="number"
                     min="0"
                     value={minBill}
-                    onChange={(e) => setMinBill(e.target.value)}
+                    onChange={(e) => setMinBill(sanitizeNonNegative(e.target.value))}
+                    onKeyDown={preventInvalidNumberKeys}
                     className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
                     placeholder="500"
                   />
@@ -486,6 +561,7 @@ export default function CreateOfferPage() {
                   <input
                     type="datetime-local"
                     value={startAt}
+                    min={minDateTime}
                     onChange={(e) => setStartAt(e.target.value)}
                     className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
                   />
@@ -495,13 +571,14 @@ export default function CreateOfferPage() {
                   <input
                     type="datetime-local"
                     value={endAt}
+                    min={endMinDateTime}
                     onChange={(e) => setEndAt(e.target.value)}
                     className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
                   />
                 </Field>
-
-                
               </div>
+
+             
 
               <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
                 <div className="text-sm font-semibold text-gray-900">Terms & Conditions</div>
@@ -604,12 +681,13 @@ export default function CreateOfferPage() {
                                 min="0"
                                 max={mode === REWARD_MODES.PERCENT ? "100" : undefined}
                                 value={row.amount}
+                                onKeyDown={preventInvalidNumberKeys}
                                 onChange={(e) =>
                                   setVisitRewards((prev) => ({
                                     ...prev,
                                     [String(visit)]: {
                                       ...prev[String(visit)],
-                                      amount: e.target.value,
+                                      amount: sanitizeNonNegative(e.target.value),
                                     },
                                   }))
                                 }
