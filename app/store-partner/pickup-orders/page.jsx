@@ -356,7 +356,7 @@ export default function StorePartnerOrdersPage() {
       className="min-h-screen"
       style={{ fontFamily: '"Space Grotesk", "Sora", sans-serif' }}
     >
-      <div className="mx-auto max-w-7xl px-6 py-4 space-y-6">
+      <div className="mx-auto max-w-7xl px-6 space-y-6">
         <div className="flex items-center justify-between gap-3">
           <div></div>
 
@@ -388,12 +388,7 @@ export default function StorePartnerOrdersPage() {
           <div className="grid grid-cols-1 xl:grid-cols-[1.08fr_0.92fr] gap-6">
             <Card
               title="Pickup Orders"
-              right={
-                <div className="flex items-center gap-2">
-                  <Bell className="h-4 w-4 text-orange-600" />
-                  <span className="text-sm font-semibold text-gray-700">{filteredOrders.length}</span>
-                </div>
-              }
+             
             >
               <div className="grid sm:grid-cols-2 gap-3 mb-4">
                 <div>
@@ -607,7 +602,7 @@ export default function StorePartnerOrdersPage() {
                       style={{ background: "linear-gradient(90deg, #0f766e 0%, #14b8a6 100%)" }}
                     >
                       {savingId === selectedOrder.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackageCheck className="h-4 w-4" />}
-                      Collected (Reduce Stock)
+                      Collected
                     </button>
                   </div>
 

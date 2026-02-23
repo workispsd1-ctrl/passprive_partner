@@ -15,7 +15,6 @@ import {
   XCircle,
   Eye,
   Pencil,
-  Sparkles,
   SlidersHorizontal,
 } from "lucide-react";
 
@@ -123,6 +122,11 @@ function timeAgo(iso) {
   const day = Math.floor(hr / 24);
   if (day < 7) return `${day}d ago`;
   return d.toLocaleDateString();
+}
+
+function toCsvCell(value) {
+  const safe = String(value ?? "").replace(/"/g, '""');
+  return `"${safe}"`;
 }
 
 export default function StorePartnerAllStoresPage() {
@@ -237,26 +241,79 @@ export default function StorePartnerAllStoresPage() {
     router.push(`/store-partner/all-stores/${storeId}/edit`);
   };
 
+  const handleExport = () => {
+    const rows = [];
+    rows.push(["All Stores Export"]);
+    rows.push(["Generated At", new Date().toLocaleString()]);
+    rows.push(["Total Visible Stores", String(filtered.length)]);
+    rows.push([]);
+    rows.push([
+      "Store ID",
+      "Store Name",
+      "Category",
+      "City",
+      "Region",
+      "Country",
+      "Postal Code",
+      "Slug",
+      "Status",
+      "Featured",
+      "Updated At",
+      "Created At",
+    ]);
+
+    filtered.forEach((s) => {
+      rows.push([
+        s.id,
+        s.name || "",
+        s.category || "",
+        s.city || "",
+        s.region || "",
+        s.country || "",
+        s.postal_code || "",
+        s.slug || "",
+        s.is_active !== false ? "Active" : "Inactive",
+        s.is_featured ? "Yes" : "No",
+        s.updated_at ? new Date(s.updated_at).toLocaleString() : "",
+        s.created_at ? new Date(s.created_at).toLocaleString() : "",
+      ]);
+    });
+
+    const csv = rows.map((r) => r.map(toCsvCell).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+
+    const now = new Date();
+    const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+      now.getDate()
+    ).padStart(2, "0")}`;
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `stores-export-${date}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div
       className="min-h-screen"
       style={{
         fontFamily: '"Space Grotesk", "Sora", sans-serif',
-        
       }}
     >
       <div className="mx-auto max-w-6xl px-6 py-4 space-y-6">
-        {/* Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-           
-          </div>
+          <div></div>
 
           <div className="flex items-center gap-2">
             <button
-              className="h-10 rounded-full border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 inline-flex items-center gap-2 shadow-sm"
+              className="h-10 rounded-full border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 inline-flex items-center gap-2 shadow-sm disabled:opacity-60"
               type="button"
-              onClick={() => alert("Export: wire this later")}
+              onClick={handleExport}
+              disabled={loading || filtered.length === 0}
             >
               <Download className="h-4 w-4" />
               Export
@@ -277,7 +334,6 @@ export default function StorePartnerAllStoresPage() {
           </div>
         </div>
 
-        {/* KPI */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {loading ? (
             <>
@@ -296,14 +352,12 @@ export default function StorePartnerAllStoresPage() {
           )}
         </div>
 
-        {/* Error */}
         {fetchErr ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {fetchErr}
           </div>
         ) : null}
 
-        {/* Filters */}
         <CardShell
           title="Filters"
           right={
@@ -395,7 +449,6 @@ export default function StorePartnerAllStoresPage() {
           </div>
         </CardShell>
 
-        {/* Stores Table */}
         <CardShell title={`All Stores (${filtered.length})`} right={loading ? <Pill>Loading…</Pill> : null}>
           {loading ? (
             <div className="space-y-2 animate-pulse">
@@ -463,20 +516,14 @@ export default function StorePartnerAllStoresPage() {
                       <td className="py-3 pr-4 text-gray-700">{s.category || "—"}</td>
 
                       <td className="py-3 pr-4">
-                        {s.is_active !== false ? (
-                          <Pill tone="green">Active</Pill>
-                        ) : (
-                          <Pill tone="red">Inactive</Pill>
-                        )}
+                        {s.is_active !== false ? <Pill tone="green">Active</Pill> : <Pill tone="red">Inactive</Pill>}
                       </td>
 
                       <td className="py-3 pr-4">
                         {s.is_featured ? <Pill tone="yellow">Featured</Pill> : <Pill>—</Pill>}
                       </td>
 
-                      <td className="py-3 pr-4 text-gray-500">
-                        {timeAgo(s.updated_at || s.created_at)}
-                      </td>
+                      <td className="py-3 pr-4 text-gray-500">{timeAgo(s.updated_at || s.created_at)}</td>
 
                       <td className="py-3 pr-0">
                         <div className="flex items-center justify-end gap-2">
@@ -507,7 +554,6 @@ export default function StorePartnerAllStoresPage() {
           )}
         </CardShell>
 
-        {/* Alerts */}
         <CardShell title="Alerts">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="rounded-2xl border border-gray-200 bg-white p-4 flex items-start gap-3">
@@ -518,9 +564,7 @@ export default function StorePartnerAllStoresPage() {
                 <div className="font-semibold text-gray-900">
                   {(stores || []).filter((s) => s.is_active === false).length} store(s) inactive
                 </div>
-                <div className="text-sm text-gray-600 mt-1">
-                  Reactivate to start receiving orders.
-                </div>
+                <div className="text-sm text-gray-600 mt-1">Reactivate to start receiving orders.</div>
               </div>
             </div>
 
@@ -530,9 +574,7 @@ export default function StorePartnerAllStoresPage() {
               </div>
               <div>
                 <div className="font-semibold text-gray-900">All good</div>
-                <div className="text-sm text-gray-600 mt-1">
-                  Stores are loading from your live database.
-                </div>
+                <div className="text-sm text-gray-600 mt-1">Stores are loading from your live database.</div>
               </div>
             </div>
           </div>

@@ -11,6 +11,7 @@ import {
   Sparkles,
   TrendingUp,
 } from "lucide-react";
+import Link from "next/link";
 
 function StatCard({ title, value, change, changeType, icon: Icon }) {
   const up = changeType === "up";
@@ -59,15 +60,19 @@ function CardShell({ title, right, children }) {
 function StatusPill({ status }) {
   const s = String(status || "").toLowerCase();
   const cls =
-    s === "delivered"
+    s === "delivered" || s === "completed"
       ? "bg-emerald-50 text-emerald-700 border-emerald-200"
       : s === "preparing" || s === "pending"
       ? "bg-amber-50 text-amber-700 border-amber-200"
-      : s === "cancelled"
+      : s === "cancelled" || s === "failed"
       ? "bg-red-50 text-red-700 border-red-200"
       : "bg-gray-50 text-gray-700 border-gray-200";
 
-  return <span className={`px-2 py-1 rounded-lg border text-xs font-medium ${cls}`}>{status}</span>;
+  return (
+    <span className={`px-2 py-1 rounded-lg border text-xs font-medium ${cls}`}>
+      {status}
+    </span>
+  );
 }
 
 function SkeletonBlock({ className = "" }) {
@@ -96,6 +101,90 @@ function SkeletonRow() {
   );
 }
 
+function toCsvCell(value) {
+  const safe = String(value ?? "").replace(/"/g, '""');
+  return `"${safe}"`;
+}
+
+function SalesOverviewChart({ data }) {
+  const width = 760;
+  const height = 260;
+  const padX = 24;
+  const padY = 24;
+  const innerW = width - padX * 2;
+  const innerH = height - padY * 2;
+
+  const values = data.map((d) => d.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = Math.max(max - min, 1);
+
+  const points = data.map((d, i) => {
+    const x = padX + (i * innerW) / (data.length - 1);
+    const y = padY + ((max - d.value) / range) * innerH;
+    return { x, y, label: d.label, value: d.value };
+  });
+
+  const polyline = points.map((p) => `${p.x},${p.y}`).join(" ");
+  const areaPath = `M ${points[0].x} ${height - padY} L ${points
+    .map((p) => `${p.x} ${p.y}`)
+    .join(" L ")} L ${points[points.length - 1].x} ${height - padY} Z`;
+
+  const gridY = [0, 0.25, 0.5, 0.75, 1].map(
+    (step) => padY + step * innerH
+  );
+
+  return (
+    <div className="h-[260px] rounded-2xl border border-gray-200 bg-white p-3">
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full">
+        <defs>
+          <linearGradient id="salesGradient" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#fb923c" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#fb923c" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+
+        {gridY.map((y, idx) => (
+          <line
+            key={idx}
+            x1={padX}
+            y1={y}
+            x2={width - padX}
+            y2={y}
+            stroke="#e5e7eb"
+            strokeWidth="1"
+          />
+        ))}
+
+        <path d={areaPath} fill="url(#salesGradient)" />
+        <polyline
+          points={polyline}
+          fill="none"
+          stroke="#f97316"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+
+        {points.map((p, idx) => (
+          <g key={idx}>
+            <circle cx={p.x} cy={p.y} r="4.5" fill="#ffffff" stroke="#f97316" strokeWidth="2" />
+            <text
+              x={p.x}
+              y={height - 6}
+              textAnchor="middle"
+              fontSize="11"
+              fill="#6b7280"
+            >
+              {p.label}
+            </text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
 export default function StorePartnerDashboardPage() {
   const [loading, setLoading] = useState(true);
 
@@ -104,13 +193,36 @@ export default function StorePartnerDashboardPage() {
     return () => clearTimeout(t);
   }, []);
 
-  // Sample recent payments data (replace with real data as needed)
   const recentPayments = useMemo(
     () => [
-      { id: 'PAY-1001', date: '2026-02-19', amount: 'MUR 2,500', method: 'Card', status: 'Completed' },
-      { id: 'PAY-1000', date: '2026-02-18', amount: 'MUR 1,200', method: 'Cash', status: 'Completed' },
-      { id: 'PAY-0999', date: '2026-02-17', amount: 'MUR 3,000', method: 'UPI', status: 'Pending' },
-      { id: 'PAY-0998', date: '2026-02-16', amount: 'MUR 1,800', method: 'Card', status: 'Failed' },
+      {
+        id: "PAY-1001",
+        date: "2026-02-19",
+        amount: "MUR 2,500",
+        method: "Card",
+        status: "Completed",
+      },
+      {
+        id: "PAY-1000",
+        date: "2026-02-18",
+        amount: "MUR 1,200",
+        method: "Cash",
+        status: "Completed",
+      },
+      {
+        id: "PAY-0999",
+        date: "2026-02-17",
+        amount: "MUR 3,000",
+        method: "UPI",
+        status: "Pending",
+      },
+      {
+        id: "PAY-0998",
+        date: "2026-02-16",
+        amount: "MUR 1,800",
+        method: "Card",
+        status: "Failed",
+      },
     ],
     []
   );
@@ -193,44 +305,101 @@ export default function StorePartnerDashboardPage() {
     []
   );
 
+  const salesChartData = useMemo(
+    () => [
+      { label: "Day 1", value: 5200 },
+      { label: "Day 5", value: 6800 },
+      { label: "Day 10", value: 6100 },
+      { label: "Day 15", value: 7900 },
+      { label: "Day 20", value: 7400 },
+      { label: "Day 25", value: 8600 },
+      { label: "Day 30", value: 9300 },
+    ],
+    []
+  );
+
+  const handleExport = () => {
+    const rows = [];
+
+    rows.push(["Dashboard Stats"]);
+    rows.push(["Metric", "Value", "Change"]);
+    stats.forEach((s) => rows.push([s.title, s.value, s.change]));
+
+    rows.push([]);
+    rows.push(["Recent Pick and Collect"]);
+    rows.push(["Order", "Customer", "Total", "Status", "Time"]);
+    recentOrders.forEach((o) =>
+      rows.push([o.id, o.customer, o.total, o.status, o.time])
+    );
+
+    rows.push([]);
+    rows.push(["Recent Payments"]);
+    rows.push(["Payment ID", "Date", "Amount", "Method", "Status"]);
+    recentPayments.forEach((p) =>
+      rows.push([p.id, p.date, p.amount, p.method, p.status])
+    );
+
+    rows.push([]);
+    rows.push(["Top Products"]);
+    rows.push(["Product", "Sold", "Revenue"]);
+    topProducts.forEach((p) => rows.push([p.name, p.sold, p.revenue]));
+
+    const csv = rows
+      .map((row) => row.map((cell) => toCsvCell(cell)).join(","))
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+
+    const now = new Date();
+    const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}-${String(now.getDate()).padStart(2, "0")}`;
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `store-partner-dashboard-${date}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div
       className="min-h-screen"
       style={{
         fontFamily: '"Space Grotesk", "Sora", sans-serif',
-        
       }}
     >
       <div className="mx-auto max-w-6xl px-6 py-4 space-y-6">
-        {/* Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            
-          </div>
+          <div></div>
 
           <div className="flex items-center gap-2">
             <button
               className="h-10 rounded-full border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 shadow-sm"
               type="button"
+              onClick={handleExport}
             >
               Export
             </button>
 
-            <button
+            <Link
+              href="/store-partner/offers"
               className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 shadow-lg shadow-orange-200"
               style={{
                 background:
                   "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)",
               }}
-              type="button"
             >
               <Sparkles className="h-4 w-4" />
               Create Offer
-            </button>
+            </Link>
           </div>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {loading ? (
             <>
@@ -244,8 +413,7 @@ export default function StorePartnerDashboardPage() {
           )}
         </div>
 
-        {/* Middle grid */}
-        <div className="">
+        <div>
           <div className="xl:col-span-2">
             <CardShell
               title="Sales Overview"
@@ -259,11 +427,7 @@ export default function StorePartnerDashboardPage() {
               {loading ? (
                 <SkeletonBlock className="h-[260px]" />
               ) : (
-                <div className="h-[260px] rounded-2xl border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center">
-                  <div className="text-sm text-gray-600">
-                    Chart will go here (we’ll add real chart next)
-                  </div>
-                </div>
+                <SalesOverviewChart data={salesChartData} />
               )}
 
               <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -297,11 +461,8 @@ export default function StorePartnerDashboardPage() {
               </div>
             </CardShell>
           </div>
-
-          
         </div>
 
-        {/* Recent Pick and Collect */}
         <CardShell
           title="Recent Pick and Collect"
           right={
@@ -334,8 +495,13 @@ export default function StorePartnerDashboardPage() {
                 </thead>
                 <tbody>
                   {recentOrders.map((o) => (
-                    <tr key={o.id} className="border-t border-gray-100 hover:bg-gray-50/60 transition-colors">
-                      <td className="py-3 pr-4 font-semibold text-gray-900">{o.id}</td>
+                    <tr
+                      key={o.id}
+                      className="border-t border-gray-100 hover:bg-gray-50/60 transition-colors"
+                    >
+                      <td className="py-3 pr-4 font-semibold text-gray-900">
+                        {o.id}
+                      </td>
                       <td className="py-3 pr-4 text-gray-700">{o.customer}</td>
                       <td className="py-3 pr-4 text-gray-700">{o.total}</td>
                       <td className="py-3 pr-4">
@@ -350,10 +516,7 @@ export default function StorePartnerDashboardPage() {
           )}
         </CardShell>
 
-        {/* Recent Payments */}
-        <CardShell
-          title="Recent Payments"
-        >
+        <CardShell title="Recent Payments">
           {loading ? (
             <div className="space-y-2 animate-pulse">
               <SkeletonRow />
@@ -373,8 +536,13 @@ export default function StorePartnerDashboardPage() {
                 </thead>
                 <tbody>
                   {recentPayments.map((p) => (
-                    <tr key={p.id} className="border-t border-gray-100 hover:bg-gray-50/60 transition-colors">
-                      <td className="py-3 pr-4 font-semibold text-gray-900">{p.id}</td>
+                    <tr
+                      key={p.id}
+                      className="border-t border-gray-100 hover:bg-gray-50/60 transition-colors"
+                    >
+                      <td className="py-3 pr-4 font-semibold text-gray-900">
+                        {p.id}
+                      </td>
                       <td className="py-3 pr-4 text-gray-700">{p.date}</td>
                       <td className="py-3 pr-4 text-gray-700">{p.amount}</td>
                       <td className="py-3 pr-4 text-gray-700">{p.method}</td>
