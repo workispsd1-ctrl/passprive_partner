@@ -57,7 +57,6 @@ function normalizeMemberStore(storesField) {
   return storesField || null;
 }
 
-// unchanged switch UI
 function StatusSwitch({ checked, onChange, disabled = false }) {
   return (
     <button
@@ -180,7 +179,7 @@ export default function StoreSidebar() {
   const [statusLoading, setStatusLoading] = useState(true);
   const [statusSaving, setStatusSaving] = useState(false);
   const [statusError, setStatusError] = useState("");
-  const [userRole, setUserRole] = useState("manager"); // owner | manager
+  const [userRole, setUserRole] = useState("manager");
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingStatus, setPendingStatus] = useState(null);
@@ -236,7 +235,6 @@ export default function StoreSidebar() {
 
   const markPickupOrdersSeen = async (ids) => {
     if (!ids?.length) return;
-
     const nowIso = new Date().toISOString();
     const attempts = [
       () =>
@@ -263,7 +261,6 @@ export default function StoreSidebar() {
           .in("status", ["NEW", "PLACED"])
           .is("partner_seen_at", null),
     ];
-
     for (const run of attempts) {
       const { error } = await run();
       if (!error) break;
@@ -328,12 +325,14 @@ export default function StoreSidebar() {
           .select("id,name,city,is_active,pickup_premium_enabled,pickup_premium_expires_at")
           .eq("owner_user_id", userId)
           .order("name", { ascending: true });
+
         if (ownerRes.error) throw ownerRes.error;
 
         const memberRes = await supabaseBrowser
           .from("store_members")
           .select("store_id,role,stores:store_id(id,name,city,is_active,pickup_premium_enabled,pickup_premium_expires_at)")
           .eq("user_id", userId);
+
         if (memberRes.error) throw memberRes.error;
 
         const ownerStores = ownerRes.data || [];
@@ -546,11 +545,11 @@ export default function StoreSidebar() {
           })}
         </nav>
 
-        <div className="p-4 shrink-0 border-t border-gray-200">
-          {showStoreSwitcher ? (
-            <div className="rounded-2xl border border-gray-200 bg-white p-4">
-              <div className="text-sm font-semibold">Store Visibility</div>
+        <div className="p-4 shrink-0 border-t border-gray-200 space-y-3">
+          <div className="rounded-2xl border border-gray-200 bg-white p-4">
+            <div className="text-sm font-semibold">Store Visibility</div>
 
+            {showStoreSwitcher ? (
               <div className="mt-3">
                 <select
                   value={selectedStoreId}
@@ -569,69 +568,69 @@ export default function StoreSidebar() {
                   )}
                 </select>
               </div>
+            ) : null}
 
-              <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
-                <Crown className="h-3.5 w-3.5" />
-                {selectedStoreHasPremium ? "Pickup Premium Active" : "Pickup Premium Locked"}
-              </div>
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+              <Crown className="h-3.5 w-3.5" />
+              {selectedStoreHasPremium ? "Pickup Premium Active" : "Pickup Premium Locked"}
+            </div>
 
-              <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
-                <div>
-                  <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
-                    <span
-                      className={[
-                        "inline-block h-2.5 w-2.5 rounded-full",
-                        selectedStore?.is_active !== false ? "bg-emerald-500" : "bg-gray-400",
-                      ].join(" ")}
-                    />
-                    {selectedStore?.is_active !== false ? "Active" : "Inactive"}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-0.5">
-                    {selectedStore?.is_active !== false ? "Customers can view this store." : "Hidden from customers."}
-                  </div>
-                </div>
-
-                {statusSaving ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
-                ) : (
-                  <StatusSwitch
-                    checked={selectedStore?.is_active !== false}
-                    onChange={handleToggleStore}
-                    disabled={statusLoading || !selectedStore}
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
+              <div>
+                <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                  <span
+                    className={[
+                      "inline-block h-2.5 w-2.5 rounded-full",
+                      selectedStore?.is_active !== false ? "bg-emerald-500" : "bg-gray-400",
+                    ].join(" ")}
                   />
-                )}
+                  {selectedStore?.is_active !== false ? "Active" : "Inactive"}
+                </div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {selectedStore?.is_active !== false ? "Customers can view this store." : "Hidden from customers."}
+                </div>
               </div>
 
-              {statusError ? <div className="mt-2 text-xs text-red-600">{statusError}</div> : null}
+              {statusSaving ? (
+                <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+              ) : (
+                <StatusSwitch
+                  checked={selectedStore?.is_active !== false}
+                  onChange={handleToggleStore}
+                  disabled={statusLoading || !selectedStore}
+                />
+              )}
             </div>
-          ) : (
-            <div className="rounded-2xl border border-gray-200 bg-white p-4">
-              <div className="text-sm font-semibold text-gray-900">Quick Actions</div>
-              <div className="mt-3 space-y-2">
-                <Link
-                  href="/store-partner/pickup-orders"
-                  className="h-9 px-3 rounded-xl border border-gray-200 bg-white text-sm inline-flex items-center justify-between w-full hover:bg-gray-50"
-                >
-                  <span>Pickup Orders</span>
-                  <ArrowUpRight className="h-4 w-4 text-gray-500" />
-                </Link>
-                <Link
-                  href="/store-partner/payment-orders"
-                  className="h-9 px-3 rounded-xl border border-gray-200 bg-white text-sm inline-flex items-center justify-between w-full hover:bg-gray-50"
-                >
-                  <span>Payment Orders</span>
-                  <ArrowUpRight className="h-4 w-4 text-gray-500" />
-                </Link>
-                <Link
-                  href="/store-partner/catalogue"
-                  className="h-9 px-3 rounded-xl border border-gray-200 bg-white text-sm inline-flex items-center justify-between w-full hover:bg-gray-50"
-                >
-                  <span>Catalogue</span>
-                  <ArrowUpRight className="h-4 w-4 text-gray-500" />
-                </Link>
-              </div>
+
+            {statusError ? <div className="mt-2 text-xs text-red-600">{statusError}</div> : null}
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 bg-white p-4">
+            <div className="text-sm font-semibold text-gray-900">Quick Actions</div>
+            <div className="mt-3 space-y-2">
+              <Link
+                href="/store-partner/pickup-orders"
+                className="h-9 px-3 rounded-xl border border-gray-200 bg-white text-sm inline-flex items-center justify-between w-full hover:bg-gray-50"
+              >
+                <span>Pickup Orders</span>
+                <ArrowUpRight className="h-4 w-4 text-gray-500" />
+              </Link>
+              <Link
+                href="/store-partner/payment-orders"
+                className="h-9 px-3 rounded-xl border border-gray-200 bg-white text-sm inline-flex items-center justify-between w-full hover:bg-gray-50"
+              >
+                <span>Payment Orders</span>
+                <ArrowUpRight className="h-4 w-4 text-gray-500" />
+              </Link>
+              <Link
+                href="/store-partner/catalogue"
+                className="h-9 px-3 rounded-xl border border-gray-200 bg-white text-sm inline-flex items-center justify-between w-full hover:bg-gray-50"
+              >
+                <span>Catalogue</span>
+                <ArrowUpRight className="h-4 w-4 text-gray-500" />
+              </Link>
             </div>
-          )}
+          </div>
         </div>
       </aside>
 
