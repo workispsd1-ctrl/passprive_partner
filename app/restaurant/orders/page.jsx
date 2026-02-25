@@ -30,6 +30,60 @@ function timeAgo(iso) {
   return `${dd}d ago`;
 }
 
+function OrdersPageSkeleton() {
+  return (
+    <div className="min-h-screen bg-white">
+      <div className="mx-auto max-w-6xl px-6 py-8 space-y-6 animate-pulse">
+        <div className="rounded-2xl bg-white p-5 shadow-sm">
+          <div className="h-3 w-28 rounded bg-slate-200" />
+          <div className="mt-2 h-6 w-44 rounded bg-slate-200" />
+          <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="rounded-xl bg-slate-50 p-3">
+              <div className="h-3 w-16 rounded bg-slate-200" />
+              <div className="mt-2 h-5 w-10 rounded bg-slate-200" />
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3">
+              <div className="h-3 w-16 rounded bg-slate-200" />
+              <div className="mt-2 h-5 w-10 rounded bg-slate-200" />
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3">
+              <div className="h-3 w-16 rounded bg-slate-200" />
+              <div className="mt-2 h-5 w-10 rounded bg-slate-200" />
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3">
+              <div className="h-3 w-16 rounded bg-slate-200" />
+              <div className="mt-2 h-5 w-10 rounded bg-slate-200" />
+            </div>
+          </div>
+        </div>
+
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="rounded-2xl bg-white p-4 shadow-sm space-y-3">
+            <div className="flex justify-between gap-3">
+              <div className="space-y-2">
+                <div className="h-4 w-32 rounded bg-slate-200" />
+                <div className="h-3 w-52 rounded bg-slate-200" />
+                <div className="h-3 w-40 rounded bg-slate-200" />
+              </div>
+              <div className="space-y-2">
+                <div className="h-4 w-24 rounded bg-slate-200 ml-auto" />
+                <div className="h-3 w-20 rounded bg-slate-200 ml-auto" />
+                <div className="h-5 w-20 rounded-full bg-slate-200 ml-auto" />
+              </div>
+            </div>
+            <div className="h-3 w-3/4 rounded bg-slate-200" />
+            <div className="flex flex-wrap gap-2">
+              {Array.from({ length: 6 }).map((__, j) => (
+                <div key={j} className="h-7 w-24 rounded-lg bg-slate-200" />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function PartnerOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState("");
@@ -52,9 +106,7 @@ export default function PartnerOrdersPage() {
   const playNewOrderSound = async () => {
     try {
       await audioRef.current?.play();
-    } catch {
-      // autoplay can be blocked until first interaction
-    }
+    } catch {}
   };
 
   const loadOrders = async (ownedIds, filterId) => {
@@ -210,7 +262,7 @@ export default function PartnerOrdersPage() {
   };
 
   if (loading) {
-    return <div className="p-6 text-sm text-slate-500">Loading orders...</div>;
+    return <OrdersPageSkeleton />;
   }
 
   return (
@@ -228,8 +280,6 @@ export default function PartnerOrdersPage() {
               <p className="text-xs text-slate-500">Pickup orders</p>
               <p className="text-xl font-semibold text-slate-900">Partner Orders</p>
             </div>
-
-            
           </div>
 
           <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">

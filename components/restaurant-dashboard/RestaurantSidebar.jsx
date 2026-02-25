@@ -16,16 +16,17 @@ import {
   Megaphone,
   QrCode,
   X,
+  Crown,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 const nav = [
   { label: "Dashboard", href: "/restaurant/dashboard", icon: LayoutDashboard },
   { label: "Bookings", href: "/restaurant/bookings", icon: CalendarCheck },
-  { label: "Table Orders", href: "/restaurant/table-orders", icon: QrCode, key: "table_orders" },
-  { label: "Pickup Orders", href: "/restaurant/orders", icon: Soup },
+  { label: "Table Orders", href: "/restaurant/table-orders", icon: QrCode, key: "table_orders", premium: true },
+  { label: "Pickup Orders", href: "/restaurant/orders", icon: Soup, key: "pickup_orders", premium: true },
   { label: "Menu", href: "/restaurant/menu", icon: UtensilsCrossed },
-  { label: "Offers", href: "/restaurant/offers", icon: Tag },
+  { label: "Offers", href: "/restaurant/offers", icon: Tag, premium: true },
   { label: "Reviews", href: "/restaurant/reviews", icon: Star },
   { label: "Analytics", href: "/restaurant/analytics", icon: LineChart },
   { label: "Payouts", href: "/restaurant/payouts", icon: Wallet },
@@ -119,10 +120,16 @@ export default function RestaurantSidebar() {
   const [pendingStatus, setPendingStatus] = useState(null);
 
   const [unreadTableOrders, setUnreadTableOrders] = useState(0);
+  const [unreadPickupOrders, setUnreadPickupOrders] = useState(0);
 
   const tableOrdersSeenKey = useMemo(() => {
     if (!restaurantId) return null;
     return `restaurant_table_orders_last_seen_${restaurantId}`;
+  }, [restaurantId]);
+
+  const pickupOrdersSeenKey = useMemo(() => {
+    if (!restaurantId) return null;
+    return `restaurant_pickup_orders_last_seen_${restaurantId}`;
   }, [restaurantId]);
 
   const filteredNav = useMemo(() => {
@@ -150,7 +157,7 @@ export default function RestaurantSidebar() {
 
       const { data, error } = await supabaseBrowser
         .from("restaurants")
-        .select("id, is_active")
+        .select("id, is_active, subscribed")
         .eq("owner_user_id", user.id)
         .single();
 
@@ -159,15 +166,7 @@ export default function RestaurantSidebar() {
       if (!error && data) {
         setRestaurantId(data.id);
         setIsActive(Boolean(data.is_active));
-
-        const { data: subData } = await supabaseBrowser
-          .from("restaurants")
-          .select("subscribed")
-          .eq("id", data.id)
-          .maybeSingle();
-
-        if (!mounted) return;
-        setTablesSubscribed(subData?.subscribed === true);
+        setTablesSubscribed(data?.subscribed === true);
       }
 
       setStatusLoading(false);
@@ -188,16 +187,24 @@ export default function RestaurantSidebar() {
   }, [pathname, tableOrdersSeenKey]);
 
   useEffect(() => {
-    if (!restaurantId || !tableOrdersSeenKey) return;
+    if (!pickupOrdersSeenKey) return;
+    if (pathname === "/restaurant/orders" || pathname.startsWith("/restaurant/orders/")) {
+      localStorage.setItem(pickupOrdersSeenKey, new Date().toISOString());
+      setUnreadPickupOrders(0);
+    }
+  }, [pathname, pickupOrdersSeenKey]);
+
+  useEffect(() => {
+    if (!restaurantId || !tableOrdersSeenKey || !pickupOrdersSeenKey) return;
     let mounted = true;
 
     const isOnTableOrdersPage =
-      pathname === "/restaurant/table-orders" ||
-      pathname.startsWith("/restaurant/table-orders/");
+      pathname === "/restaurant/table-orders" || pathname.startsWith("/restaurant/table-orders/");
+    const isOnPickupOrdersPage =
+      pathname === "/restaurant/orders" || pathname.startsWith("/restaurant/orders/");
 
-    async function loadUnreadCount() {
-      const lastSeenAt =
-        localStorage.getItem(tableOrdersSeenKey) || "1970-01-01T00:00:00.000Z";
+    async function loadUnreadTableCount() {
+      const lastSeenAt = localStorage.getItem(tableOrdersSeenKey) || "1970-01-01T00:00:00.000Z";
 
       const { count, error } = await supabaseBrowser
         .from("restaurant_table_orders")
@@ -210,38 +217,67 @@ export default function RestaurantSidebar() {
       if (!error) setUnreadTableOrders(count ?? 0);
     }
 
-    loadUnreadCount();
+    async function loadUnreadPickupCount() {
+      const lastSeenAt = localStorage.getItem(pickupOrdersSeenKey) || "1970-01-01T00:00:00.000Z";
 
-    // Realtime + polling fallback so badge updates without page refresh.
+      const { count, error } = await supabaseBrowser
+        .from("restaurant_orders")
+        .select("id", { count: "exact", head: true })
+        .eq("restaurant_id", restaurantId)
+        .eq("order_status", "NEW")
+        .gt("created_at", lastSeenAt);
+
+      if (!mounted) return;
+      if (!error) setUnreadPickupOrders(count ?? 0);
+    }
+
+    const refreshUnreadCounts = async () => {
+      if (isOnTableOrdersPage) {
+        localStorage.setItem(tableOrdersSeenKey, new Date().toISOString());
+        setUnreadTableOrders(0);
+      } else {
+        await loadUnreadTableCount();
+      }
+
+      if (isOnPickupOrdersPage) {
+        localStorage.setItem(pickupOrdersSeenKey, new Date().toISOString());
+        setUnreadPickupOrders(0);
+      } else {
+        await loadUnreadPickupCount();
+      }
+    };
+
+    refreshUnreadCounts();
+
     const channel = supabaseBrowser
-      .channel(`restaurant_table_orders_badge_${restaurantId}`)
+      .channel(`restaurant_order_badges_${restaurantId}`)
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "restaurant_table_orders",
           filter: `restaurant_id=eq.${restaurantId}`,
         },
-        () => {
-          if (isOnTableOrdersPage) {
-            localStorage.setItem(tableOrdersSeenKey, new Date().toISOString());
-            setUnreadTableOrders(0);
-            return;
-          }
-          loadUnreadCount();
-        }
+        refreshUnreadCounts
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "restaurant_orders",
+          filter: `restaurant_id=eq.${restaurantId}`,
+        },
+        refreshUnreadCounts
       )
       .subscribe();
 
-    const pollId = window.setInterval(loadUnreadCount, 5000);
+    const pollId = window.setInterval(refreshUnreadCounts, 5000);
 
-    const onFocus = () => {
-      loadUnreadCount();
-    };
-
+    const onFocus = () => refreshUnreadCounts();
     const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") loadUnreadCount();
+      if (document.visibilityState === "visible") refreshUnreadCounts();
     };
 
     window.addEventListener("focus", onFocus);
@@ -254,7 +290,7 @@ export default function RestaurantSidebar() {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       supabaseBrowser.removeChannel(channel);
     };
-  }, [restaurantId, tableOrdersSeenKey, pathname]);
+  }, [restaurantId, tableOrdersSeenKey, pickupOrdersSeenKey, pathname]);
 
   function onToggleActive(nextValue) {
     if (!restaurantId || statusSaving) return;
@@ -314,28 +350,39 @@ export default function RestaurantSidebar() {
           {filteredNav.map((item) => {
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
             const Icon = item.icon;
-            const showTableOrderBadge = item.key === "table_orders" && unreadTableOrders > 0;
+
+            const badgeCount =
+              item.key === "table_orders"
+                ? unreadTableOrders
+                : item.key === "pickup_orders"
+                ? unreadPickupOrders
+                : 0;
 
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={[
-                  "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition",
+                  "relative flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition",
                   active
                     ? "bg-gray-100 text-gray-900"
                     : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
                 ].join(" ")}
               >
-                <Icon
-                  className="h-4 w-4"
-                  style={{ color: active ? "var(--accent)" : undefined }}
-                />
-                {item.label}
+                <span className="flex items-center gap-3">
+                  <Icon className="h-4 w-4" style={{ color: active ? "var(--accent)" : undefined }} />
+                  {item.label}
+                  {item.premium ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-1.5 py-0.5 text-[9px] font-semibold text-green-700">
+                      <Crown className="h-2.5 w-2.5" />
+                      Premium
+                    </span>
+                  ) : null}
+                </span>
 
-                {showTableOrderBadge ? (
-                  <span className="absolute right-3 top-1.5 min-w-[20px] h-5 px-1 rounded-full bg-[#DA3224] text-white text-[11px] font-semibold flex items-center justify-center">
-                    {unreadTableOrders > 99 ? "99+" : unreadTableOrders}
+                {badgeCount > 0 ? (
+                  <span className="inline-flex min-w-[22px] h-[22px] items-center justify-center rounded-full bg-[#DA3224] px-1.5 text-[11px] font-semibold text-white">
+                    {badgeCount > 99 ? "99+" : badgeCount}
                   </span>
                 ) : null}
               </Link>
