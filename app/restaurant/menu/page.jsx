@@ -20,12 +20,14 @@ import {
   Download,
   ExternalLink,
   Lock,
+  LockOpen,
   CreditCard,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 const BUCKET_NAME = "restaurants";
 const BUCKET_ROOT_FOLDER = "menu";
+const MENU_PREMIUM_PRICE = 3000;
 
 const DEMO_CARD = {
   number: "4242 4242 4242 4242",
@@ -285,7 +287,9 @@ export default function RestaurantMenuPage() {
 
       const { data: restaurant, error } = await supabaseBrowser
         .from("restaurants")
-        .select("id, menu, subscribed")
+        .select(
+          "id, menu, subscribed, premium_unlock_all, premium_dish_discounts_enabled, subscribed_plan"
+        )
         .eq("owner_user_id", user.id)
         .single();
 
@@ -300,8 +304,15 @@ export default function RestaurantMenuPage() {
         return;
       }
 
+      const menuUnlocked =
+        restaurant?.premium_unlock_all === true ||
+        restaurant?.premium_dish_discounts_enabled === true ||
+        restaurant?.subscribed_plan === "ALL" ||
+        restaurant?.subscribed_plan === "DISCOUNTS" ||
+        restaurant?.subscribed === true;
+
       setRestaurantId(restaurant.id);
-      setIsSubscribed(Boolean(restaurant.subscribed));
+      setIsSubscribed(Boolean(menuUnlocked));
 
       const parsed = safeMenu(restaurant.menu);
       originalMenuRef.current = parsed;
@@ -310,7 +321,7 @@ export default function RestaurantMenuPage() {
 
       if (typeof window !== "undefined") {
         const catalogUrl = `${window.location.origin}/public-menu?id=${restaurant.id}`;
-        setMenuUrl(restaurant.subscribed ? catalogUrl : getMenuImageUrls(parsed)[0] || "");
+        setMenuUrl(menuUnlocked ? catalogUrl : getMenuImageUrls(parsed)[0] || "");
       }
 
       if (!restaurant.menu || Array.isArray(restaurant.menu)) {
@@ -327,14 +338,6 @@ export default function RestaurantMenuPage() {
     const catalogUrl = `${window.location.origin}/public-menu?id=${restaurantId}`;
     setMenuUrl(isSubscribed ? catalogUrl : menuCardImages[0] || "");
   }, [restaurantId, isSubscribed, menuCardImages]);
-
-  const hasChanges = useMemo(() => {
-    try {
-      return JSON.stringify(menu) !== JSON.stringify(originalMenuRef.current);
-    } catch {
-      return true;
-    }
-  }, [menu]);
 
   const saveMenu = async (nextMenu, forceRestaurantId) => {
     const rid = forceRestaurantId || restaurantId;
@@ -378,7 +381,12 @@ export default function RestaurantMenuPage() {
 
     const { error } = await supabaseBrowser
       .from("restaurants")
-      .update({ subscribed: true })
+      .update({
+        subscribed: true,
+        subscribed_plan: "DISCOUNTS",
+        premium_dish_discounts_enabled: true,
+        premium_unlocked_at: new Date().toISOString(),
+      })
       .eq("id", restaurantId)
       .select("id")
       .single();
@@ -427,7 +435,7 @@ export default function RestaurantMenuPage() {
 
     if (ok) {
       setPaymentModalOpen(false);
-      setInfoMsg("Premium unlocked successfully.");
+      setInfoMsg("Dish Discounts unlocked. Menu premium is now active.");
     }
   };
 
@@ -810,18 +818,20 @@ export default function RestaurantMenuPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 text-gray-900 font-semibold">
-              <Lock className="h-4 w-4" />
-              Premium Table Catalogue
+              {isSubscribed ? <LockOpen className="h-4 w-4 text-emerald-600" /> : <Lock className="h-4 w-4" />}
+              {isSubscribed ? "Premium Table Catalogue Unlocked" : "Premium Table Catalogue Locked"}
             </div>
             <div className="mt-2 text-sm text-gray-600">
-              Unlock to manage catalogue items and show full digital menu from QR.
+              {isSubscribed
+                ? "You can now manage catalogue items and show full digital menu from QR."
+                : "Unlock to manage catalogue items and show full digital menu from QR."}
             </div>
           </div>
 
           {isSubscribed ? (
             <div className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 h-10 text-sm font-semibold text-emerald-700">
-              <BadgeCheck className="h-4 w-4" />
-              Premium Active
+              <LockOpen className="h-4 w-4" />
+              Premium Unlocked
             </div>
           ) : (
             <button
@@ -830,7 +840,7 @@ export default function RestaurantMenuPage() {
               className="h-10 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 px-4 text-sm font-semibold inline-flex items-center gap-2 border border-amber-700"
             >
               <CreditCard className="h-4 w-4" />
-              Pay & Unlock
+              Unlock Rs. {MENU_PREMIUM_PRICE}/mo
             </button>
           )}
         </div>
@@ -855,16 +865,6 @@ export default function RestaurantMenuPage() {
               <Plus className="h-4 w-4" />
               Add section
             </button>
-
-            {/*<button
-              type="button"
-              disabled={!isSubscribed || !hasChanges || saving}
-              onClick={() => saveMenu(menu)}
-              className="h-10 rounded-xl text-amber-700 hover:bg-amber-100 px-4 text-sm disabled:opacity-50 border border-amber-700 font-semibold flex items-center gap-2"
-            >
-              <Save className="h-4 w-4" />
-              {saving ? "Saving..." : "Save changes"}
-            </button> */}
           </div>
         </div>
 
@@ -931,10 +931,10 @@ export default function RestaurantMenuPage() {
         <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
           <div className="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">
             <Lock className="h-4 w-4" />
-            Catalogue Hidden (Premium Required)
+            Catalogue Hidden (Dish Discounts Premium Required)
           </div>
           <div className="mt-2 text-xs text-gray-500">
-            Existing sections/items are stored, but hidden until premium is active.
+            Existing sections/items are stored, but hidden until Dish Discounts premium is active.
           </div>
         </div>
       ) : (
@@ -1158,7 +1158,7 @@ export default function RestaurantMenuPage() {
               onClick={onPayAndUnlock}
               className="h-10 rounded-xl bg-blue-600 hover:bg-blue-500 text-white px-4 text-sm font-semibold disabled:opacity-50"
             >
-              {unlockingSubscription ? "Processing Payment..." : "Pay & Unlock"}
+              {unlockingSubscription ? "Processing Payment..." : `Pay Rs. ${MENU_PREMIUM_PRICE} & Unlock`}
             </button>
           </div>
         }

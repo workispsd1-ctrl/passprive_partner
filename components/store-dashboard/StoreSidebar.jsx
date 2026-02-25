@@ -522,7 +522,7 @@ export default function StoreSidebar() {
                   <Icon className="h-4 w-4" style={{ color: active ? ACTIVE_ICON : INACTIVE_ICON }} />
                   {item.label}
                   {item.premium ? (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-1.5 py-0.5 text-[9px] font-semibold text-green-700">
                       <Crown className="h-2.5 w-2.5" />
                       Premium
                     </span>
