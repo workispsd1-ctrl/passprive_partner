@@ -98,6 +98,23 @@ function uid() {
     : `id_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
+function onlyDigits(v) {
+  return String(v || "").replace(/\D/g, "");
+}
+
+function toDateInputValue(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function toTimeInputValue(date) {
+  const h = String(date.getHours()).padStart(2, "0");
+  const m = String(date.getMinutes()).padStart(2, "0");
+  return `${h}:${m}`;
+}
+
 /* ----------------------------
    CARD HELPERS
 -----------------------------*/
@@ -457,6 +474,10 @@ export default function OffersPage() {
   const [cardCvv, setCardCvv] = useState("");
 
   const [lastError, setLastError] = useState("");
+  const [nowTick, setNowTick] = useState(Date.now());
+
+  const todayStr = useMemo(() => toDateInputValue(new Date(nowTick)), [nowTick]);
+  const nowTimeStr = useMemo(() => toTimeInputValue(new Date(nowTick)), [nowTick]);
 
   const isSubscribed = useMemo(
     () => premiumAccess.unlockAll || premiumAccess.timeSlot || premiumAccess.repeatRewards || premiumAccess.discounts,
@@ -467,6 +488,12 @@ export default function OffersPage() {
     () => PREMIUM_PLANS.find((p) => p.key === selectedPlan) || PREMIUM_PLANS[0],
     [selectedPlan]
   );
+
+  const currentKind = formOffer.offerKind || inferKind(formOffer);
+  const isVisitForm = currentKind === OFFER_KIND.VISIT;
+  const isDishForm = currentKind === OFFER_KIND.DISH;
+  const slotStartMin = formOffer.startDate === todayStr ? nowTimeStr : "";
+  const slotEndMin = formOffer.slotStart || (formOffer.startDate === todayStr ? nowTimeStr : "");
 
   function hasPremiumForKind(kind) {
     if (kind === OFFER_KIND.GENERAL) return true;
@@ -479,6 +506,11 @@ export default function OffersPage() {
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 30000);
+    return () => clearInterval(t);
   }, []);
 
   async function loadData() {
@@ -739,11 +771,19 @@ export default function OffersPage() {
   }
 
   function patchVisitTier(id, patch) {
+    const nextPatch = { ...patch };
+    if (Object.prototype.hasOwnProperty.call(nextPatch, "visitCount")) {
+      nextPatch.visitCount = onlyDigits(nextPatch.visitCount).slice(0, 2);
+    }
+    if (Object.prototype.hasOwnProperty.call(nextPatch, "rewardValue")) {
+      nextPatch.rewardValue = onlyDigits(nextPatch.rewardValue);
+    }
+
     setFormOffer((prev) => ({
       ...prev,
       visitRewards: {
         ...prev.visitRewards,
-        tiers: (prev.visitRewards?.tiers || []).map((t) => (t.id === id ? { ...t, ...patch } : t)),
+        tiers: (prev.visitRewards?.tiers || []).map((t) => (t.id === id ? { ...t, ...nextPatch } : t)),
       },
     }));
   }
@@ -753,6 +793,14 @@ export default function OffersPage() {
     const kind = cleaned.offerKind || inferKind(cleaned) || OFFER_KIND.GENERAL;
 
     if (!ensurePremium(kind)) return;
+
+    if (kind !== OFFER_KIND.VISIT) {
+      if (cleaned.startDate && cleaned.startDate < todayStr) return alert("Start date cannot be before today.");
+      if (cleaned.endDate && cleaned.endDate < todayStr) return alert("End date cannot be before today.");
+      if (cleaned.startDate && cleaned.endDate && cleaned.endDate < cleaned.startDate) {
+        return alert("End date cannot be before start date.");
+      }
+    }
 
     if (kind === OFFER_KIND.VISIT) {
       const tiers = Array.isArray(cleaned.visitRewards?.tiers) ? cleaned.visitRewards.tiers : [];
@@ -810,6 +858,14 @@ export default function OffersPage() {
     if (kind === OFFER_KIND.TIME_SLOT) {
       if (!cleaned.slotStart || !cleaned.slotEnd) return alert("Please select slot start and end time.");
       if (cleaned.weekdays.length === 0) return alert("Please select at least one day.");
+      if (cleaned.slotEnd <= cleaned.slotStart) return alert("Slot end time must be after slot start time.");
+
+      if (cleaned.startDate === todayStr && cleaned.slotStart < nowTimeStr) {
+        return alert("Slot start time cannot be in the past for today.");
+      }
+      if (cleaned.startDate === todayStr && cleaned.slotEnd < nowTimeStr) {
+        return alert("Slot end time cannot be in the past for today.");
+      }
     }
 
     const next = offers.some((o) => o.id === cleaned.id)
@@ -956,10 +1012,6 @@ export default function OffersPage() {
 
   if (loading) return <Skeleton />;
 
-  const currentKind = formOffer.offerKind || inferKind(formOffer);
-  const isVisitForm = currentKind === OFFER_KIND.VISIT;
-  const isDishForm = currentKind === OFFER_KIND.DISH;
-
   return (
     <div className="min-h-screen bg-slate-50">
       {lastError ? (
@@ -1087,7 +1139,6 @@ export default function OffersPage() {
                   {selectedPlanObj.features.map((f) => (
                     <li key={f}>{f}</li>
                   ))}
-                  
                 </ul>
               </div>
 
@@ -1289,10 +1340,12 @@ export default function OffersPage() {
                     <div>
                       <p className="text-xs text-slate-600 mb-2">{formOffer.discountType === "PERCENT" ? "% OFF" : "Rs OFF"}</p>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         placeholder={formOffer.discountType === "PERCENT" ? "20" : "200"}
                         value={formOffer.discountValue}
-                        onChange={(e) => setFormOffer({ ...formOffer, discountValue: e.target.value })}
+                        onChange={(e) => setFormOffer({ ...formOffer, discountValue: onlyDigits(e.target.value) })}
                         className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
                       />
                     </div>
@@ -1314,8 +1367,16 @@ export default function OffersPage() {
                       <p className="text-xs text-slate-600 mb-2">Start date</p>
                       <input
                         type="date"
+                        min={todayStr}
                         value={formOffer.startDate}
-                        onChange={(e) => setFormOffer({ ...formOffer, startDate: e.target.value })}
+                        onChange={(e) => {
+                          const nextStart = e.target.value < todayStr ? todayStr : e.target.value;
+                          setFormOffer((prev) => ({
+                            ...prev,
+                            startDate: nextStart,
+                            endDate: prev.endDate && prev.endDate < nextStart ? nextStart : prev.endDate,
+                          }));
+                        }}
                         className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
                       />
                     </div>
@@ -1324,8 +1385,13 @@ export default function OffersPage() {
                       <p className="text-xs text-slate-600 mb-2">End date</p>
                       <input
                         type="date"
+                        min={formOffer.startDate || todayStr}
                         value={formOffer.endDate}
-                        onChange={(e) => setFormOffer({ ...formOffer, endDate: e.target.value })}
+                        onChange={(e) => {
+                          const minDate = formOffer.startDate || todayStr;
+                          const nextEnd = e.target.value < minDate ? minDate : e.target.value;
+                          setFormOffer({ ...formOffer, endDate: nextEnd });
+                        }}
                         className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
                       />
                     </div>
@@ -1338,8 +1404,17 @@ export default function OffersPage() {
                           <p className="text-xs text-slate-600 mb-2">Slot start</p>
                           <input
                             type="time"
+                            min={slotStartMin || undefined}
                             value={formOffer.slotStart}
-                            onChange={(e) => setFormOffer({ ...formOffer, slotStart: e.target.value })}
+                            onChange={(e) => {
+                              let v = e.target.value;
+                              if (slotStartMin && v < slotStartMin) v = slotStartMin;
+                              setFormOffer((prev) => ({
+                                ...prev,
+                                slotStart: v,
+                                slotEnd: prev.slotEnd && prev.slotEnd <= v ? v : prev.slotEnd,
+                              }));
+                            }}
                             className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
                           />
                         </div>
@@ -1348,8 +1423,13 @@ export default function OffersPage() {
                           <p className="text-xs text-slate-600 mb-2">Slot end</p>
                           <input
                             type="time"
+                            min={slotEndMin || undefined}
                             value={formOffer.slotEnd}
-                            onChange={(e) => setFormOffer({ ...formOffer, slotEnd: e.target.value })}
+                            onChange={(e) => {
+                              let v = e.target.value;
+                              if (slotEndMin && v < slotEndMin) v = slotEndMin;
+                              setFormOffer({ ...formOffer, slotEnd: v });
+                            }}
                             className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
                           />
                         </div>
@@ -1393,9 +1473,9 @@ export default function OffersPage() {
                           <div>
                             <p className="text-[11px] text-slate-600 mb-1">Visit # (1-10)</p>
                             <input
-                              type="number"
-                              min="1"
-                              max="10"
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
                               value={tier.visitCount}
                               onChange={(e) => patchVisitTier(tier.id, { visitCount: e.target.value })}
                               className="w-full rounded-lg bg-white px-3 py-2 text-sm outline-none border border-slate-200"
@@ -1439,7 +1519,9 @@ export default function OffersPage() {
                                   {tier.rewardType === "PERCENT" ? "Percent" : "Amount (Rs)"}
                                 </p>
                                 <input
-                                  type="number"
+                                  type="text"
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
                                   value={tier.rewardValue}
                                   onChange={(e) => patchVisitTier(tier.id, { rewardValue: e.target.value })}
                                   className="w-full rounded-lg bg-white px-3 py-2 text-sm outline-none border border-slate-200"

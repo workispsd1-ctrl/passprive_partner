@@ -11,7 +11,6 @@ import {
   XCircle,
   Phone,
   Hash,
-  RefreshCw,
 } from "lucide-react";
 
 const STATUS = {
@@ -26,9 +25,8 @@ const STATUS = {
 function money(n) {
   const num = Number(n);
   if (!Number.isFinite(num)) return "—";
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
+  return new Intl.NumberFormat("en-MU", {
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(num);
 }
@@ -229,7 +227,9 @@ export default function TableOrdersPage() {
     }
 
     setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus, updated_at: new Date().toISOString() } : o))
+      prev.map((o) =>
+        o.id === orderId ? { ...o, status: nextStatus, updated_at: new Date().toISOString() } : o
+      )
     );
   }
 
@@ -255,7 +255,7 @@ export default function TableOrdersPage() {
               {restaurantName} • Live incoming orders from customer menu
             </div>
           </div>
-         </div>
+        </div>
 
         {error ? (
           <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
@@ -294,7 +294,9 @@ export default function TableOrdersPage() {
               <div key={o.id} className="rounded-2xl border border-slate-200 bg-white p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <div className="text-sm font-semibold text-slate-900">Order #{String(o.id).slice(0, 8)}</div>
+                    <div className="text-sm font-semibold text-slate-900">
+                      Order #{String(o.id).slice(0, 8)}
+                    </div>
                     <div className="text-xs text-slate-500 mt-1">
                       {o.created_at ? new Date(o.created_at).toLocaleString() : "—"}
                     </div>
@@ -331,7 +333,9 @@ export default function TableOrdersPage() {
                           <div className="text-slate-700">
                             {it.name} x {it.qty}
                           </div>
-                          <div className="font-semibold text-slate-900">{money((Number(it.price) || 0) * (Number(it.qty) || 0))}</div>
+                          <div className="font-semibold text-slate-900">
+                            {money((Number(it.price) || 0) * (Number(it.qty) || 0))}
+                          </div>
                         </div>
                       ))
                     )}
@@ -343,9 +347,10 @@ export default function TableOrdersPage() {
                     Subtotal: <span className="font-semibold text-slate-900">{money(o.subtotal_amount)}</span>
                   </div>
                   <div className="rounded-lg bg-slate-50 px-3 py-2 text-slate-700">
-                    Tax ({Number(o.tax_percent || 0)}%): <span className="font-semibold text-slate-900">{money(o.tax_amount)}</span>
+                    Tax ({Number(o.tax_percent || 0)}%):{" "}
+                    <span className="font-semibold text-slate-900">{money(o.tax_amount)}</span>
                   </div>
-                  <div className="rounded-lg bg-amber-50 border-amber-700 border-1 px-3 py-2 text-black">
+                  <div className="rounded-lg bg-amber-50 border-amber-700 border px-3 py-2 text-black">
                     Total: <span className="font-semibold">{money(o.total_amount)}</span>
                   </div>
                 </div>

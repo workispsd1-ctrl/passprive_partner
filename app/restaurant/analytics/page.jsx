@@ -80,7 +80,6 @@ function DividerLabel({ label, right }) {
    Tiny chart components (no external libs)
 ======================================================= */
 function BarStack({ segments }) {
-  // segments: [{pct, className, title}]
   return (
     <div className="h-2 w-full rounded-full bg-white/60 overflow-hidden">
       <div className="h-2 w-full flex">
@@ -119,10 +118,8 @@ function MiniBars({ points, height = 140, barWidth = 10 }) {
 }
 
 function Donut({ items, size = 160 }) {
-  // items: [{label, value, color}] - color is css var or tailwind not allowed inline classes for conic?
   const total = items.reduce((a, x) => a + (x.value || 0), 0) || 1;
 
-  // build conic gradient
   let acc = 0;
   const stops = items
     .map((x) => {
@@ -172,12 +169,10 @@ function Donut({ items, size = 160 }) {
 }
 
 function LineArea({ points, height = 160 }) {
-  // points: [{xLabel, y}]
   const ys = points.map((p) => Number(p.y) || 0);
   const max = Math.max(1, ...ys);
   const min = Math.min(0, ...ys);
 
-  // create SVG path
   const w = Math.max(520, points.length * 18);
   const h = height;
 
@@ -195,7 +190,7 @@ function LineArea({ points, height = 160 }) {
     })
     .join(" ");
 
-  const area = `${d} L ${(w).toFixed(2)} ${h} L 0 ${h} Z`;
+  const area = `${d} L ${w.toFixed(2)} ${h} L 0 ${h} Z`;
 
   return (
     <div className="overflow-x-auto">
@@ -207,12 +202,9 @@ function LineArea({ points, height = 160 }) {
           </linearGradient>
         </defs>
 
-        {/* area */}
         <path d={area} fill="url(#areaGrad)" />
-        {/* line */}
         <path d={d} fill="none" stroke="rgba(218,50,36,0.9)" strokeWidth="3" />
 
-        {/* points */}
         {points.map((p, i) => {
           const x = i * xStep;
           const y = scaleY(Number(p.y) || 0);
@@ -223,7 +215,6 @@ function LineArea({ points, height = 160 }) {
           );
         })}
 
-        {/* x labels */}
         {points.map((p, i) => {
           if (points.length > 24 && i % 3 !== 0) return null;
           const x = i * xStep;
@@ -327,6 +318,19 @@ function fmtNum(n) {
 }
 
 /* =======================================================
+   CSV helpers
+======================================================= */
+function csvEscape(v) {
+  const s = String(v ?? "");
+  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function toCsv(rows) {
+  return rows.map((r) => r.map(csvEscape).join(",")).join("\n");
+}
+
+/* =======================================================
    Page
 ======================================================= */
 export default function page() {
@@ -340,13 +344,11 @@ export default function page() {
   const [userMap, setUserMap] = useState({});
   const [paymentDetails, setPaymentDetails] = useState(null);
 
-  // UI controls
-  const [range, setRange] = useState("30"); // 7 | 30 | 90 | all
+  const [range, setRange] = useState("30");
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     bootstrap();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function bootstrap() {
@@ -427,13 +429,9 @@ export default function page() {
     setLoading(false);
   }
 
-  /* =======================================================
-     Filtered (range + search) WITHOUT top KPI cards
-  ======================================================= */
   const filtered = useMemo(() => {
     if (!restaurantRow) return { bookings: [], reviews: [] };
 
-    // bookings by range
     const byRangeBookings = (() => {
       if (range === "all") return bookings;
       const days = Number(range);
@@ -455,7 +453,6 @@ export default function page() {
           return hay.includes(q);
         });
 
-    // reviews (jsonb)
     const rawReviews = Array.isArray(restaurantRow.reviews) ? restaurantRow.reviews : [];
     const reviewsEnriched = rawReviews
       .map((r, idx) => {
@@ -503,21 +500,16 @@ export default function page() {
     return { bookings: bySearchBookings, reviews: bySearchReviews };
   }, [range, search, bookings, userMap, restaurantRow]);
 
-  /* =======================================================
-     Analytics (graphs + modern layout)
-  ======================================================= */
   const analytics = useMemo(() => {
     if (!restaurantRow) return null;
 
     const b = filtered.bookings;
     const r = filtered.reviews;
 
-    // booking status
     const statusCounts = { pending: 0, confirmed: 0, completed: 0, cancelled: 0, no_show: 0 };
     const sourceCounts = {};
     let totalGuests = 0;
 
-    // series window
     const seriesDays = range === "7" ? 7 : range === "30" ? 30 : range === "90" ? 90 : 30;
 
     const daily = {};
@@ -560,7 +552,6 @@ export default function page() {
     const maxBookings = Math.max(1, ...bookingSeries.map((x) => x.bookings));
     const maxGuests = Math.max(1, ...bookingSeries.map((x) => x.guests));
 
-    // reviews summary (for charts)
     const dist = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
     let replied = 0;
     let pendingReply = 0;
@@ -590,16 +581,13 @@ export default function page() {
     const replyRate = r.length ? Math.round((replied / r.length) * 100) : 0;
     const avgResponseMin = responseTimes.length ? Math.round(responseTimes.reduce((a, c) => a + c, 0) / responseTimes.length) : null;
 
-    // keywords
     const keywords = topKeywords(r, 10);
 
-    // offers/menu quick chips (not KPI cards)
     const offerRaw = restaurantRow.offer;
     const offers = Array.isArray(offerRaw) ? offerRaw : offerRaw && typeof offerRaw === "object" ? [offerRaw] : [];
     const offersTotal = offers.length;
     const offersActive = offers.filter((o) => o && o.isActive !== false).length;
 
-    // dish discounts
     const menu = restaurantRow.menu || {};
     const sections = Array.isArray(menu.sections) ? menu.sections : [];
     let dishTotal = 0;
@@ -613,24 +601,18 @@ export default function page() {
       }
     }
 
-    // payout config (no transaction analytics without a payouts table)
     const currency = paymentDetails?.currency || "MUR";
     const kyc = paymentDetails?.kyc_status || "NOT_STARTED";
     const commissionPct =
       paymentDetails?.commission_percent != null ? Number(paymentDetails.commission_percent) : null;
 
     return {
-      // graphs
       bookingSeries,
       maxBookings,
       maxGuests,
-
-      // booking breakdown
       statusCounts,
       sourceCounts,
       totalGuests,
-
-      // review breakdown
       dist,
       sentimentCounts,
       replied,
@@ -639,14 +621,10 @@ export default function page() {
       avgReviewRating,
       avgResponseMin,
       keywords,
-
-      // chips
       offersActive,
       offersTotal,
       dishActive,
       dishTotal,
-
-      // payout config
       currency,
       kyc,
       commissionPct,
@@ -656,9 +634,6 @@ export default function page() {
     };
   }, [restaurantRow, filtered, range, paymentDetails]);
 
-  /* =======================================================
-     Loading / Error
-  ======================================================= */
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50">
@@ -691,7 +666,6 @@ export default function page() {
 
   const a = analytics;
 
-  // Chart data
   const bookingsBars = a.bookingSeries.map((x) => ({
     key: x.day,
     label: x.label,
@@ -717,23 +691,15 @@ export default function page() {
     { label: "Negative", value: a.sentimentCounts.negative || 0, color: "rgba(239,68,68,0.9)" },
   ];
 
-  // Booking status stack
   const totalBookings = bookingsBars.reduce((s, x) => s + (x.value || 0), 0) || 0;
   const pct = (n) => (totalBookings ? (n / totalBookings) * 100 : 0);
 
-  /* =======================================================
-     UI (Trendy + graphs + no KPI cards row)
-  ======================================================= */
   return (
     <div className="min-h-screen ">
-      {/* Ambient gradient header */}
       <div className="relative overflow-hidden">
-        
-
         <div className="relative max-w-6xl mx-auto px-6 pt-8 pb-4">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-             
               <div className="mt-3 flex flex-wrap gap-2">
                 <Chip tone="amber">
                   Offers {a.offersActive}/{a.offersTotal}
@@ -772,16 +738,12 @@ export default function page() {
                 placeholder="Search bookings / reviews…"
                 className="w-full sm:w-64 rounded-2xl border border-gray-300 bg-white/70 px-3 py-2 text-sm outline-none backdrop-blur focus:ring-2 focus:ring-slate-200"
               />
-
-              
             </div>
           </div>
         </div>
       </div>
 
-      {/* Content */}
       <div className="max-w-6xl mx-auto px-6 pb-10 space-y-4">
-        {/* Row 1: Bookings volume + Guests line */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <GlassCard
             title="Bookings volume"
@@ -853,7 +815,6 @@ export default function page() {
           </GlassCard>
         </div>
 
-        {/* Row 2: Reviews donuts + Sentiment + Keywords */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <GlassCard
             title="Review rating distribution"
@@ -907,7 +868,6 @@ export default function page() {
           </GlassCard>
         </div>
 
-        {/* Row 3: Booking sources + Recent activity (compact) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <GlassCard title="Booking sources" sub="Where bookings are coming from">
             {Object.keys(a.sourceCounts).length ? (
@@ -942,29 +902,108 @@ export default function page() {
             right={
               <PrimaryButton
                 onClick={() => {
-                  const payload = {
-                    range,
-                    search,
-                    restaurant_id: restaurantId,
-                    bookings: filtered.bookings,
-                    reviews: filtered.reviews,
-                    payment_details: paymentDetails,
-                  };
-                  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+                  const header = [
+                    "record_type",
+                    "restaurant_id",
+                    "range",
+                    "search",
+                    "id",
+                    "created_at",
+                    "customer_name",
+                    "customer_phone",
+                    "customer_email",
+                    "party_size",
+                    "status",
+                    "source",
+                    "author_name",
+                    "rating",
+                    "sentiment",
+                    "comment",
+                    "has_reply",
+                    "reply_text",
+                    "reply_created_at",
+                    "payout_method",
+                    "settlement_cycle",
+                    "currency",
+                    "kyc_status",
+                    "commission_percent",
+                  ];
+
+                  const rows = [header];
+
+                  filtered.bookings.forEach((b) => {
+                    rows.push([
+                      "booking",
+                      restaurantId || "",
+                      range,
+                      search,
+                      b.id || "",
+                      b.created_at || "",
+                      b.customer_name || "",
+                      b.customer_phone || "",
+                      b.customer_email || "",
+                      b.party_size || "",
+                      b.status || "",
+                      b.source || "",
+                      "",
+                      "",
+                      "",
+                      "",
+                      "",
+                      "",
+                      "",
+                      paymentDetails?.payout_method || "",
+                      paymentDetails?.settlement_cycle || "",
+                      paymentDetails?.currency || "",
+                      paymentDetails?.kyc_status || "",
+                      paymentDetails?.commission_percent ?? "",
+                    ]);
+                  });
+
+                  filtered.reviews.forEach((r) => {
+                    rows.push([
+                      "review",
+                      restaurantId || "",
+                      range,
+                      search,
+                      r._idx ?? "",
+                      r.createdAt || "",
+                      "",
+                      "",
+                      "",
+                      "",
+                      "",
+                      "",
+                      r.authorName || "",
+                      r.rating ?? "",
+                      r.sentiment || "",
+                      r.comment || "",
+                      r.hasReply ? "yes" : "no",
+                      r?.reply?.text || "",
+                      r.replyAt || "",
+                      paymentDetails?.payout_method || "",
+                      paymentDetails?.settlement_cycle || "",
+                      paymentDetails?.currency || "",
+                      paymentDetails?.kyc_status || "",
+                      paymentDetails?.commission_percent ?? "",
+                    ]);
+                  });
+
+                  const csv = toCsv(rows);
+                  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
                   const url = URL.createObjectURL(blob);
                   const aTag = document.createElement("a");
                   aTag.href = url;
-                  aTag.download = "restaurant_analytics.json";
+                  aTag.download = "restaurant_analytics.csv";
                   aTag.click();
                   URL.revokeObjectURL(url);
                 }}
               >
-                Export JSON
+                Export CSV
               </PrimaryButton>
             }
           >
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* bookings */}
               <div className="rounded-2xl border border-white/60 bg-white/60 p-4">
                 <p className="text-sm font-semibold text-slate-900">Bookings</p>
                 <div className="mt-3 space-y-3">
@@ -998,7 +1037,6 @@ export default function page() {
                 </div>
               </div>
 
-              {/* reviews */}
               <div className="rounded-2xl border border-white/60 bg-white/60 p-4">
                 <p className="text-sm font-semibold text-slate-900">Reviews</p>
                 <div className="mt-3 space-y-3">
@@ -1031,9 +1069,6 @@ export default function page() {
                 </div>
               </div>
             </div>
-
-        
-           
           </GlassCard>
         </div>
       </div>

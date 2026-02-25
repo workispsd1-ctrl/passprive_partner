@@ -55,6 +55,10 @@ function money(n) {
   }).format(num);
 }
 
+function onlyDigits(v) {
+  return String(v || "").replace(/\D/g, "");
+}
+
 function MenuSkeleton() {
   return (
     <div className="min-h-screen bg-slate-50">
@@ -528,19 +532,27 @@ function PublicRestaurantMenuContent() {
                   <div>
                     <label className="text-[11px] text-slate-600">Phone (optional)</label>
                     <input
+                      type="tel"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={15}
                       value={customerPhone}
-                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      onChange={(e) => setCustomerPhone(onlyDigits(e.target.value))}
                       className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none bg-white"
-                      placeholder="Your phone number"
+                      placeholder="Phone number"
                     />
                   </div>
                   <div>
                     <label className="text-[11px] text-slate-600">Table No</label>
                     <input
+                      type="tel"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
                       value={tableNo}
-                      onChange={(e) => setTableNo(e.target.value)}
+                      onChange={(e) => setTableNo(onlyDigits(e.target.value))}
                       className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none bg-white"
-                      placeholder="e.g. T12"
+                      placeholder="e.g. 12"
                     />
                   </div>
                   <div>

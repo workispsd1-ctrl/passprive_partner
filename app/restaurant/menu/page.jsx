@@ -12,7 +12,6 @@ import {
   Leaf,
   Eye,
   EyeOff,
-  Save,
   X,
   Upload,
   CircleDot,
@@ -74,6 +73,10 @@ function formatExpiry(v) {
 
 function formatCvv(v) {
   return String(v || "").replace(/\D/g, "").slice(0, 4);
+}
+
+function normalizePriceInput(v) {
+  return String(v || "").replace(/\D/g, "");
 }
 
 function extFromName(name) {
@@ -1318,9 +1321,11 @@ export default function RestaurantMenuPage() {
           <div className="col-span-12 sm:col-span-6">
             <label className="text-sm font-semibold text-gray-700">Price</label>
             <input
+              type="text"
               value={itemPrice}
-              onChange={(e) => setItemPrice(e.target.value)}
+              onChange={(e) => setItemPrice(normalizePriceInput(e.target.value))}
               inputMode="numeric"
+              pattern="[0-9]*"
               placeholder="199"
               className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-300"
             />
@@ -1413,4 +1418,3 @@ export default function RestaurantMenuPage() {
     </div>
   );
 }
- 
