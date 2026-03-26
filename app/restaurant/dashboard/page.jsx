@@ -4,6 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
+function isMissingRestaurantReviewsColumn(error) {
+  const msg = String(error?.message || "").toLowerCase();
+  return msg.includes("restaurants.reviews") && msg.includes("does not exist");
+}
+
 export default function RestaurantDashboardPage() {
   const router = useRouter();
 
@@ -74,13 +79,29 @@ export default function RestaurantDashboardPage() {
         return;
       }
 
-      const { data: restaurant, error: restErr } = await supabaseBrowser
+      let restaurant = null;
+      const { data: restaurantWithReviews, error: restErr } = await supabaseBrowser
         .from("restaurants")
         .select("id, rating, reviews")
         .eq("owner_user_id", user.id)
         .maybeSingle();
 
-      if (restErr) throw restErr;
+      if (restErr && isMissingRestaurantReviewsColumn(restErr)) {
+        const { data: restaurantFallback, error: fallbackErr } = await supabaseBrowser
+          .from("restaurants")
+          .select("id, rating")
+          .eq("owner_user_id", user.id)
+          .maybeSingle();
+
+        if (fallbackErr) throw fallbackErr;
+        restaurant = restaurantFallback
+          ? { ...restaurantFallback, reviews: [] }
+          : restaurantFallback;
+      } else {
+        if (restErr) throw restErr;
+        restaurant = restaurantWithReviews;
+      }
+
       if (!restaurant?.id) {
         setError("No restaurant found for this account.");
         setLoading(false);

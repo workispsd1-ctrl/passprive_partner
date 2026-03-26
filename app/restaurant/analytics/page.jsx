@@ -3,6 +3,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
+function isMissingRestaurantReviewsColumn(error) {
+  const msg = String(error?.message || "").toLowerCase();
+  return msg.includes("restaurants.reviews") && msg.includes("does not exist");
+}
+
 /* =======================================================
    Trendy UI helpers (glass + sections + charts)
 ======================================================= */
@@ -120,15 +125,20 @@ function MiniBars({ points, height = 140, barWidth = 10 }) {
 function Donut({ items, size = 160 }) {
   const total = items.reduce((a, x) => a + (x.value || 0), 0) || 1;
 
-  let acc = 0;
   const stops = items
-    .map((x) => {
-      const start = (acc / total) * 100;
-      acc += x.value || 0;
-      const end = (acc / total) * 100;
-      return `${x.color} ${start.toFixed(2)}% ${end.toFixed(2)}%`;
-    })
-    .join(", ");
+    .reduce(
+      (state, x) => {
+        const start = (state.acc / total) * 100;
+        const nextAcc = state.acc + (x.value || 0);
+        const end = (nextAcc / total) * 100;
+        return {
+          acc: nextAcc,
+          parts: [...state.parts, `${x.color} ${start.toFixed(2)}% ${end.toFixed(2)}%`],
+        };
+      },
+      { acc: 0, parts: [] }
+    )
+    .parts.join(", ");
 
   const ringStyle = {
     width: size,
@@ -333,7 +343,7 @@ function toCsv(rows) {
 /* =======================================================
    Page
 ======================================================= */
-export default function page() {
+export default function Page() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -346,10 +356,6 @@ export default function page() {
 
   const [range, setRange] = useState("30");
   const [search, setSearch] = useState("");
-
-  useEffect(() => {
-    bootstrap();
-  }, []);
 
   async function bootstrap() {
     setLoading(true);
@@ -371,16 +377,34 @@ export default function page() {
       return;
     }
 
-    const { data: rData, error: rErr } = await supabaseBrowser
+    let rData = null;
+    const { data: restaurantWithReviews, error: rErr } = await supabaseBrowser
       .from("restaurants")
       .select("id, rating, total_ratings, food_rating, service_rating, ambience_rating, reviews, offer, menu, booking_enabled, created_at")
       .eq("owner_user_id", user.id)
       .single();
 
-    if (rErr) {
-      setError(rErr.message || "Failed to load restaurant");
-      setLoading(false);
-      return;
+    if (rErr && isMissingRestaurantReviewsColumn(rErr)) {
+      const { data: restaurantFallback, error: fallbackErr } = await supabaseBrowser
+        .from("restaurants")
+        .select("id, rating, total_ratings, food_rating, service_rating, ambience_rating, offer, menu, booking_enabled, created_at")
+        .eq("owner_user_id", user.id)
+        .single();
+
+      if (fallbackErr) {
+        setError(fallbackErr.message || "Failed to load restaurant");
+        setLoading(false);
+        return;
+      }
+
+      rData = restaurantFallback ? { ...restaurantFallback, reviews: [] } : restaurantFallback;
+    } else {
+      if (rErr) {
+        setError(rErr.message || "Failed to load restaurant");
+        setLoading(false);
+        return;
+      }
+      rData = restaurantWithReviews;
     }
 
     const rid = rData?.id;
@@ -428,6 +452,12 @@ export default function page() {
 
     setLoading(false);
   }
+
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      bootstrap();
+    });
+  }, []);
 
   const filtered = useMemo(() => {
     if (!restaurantRow) return { bookings: [], reviews: [] };

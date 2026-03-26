@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
+function isMissingRestaurantReviewsColumn(error) {
+  const msg = String(error?.message || "").toLowerCase();
+  return msg.includes("restaurants.reviews") && msg.includes("does not exist");
+}
+
 /**
  * Reviews are stored in restaurants.reviews (jsonb).
  *
@@ -157,6 +162,7 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [lastError, setLastError] = useState("");
+  const [reviewsColumnMissing, setReviewsColumnMissing] = useState(false);
 
   const [restaurantId, setRestaurantId] = useState(null);
   const [restaurantName, setRestaurantName] = useState("");
@@ -198,16 +204,36 @@ export default function Page() {
       return;
     }
 
-    const { data, error } = await supabaseBrowser
+    let data = null;
+    const { data: restaurantWithReviews, error } = await supabaseBrowser
       .from("restaurants")
       .select("id, name, reviews")
       .eq("owner_user_id", user.id)
       .single();
 
-    if (error) {
-      setLastError(error.message || "Failed to load restaurant");
-      setLoading(false);
-      return;
+    if (error && isMissingRestaurantReviewsColumn(error)) {
+      const { data: restaurantFallback, error: fallbackErr } = await supabaseBrowser
+        .from("restaurants")
+        .select("id, name")
+        .eq("owner_user_id", user.id)
+        .single();
+
+      if (fallbackErr) {
+        setLastError(fallbackErr.message || "Failed to load restaurant");
+        setLoading(false);
+        return;
+      }
+
+      setReviewsColumnMissing(true);
+      data = { ...(restaurantFallback || {}), reviews: [] };
+    } else {
+      if (error) {
+        setLastError(error.message || "Failed to load restaurant");
+        setLoading(false);
+        return;
+      }
+      setReviewsColumnMissing(false);
+      data = restaurantWithReviews;
     }
 
     setRestaurantId(data.id);
@@ -255,6 +281,10 @@ export default function Page() {
 
   async function saveReviews(next) {
     if (!restaurantId) return false;
+    if (reviewsColumnMissing) {
+      setLastError("Reviews storage is not available in this database schema.");
+      return false;
+    }
 
     setSaving(true);
     setLastError("");
@@ -270,7 +300,12 @@ export default function Page() {
       .eq("id", restaurantId);
 
     if (error) {
-      setLastError(error.message || "Failed to save replies");
+      if (isMissingRestaurantReviewsColumn(error)) {
+        setReviewsColumnMissing(true);
+        setLastError("Reviews storage is not available in this database schema.");
+      } else {
+        setLastError(error.message || "Failed to save replies");
+      }
       setSaving(false);
       return false;
     }

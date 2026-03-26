@@ -295,7 +295,7 @@ function UrlGrid({ urls, onRemove }) {
 /* =========================================================
    Page
 ========================================================= */
-export default function page() {
+export default function Page() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
