@@ -2,45 +2,27 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import {
+  Boxes,
+  BriefcaseBusiness,
+  CalendarClock,
+  CheckCircle2,
+  Eye,
   ImagePlus,
   Loader2,
+  Pencil,
+  Plus,
   RefreshCw,
-  PackagePlus,
+  Save,
+  Store,
+  Trash2,
   Crown,
   AlertTriangle,
-  X,
-  CalendarClock,
-  Save,
 } from "lucide-react";
 
 const BUCKET_NAME = "stores";
-const DEFAULT_CATEGORY_TITLE = "Catalogue Images";
-const DEFAULT_ITEM_CATEGORY_TITLE = "General Items";
-
-const DEMO_CARD = {
-  number: "4242 4242 4242 4242",
-  expiry: "12/34",
-  cvv: "123",
-};
-
-const PICKUP_PREMIUM_PLAN = {
-  code: "PICKUP_PREMIUM",
-  name: "PickUp Orders Premium",
-  priceMonthly: 2000,
-};
-
-const WEEK_DAYS = [
-  { key: "MON", label: "Mon" },
-  { key: "TUE", label: "Tue" },
-  { key: "WED", label: "Wed" },
-  { key: "THU", label: "Thu" },
-  { key: "FRI", label: "Fri" },
-  { key: "SAT", label: "Sat" },
-  { key: "SUN", label: "Sun" },
-];
-
 const STORE_ID_STORAGE_KEYS = [
   "store_partner_selected_store_id",
   "selectedStoreId",
@@ -70,20 +52,53 @@ function safeNum(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-function normalizeCardNumber(v) {
-  return String(v || "").replace(/\D/g, "");
+function asText(v) {
+  const text = String(v || "").trim();
+  return text || null;
 }
-function formatCardNumber(v) {
-  const digits = normalizeCardNumber(v).slice(0, 16);
-  return digits.replace(/(.{4})/g, "$1 ").trim();
+
+function money(v) {
+  const num = Number(v || 0);
+  return `MUR ${num.toLocaleString()}`;
 }
-function formatExpiry(v) {
-  const digits = String(v || "").replace(/\D/g, "").slice(0, 4);
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+
+function readPreferredStoreId() {
+  if (typeof window === "undefined") return "";
+  for (const key of STORE_ID_STORAGE_KEYS) {
+    const value = window.localStorage.getItem(key);
+    if (value) return String(value);
+  }
+  return "";
 }
-function formatCvv(v) {
-  return String(v || "").replace(/\D/g, "").slice(0, 4);
+
+function savePreferredStoreId(id) {
+  if (typeof window === "undefined" || !id) return;
+  STORE_ID_STORAGE_KEYS.forEach((key) => window.localStorage.setItem(key, String(id)));
+  window.dispatchEvent(new Event("store-selection-changed"));
+}
+
+function normalizeMemberStore(storesField) {
+  if (Array.isArray(storesField)) return storesField[0] || null;
+  return storesField || null;
+}
+
+function normalizeStoreType(value) {
+  return String(value || "PRODUCT").toUpperCase() === "SERVICE" ? "SERVICE" : "PRODUCT";
+}
+
+function sectionLabel(storeType) {
+  return normalizeStoreType(storeType) === "SERVICE" ? "Services" : "Catalogue";
+}
+
+function isPremiumActive(store) {
+  const pickupMode = String(store?.pickup_mode || "").toUpperCase();
+  const modeImpliesPremium = ["PREMIUM", "PICKUP_PREMIUM", "FULL"].includes(pickupMode);
+
+  if (!store?.pickup_premium_enabled && !modeImpliesPremium) return false;
+  if (!store?.pickup_premium_expires_at) return true;
+
+  const ts = new Date(store.pickup_premium_expires_at).getTime();
+  return Number.isFinite(ts) && ts > Date.now();
 }
 
 function stockStatusFromQty(qty, lowThreshold = 5) {
@@ -94,41 +109,72 @@ function stockStatusFromQty(qty, lowThreshold = 5) {
   return "in_stock";
 }
 
-function isPremiumActive(store) {
-  if (!store?.pickup_premium_enabled) return false;
-  if (!store?.pickup_premium_expires_at) return true;
-  const ts = new Date(store.pickup_premium_expires_at).getTime();
-  return Number.isFinite(ts) && ts > Date.now();
+function getInitialCategoryForm() {
+  return {
+    title: "",
+    starting_from: "",
+    enabled: true,
+    sort_order: "",
+  };
 }
 
-function readPreferredStoreId() {
-  if (typeof window === "undefined") return "";
-  for (const key of STORE_ID_STORAGE_KEYS) {
-    const v = window.localStorage.getItem(key);
-    if (v) return String(v);
+function getInitialItemForm(storeType = "PRODUCT") {
+  if (normalizeStoreType(storeType) === "SERVICE") {
+    return {
+      category_id: "",
+      title: "",
+      description: "",
+      price: "",
+      sku: "",
+      image_url: "",
+      is_available: true,
+      is_billable: false,
+      duration_minutes: "30",
+      supports_slot_booking: false,
+      track_inventory: false,
+      stock_qty: "0",
+      low_stock_threshold: "5",
+      allow_backorder: false,
+      is_image_catalogue: false,
+    };
   }
-  return "";
+
+  return {
+    category_id: "",
+    title: "",
+    description: "",
+    price: "",
+    sku: "",
+    image_url: "",
+    is_available: true,
+    is_billable: false,
+    duration_minutes: "",
+    supports_slot_booking: false,
+    track_inventory: false,
+    stock_qty: "0",
+    low_stock_threshold: "5",
+    allow_backorder: false,
+    is_image_catalogue: true,
+  };
 }
 
-function savePreferredStoreId(id) {
-  if (typeof window === "undefined" || !id) return;
-  for (const key of STORE_ID_STORAGE_KEYS) {
-    window.localStorage.setItem(key, String(id));
-  }
-}
-
-function normalizeMemberStore(storesField) {
-  if (Array.isArray(storesField)) return storesField[0] || null;
-  return storesField || null;
+function getInitialScheduleForm() {
+  return {
+    supports_time_slots: false,
+    slot_duration_minutes: "30",
+    slot_buffer_minutes: "0",
+    slot_advance_days: "30",
+    slot_max_per_window: "1",
+  };
 }
 
 function Card({ title, subtitle, right, children }) {
   return (
     <div className="rounded-3xl border border-gray-200 bg-white shadow-sm">
-      <div className="px-6 py-4 border-b border-gray-200 flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-6 py-4">
         <div>
           <div className="font-semibold text-gray-900">{title}</div>
-          {subtitle ? <div className="text-xs text-gray-500 mt-1">{subtitle}</div> : null}
+          {subtitle ? <div className="mt-1 text-xs text-gray-500">{subtitle}</div> : null}
         </div>
         {right || null}
       </div>
@@ -139,288 +185,304 @@ function Card({ title, subtitle, right, children }) {
 
 function SectionSkeleton() {
   return (
-    <div className="space-y-3 animate-pulse">
-      <div className="h-5 w-52 rounded bg-gray-100" />
-      <div className="h-11 w-full rounded-xl bg-gray-100" />
-      <div className="h-28 w-full rounded-xl bg-gray-100" />
-      <div className="h-11 w-44 rounded-full bg-gray-100" />
+    <div className="space-y-4 animate-pulse">
+      <div className="h-6 w-56 rounded bg-gray-100" />
+      <div className="h-12 w-full rounded-2xl bg-gray-100" />
+      <div className="h-24 w-full rounded-2xl bg-gray-100" />
+      <div className="h-12 w-44 rounded-full bg-gray-100" />
     </div>
   );
 }
 
-function StoreSelector({
-  stores,
-  applyAll,
-  setApplyAll,
-  selectedStoreIds,
-  setSelectedStoreIds,
-  disabled = false,
-}) {
-  const onToggleStore = (id, checked) => {
-    setSelectedStoreIds((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(String(id));
-      else next.delete(String(id));
-      return Array.from(next);
-    });
-  };
-
+function Field({ label, hint, children }) {
   return (
-    <>
-      <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-        <input
-          type="checkbox"
-          checked={applyAll}
-          disabled={disabled}
-          onChange={(e) => setApplyAll(e.target.checked)}
-        />
-        Apply to all stores ({stores.length})
-      </label>
-
-      <div className="max-h-52 overflow-auto rounded-2xl border border-gray-200 bg-white p-3 space-y-2 mt-3">
-        {stores.map((s) => {
-          const checked = applyAll || selectedStoreIds.includes(String(s.id));
-          return (
-            <label key={s.id} className="flex items-center gap-2 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                disabled={disabled || applyAll}
-                checked={checked}
-                onChange={(e) => onToggleStore(s.id, e.target.checked)}
-              />
-              <span>
-                {s.name} {s.city ? `• ${s.city}` : ""} {s.is_active === false ? "(Inactive)" : ""}
-              </span>
-            </label>
-          );
-        })}
+    <div>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="text-xs font-semibold uppercase tracking-wide text-gray-600">{label}</div>
+        {hint ? <div className="text-[11px] text-gray-400">{hint}</div> : null}
       </div>
-    </>
-  );
-}
-
-function PremiumModal({
-  open,
-  onClose,
-  onConfirm,
-  loading,
-  cardName,
-  setCardName,
-  cardNumber,
-  setCardNumber,
-  cardExpiry,
-  setCardExpiry,
-  cardCvv,
-  setCardCvv,
-  error,
-  targetCount,
-}) {
-  if (!open) return null;
-
-  return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 p-4">
-      <div className="w-full max-w-xl rounded-2xl border border-gray-200 bg-white shadow-2xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Crown className="h-4 w-4 text-amber-600" />
-            <h3 className="text-sm font-semibold text-gray-900">Subscribe PickUp Premium</h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={loading}
-            className="h-8 w-8 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center"
-          >
-            <X className="h-4 w-4 text-gray-700" />
-          </button>
-        </div>
-
-        <div className="px-5 py-4 space-y-4">
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-            <div className="text-sm font-semibold text-amber-900">
-              {PICKUP_PREMIUM_PLAN.name} • Rs. {PICKUP_PREMIUM_PLAN.priceMonthly}/month
-            </div>
-            <ul className="mt-2 text-xs text-amber-800 list-disc pl-5 space-y-1">
-              <li>Item-level PickUp catalogue with live stock control.</li>
-              <li>Scheduled slot configuration for salon/services and timed collection.</li>
-              <li>Operational inventory controls across selected stores.</li>
-              <li>Applies to {targetCount} selected store(s).</li>
-            </ul>
-          </div>
-
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700">
-            Demo card: {DEMO_CARD.number} | {DEMO_CARD.expiry} | {DEMO_CARD.cvv}
-          </div>
-
-          {error ? <div className="text-sm text-red-600">{error}</div> : null}
-
-          <div>
-            <label className="text-sm font-semibold text-gray-700">Cardholder Name</label>
-            <input
-              value={cardName}
-              onChange={(e) => setCardName(e.target.value)}
-              placeholder="Demo User"
-              className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-300"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-semibold text-gray-700">Card Number</label>
-            <input
-              value={cardNumber}
-              onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
-              placeholder="4242 4242 4242 4242"
-              inputMode="numeric"
-              className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-300"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-semibold text-gray-700">Expiry</label>
-              <input
-                value={cardExpiry}
-                onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
-                placeholder="12/34"
-                inputMode="numeric"
-                className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-300"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-semibold text-gray-700">CVV</label>
-              <input
-                value={cardCvv}
-                onChange={(e) => setCardCvv(formatCvv(e.target.value))}
-                placeholder="123"
-                inputMode="numeric"
-                className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-300"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="px-5 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={loading}
-            className="h-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 px-4 text-sm font-medium"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={loading}
-            className="h-9 rounded-xl bg-[#DA3224] text-white px-4 text-sm font-medium hover:opacity-95 disabled:opacity-60"
-          >
-            {loading ? "Processing..." : "Pay & Subscribe"}
-          </button>
-        </div>
-      </div>
+      {children}
     </div>
   );
 }
 
-export default function CatalogueImagesPage() {
+function Input(props) {
+  return (
+    <input
+      {...props}
+      className={[
+        "h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none transition focus:border-gray-300 disabled:cursor-not-allowed disabled:bg-gray-50",
+        props.className || "",
+      ].join(" ")}
+    />
+  );
+}
+
+function Textarea(props) {
+  return (
+    <textarea
+      {...props}
+      className={[
+        "min-h-[110px] w-full rounded-2xl border border-gray-200 bg-white px-3 py-3 text-sm outline-none transition focus:border-gray-300 disabled:cursor-not-allowed disabled:bg-gray-50",
+        props.className || "",
+      ].join(" ")}
+    />
+  );
+}
+
+function Select(props) {
+  return (
+    <select
+      {...props}
+      className={[
+        "h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none transition focus:border-gray-300 disabled:cursor-not-allowed disabled:bg-gray-50",
+        props.className || "",
+      ].join(" ")}
+    />
+  );
+}
+
+function Toggle({ checked, onChange, label, description, disabled = false }) {
+  return (
+    <label
+      className={[
+        "flex items-start gap-3 rounded-2xl border px-4 py-3",
+        disabled ? "border-gray-200 bg-gray-50 opacity-70" : "border-gray-200 bg-white",
+      ].join(" ")}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-1 h-4 w-4 rounded border-gray-300"
+      />
+      <span className="block">
+        <span className="block text-sm font-medium text-gray-900">{label}</span>
+        {description ? <span className="mt-0.5 block text-xs text-gray-500">{description}</span> : null}
+      </span>
+    </label>
+  );
+}
+
+function Badge({ children, tone = "gray" }) {
+  const cls =
+    tone === "green"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : tone === "amber"
+      ? "border-amber-200 bg-amber-50 text-amber-700"
+      : tone === "red"
+      ? "border-red-200 bg-red-50 text-red-700"
+      : tone === "blue"
+      ? "border-blue-200 bg-blue-50 text-blue-700"
+      : "border-gray-200 bg-gray-50 text-gray-700";
+  return <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold ${cls}`}>{children}</span>;
+}
+
+function EmptyState({ title, body }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-600">
+      <div className="font-semibold text-gray-900">{title}</div>
+      <div className="mt-1">{body}</div>
+    </div>
+  );
+}
+
+export default function PartnerCataloguePage() {
   const router = useRouter();
 
   const [loadingStores, setLoadingStores] = useState(true);
-  const [loadingCatalogue, setLoadingCatalogue] = useState(false);
+  const [loadingData, setLoadingData] = useState(false);
+  const [stores, setStores] = useState([]);
+  const [selectedStoreId, setSelectedStoreId] = useState("");
+
+  const [categories, setCategories] = useState([]);
+  const [items, setItems] = useState([]);
+
+  const [categoryForm, setCategoryForm] = useState(getInitialCategoryForm());
+  const [editingCategoryId, setEditingCategoryId] = useState("");
+  const [savingCategory, setSavingCategory] = useState(false);
+  const [deletingCategoryId, setDeletingCategoryId] = useState("");
+
+  const [itemForm, setItemForm] = useState(getInitialItemForm("PRODUCT"));
+  const [editingItemId, setEditingItemId] = useState("");
+  const [itemImageFile, setItemImageFile] = useState(null);
+  const [itemImagePreviewUrl, setItemImagePreviewUrl] = useState("");
+  const [savingItem, setSavingItem] = useState(false);
+  const [deletingItemId, setDeletingItemId] = useState("");
+
+  const [scheduleForm, setScheduleForm] = useState(getInitialScheduleForm());
+  const [scheduleScope, setScheduleScope] = useState("CURRENT");
+  const [scheduleTargetIds, setScheduleTargetIds] = useState([]);
   const [savingSchedule, setSavingSchedule] = useState(false);
 
-  const [savingBulk, setSavingBulk] = useState(false);
-  const [savingItem, setSavingItem] = useState(false);
-
-  const [err, setErr] = useState("");
-  const [ok, setOk] = useState("");
-
-  const [stores, setStores] = useState([]);
-
-  const [applyAllStores, setApplyAllStores] = useState(false);
-  const [selectedStoreIds, setSelectedStoreIds] = useState([]);
-  const [files, setFiles] = useState([]);
-
-  const [applyAllItemStores, setApplyAllItemStores] = useState(false);
-  const [selectedItemStoreIds, setSelectedItemStoreIds] = useState([]);
-  const [itemTitle, setItemTitle] = useState("");
-  const [itemPrice, setItemPrice] = useState("");
-  const [itemSku, setItemSku] = useState("");
-  const [itemDescription, setItemDescription] = useState("");
-  const [itemCategoryTitle, setItemCategoryTitle] = useState(DEFAULT_ITEM_CATEGORY_TITLE);
-  const [itemAvailable, setItemAvailable] = useState(true);
-  const [itemImage, setItemImage] = useState(null);
-  const [itemInitialStock, setItemInitialStock] = useState("0");
-  const [itemLowThreshold, setItemLowThreshold] = useState("5");
-
-  const [previewStoreId, setPreviewStoreId] = useState("");
-  const [catalogueImages, setCatalogueImages] = useState([]);
-
-  const [premiumModalOpen, setPremiumModalOpen] = useState(false);
-  const [premiumError, setPremiumError] = useState("");
-  const [premiumSaving, setPremiumSaving] = useState(false);
-  const [cardName, setCardName] = useState("");
-  const [cardNumber, setCardNumber] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [cardCvv, setCardCvv] = useState("");
-
-  const [slotEnabled, setSlotEnabled] = useState(false);
-  const [slotMode, setSlotMode] = useState("OPTIONAL");
-  const [slotDuration, setSlotDuration] = useState("30");
-  const [slotBuffer, setSlotBuffer] = useState("0");
-  const [slotAdvanceDays, setSlotAdvanceDays] = useState("30");
-  const [slotMaxPerWindow, setSlotMaxPerWindow] = useState("1");
-  const [slotDays, setSlotDays] = useState(["MON", "TUE", "WED", "THU", "FRI", "SAT"]);
-  const [slotStart, setSlotStart] = useState("09:00");
-  const [slotEnd, setSlotEnd] = useState("19:00");
-
   const storeMap = useMemo(() => {
-    const m = new Map();
-    stores.forEach((s) => m.set(String(s.id), s));
-    return m;
+    const map = new Map();
+    stores.forEach((store) => map.set(String(store.id), store));
+    return map;
   }, [stores]);
 
-  const effectiveStoreIds = useMemo(() => {
-    if (applyAllStores) return stores.map((s) => String(s.id));
-    return selectedStoreIds;
-  }, [applyAllStores, selectedStoreIds, stores]);
-
-  const effectiveItemStoreIds = useMemo(() => {
-    if (applyAllItemStores) return stores.map((s) => String(s.id));
-    return selectedItemStoreIds;
-  }, [applyAllItemStores, selectedItemStoreIds, stores]);
-
-  const selectedPreviewStore = useMemo(
-    () => storeMap.get(String(previewStoreId)) || null,
-    [storeMap, previewStoreId]
+  const selectedStore = useMemo(
+    () => storeMap.get(String(selectedStoreId)) || null,
+    [storeMap, selectedStoreId]
   );
 
-  const previewStorePremiumUnlocked = useMemo(
-    () => isPremiumActive(selectedPreviewStore),
-    [selectedPreviewStore]
-  );
+  const selectedStoreType = normalizeStoreType(selectedStore?.store_type);
+  const selectedSectionLabel = sectionLabel(selectedStoreType);
+  const isServiceStore = selectedStoreType === "SERVICE";
+  const isProductStore = !isServiceStore;
+  const premiumUnlocked = isPremiumActive(selectedStore);
 
-  const targetPremiumStoreIds = useMemo(() => {
-    return effectiveItemStoreIds.filter((id) => !isPremiumActive(storeMap.get(String(id))));
-  }, [effectiveItemStoreIds, storeMap]);
+  const sortedCategories = useMemo(() => {
+    return [...categories].sort((a, b) => {
+      const bySort = Number(a.sort_order || 0) - Number(b.sort_order || 0);
+      if (bySort !== 0) return bySort;
+      return String(a.title || "").localeCompare(String(b.title || ""));
+    });
+  }, [categories]);
 
-  const pickupPremiumUnlockedForSelection = useMemo(
-    () => effectiveItemStoreIds.length > 0 && targetPremiumStoreIds.length === 0,
-    [effectiveItemStoreIds, targetPremiumStoreIds]
-  );
+  const sortedItems = useMemo(() => {
+    return [...items].sort((a, b) => {
+      const bySort = Number(a.sort_order || 0) - Number(b.sort_order || 0);
+      if (bySort !== 0) return bySort;
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    });
+  }, [items]);
 
-  const canSubmitBulk = useMemo(
-    () => effectiveStoreIds.length > 0 && files.length > 0,
-    [effectiveStoreIds, files]
-  );
+  const itemsByCategory = useMemo(() => {
+    const map = new Map();
+    sortedCategories.forEach((category) => map.set(String(category.id), []));
+    sortedItems.forEach((item) => {
+      const key = String(item.category_id || "");
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(item);
+    });
+    return map;
+  }, [sortedCategories, sortedItems]);
 
-  const canSubmitItem = useMemo(() => {
-    if (!itemTitle.trim()) return false;
-    if (!itemImage) return false;
-    if (!effectiveItemStoreIds.length) return false;
-    if (!pickupPremiumUnlockedForSelection) return false;
-    return true;
-  }, [itemTitle, itemImage, effectiveItemStoreIds, pickupPremiumUnlockedForSelection]);
+  const previewCategories = useMemo(() => {
+    return sortedCategories
+      .filter((category) => category.enabled !== false)
+      .map((category) => ({
+        ...category,
+        items: (itemsByCategory.get(String(category.id)) || []).filter((item) => item.is_available !== false),
+      }))
+      .filter((category) => category.items.length > 0);
+  }, [sortedCategories, itemsByCategory]);
+
+  const linkedServiceBranches = useMemo(() => {
+    return stores.filter((store) => normalizeStoreType(store.store_type) === "SERVICE");
+  }, [stores]);
+
+  const effectiveScheduleTargetIds = useMemo(() => {
+    if (scheduleScope === "ALL") return linkedServiceBranches.map((store) => String(store.id));
+    if (scheduleScope === "CUSTOM") return scheduleTargetIds;
+    return selectedStoreId ? [String(selectedStoreId)] : [];
+  }, [scheduleScope, linkedServiceBranches, scheduleTargetIds, selectedStoreId]);
+
+  const currentItemIsImageOnly =
+    isProductStore && (!premiumUnlocked || Boolean(itemForm.is_image_catalogue));
+
+  const loadStores = async () => {
+    const { data: sess, error: sessErr } = await supabaseBrowser.auth.getSession();
+    if (sessErr) throw sessErr;
+
+    const userId = sess?.session?.user?.id;
+    if (!userId) {
+      router.replace("/sign-in");
+      return [];
+    }
+
+    const ownerRes = await supabaseBrowser
+      .from("stores")
+      .select(
+        "id,name,city,is_active,owner_user_id,store_type,pickup_mode,pickup_premium_enabled,pickup_premium_plan,pickup_premium_expires_at,supports_time_slots,slot_duration_minutes,slot_buffer_minutes,slot_advance_days,slot_max_per_window"
+      )
+      .eq("owner_user_id", userId)
+      .order("name", { ascending: true });
+
+    if (ownerRes.error) throw ownerRes.error;
+
+    const memberRes = await supabaseBrowser
+      .from("store_members")
+      .select(
+        "store_id,role,stores:store_id(id,name,city,is_active,owner_user_id,store_type,pickup_mode,pickup_premium_enabled,pickup_premium_plan,pickup_premium_expires_at,supports_time_slots,slot_duration_minutes,slot_buffer_minutes,slot_advance_days,slot_max_per_window)"
+      )
+      .eq("user_id", userId);
+
+    if (memberRes.error) throw memberRes.error;
+
+    const ownerStores = ownerRes.data || [];
+    const memberStores = (memberRes.data || []).map((row) => normalizeMemberStore(row.stores)).filter(Boolean);
+
+    const merged = new Map();
+    [...ownerStores, ...memberStores].forEach((store) => merged.set(String(store.id), store));
+
+    return Array.from(merged.values()).sort((a, b) =>
+      String(a.name || "").localeCompare(String(b.name || ""))
+    );
+  };
+
+  const loadCatalogueData = async (storeId) => {
+    if (!storeId) {
+      setCategories([]);
+      setItems([]);
+      return;
+    }
+
+    setLoadingData(true);
+    try {
+      const [categoryRes, itemRes] = await Promise.all([
+        supabaseBrowser
+          .from("store_catalogue_categories")
+          .select("id,store_id,title,starting_from,enabled,sort_order,created_at,updated_at")
+          .eq("store_id", storeId)
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: true }),
+        supabaseBrowser
+          .from("store_catalogue_items")
+          .select(
+            "id,store_id,category_id,title,description,price,sku,image_url,is_available,item_type,is_billable,duration_minutes,supports_slot_booking,track_inventory,stock_qty,low_stock_threshold,stock_status,allow_backorder,is_image_catalogue,sort_order,created_at,updated_at"
+          )
+          .eq("store_id", storeId)
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: false }),
+      ]);
+
+      if (categoryRes.error) throw categoryRes.error;
+      if (itemRes.error) throw itemRes.error;
+
+      const loadedCategories = categoryRes.data || [];
+      const loadedItems = (itemRes.data || []).map((item) => ({
+        ...item,
+        item_type: normalizeStoreType(item.item_type),
+        stock_qty: item.stock_qty ?? null,
+        low_stock_threshold: item.low_stock_threshold ?? 5,
+      }));
+
+      setCategories(loadedCategories);
+      setItems(loadedItems);
+
+      setCategoryForm(getInitialCategoryForm());
+      setEditingCategoryId("");
+      setEditingItemId("");
+      setItemImageFile(null);
+      setItemImagePreviewUrl("");
+
+      setItemForm((prev) => {
+        const next = getInitialItemForm(selectedStoreType);
+        const fallbackCategoryId = loadedCategories[0]?.id ? String(loadedCategories[0].id) : "";
+        return {
+          ...next,
+          category_id: prev.category_id && loadedCategories.some((cat) => String(cat.id) === String(prev.category_id))
+            ? prev.category_id
+            : fallbackCategoryId,
+        };
+      });
+    } finally {
+      setLoadingData(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -428,60 +490,21 @@ export default function CatalogueImagesPage() {
     (async () => {
       try {
         setLoadingStores(true);
-        setErr("");
+        const loadedStores = await loadStores();
+        if (cancelled) return;
 
-        const { data: sess, error: sessErr } = await supabaseBrowser.auth.getSession();
-        if (sessErr) throw sessErr;
-        const userId = sess?.session?.user?.id;
+        setStores(loadedStores);
 
-        if (!userId) {
-          router.replace("/sign-in");
-          return;
+        const preferredId = readPreferredStoreId();
+        const nextStoreId =
+          loadedStores.find((store) => String(store.id) === String(preferredId))?.id || loadedStores[0]?.id || "";
+
+        if (nextStoreId) {
+          setSelectedStoreId(String(nextStoreId));
+          savePreferredStoreId(String(nextStoreId));
         }
-
-        const ownerRes = await supabaseBrowser
-          .from("stores")
-          .select("id,name,city,is_active,pickup_premium_enabled,pickup_premium_plan,pickup_premium_expires_at,metadata")
-          .eq("owner_user_id", userId);
-        if (ownerRes.error) throw ownerRes.error;
-
-        const memberRes = await supabaseBrowser
-          .from("store_members")
-          .select(
-            "store_id, stores:store_id (id,name,city,is_active,pickup_premium_enabled,pickup_premium_plan,pickup_premium_expires_at,metadata)"
-          )
-          .eq("user_id", userId);
-        if (memberRes.error) throw memberRes.error;
-
-        const ownerStores = ownerRes.data || [];
-        const memberStores = (memberRes.data || [])
-          .map((r) => normalizeMemberStore(r.stores))
-          .filter(Boolean);
-
-        const map = new Map();
-        [...ownerStores, ...memberStores].forEach((s) => map.set(String(s.id), s));
-
-        const list = Array.from(map.values()).sort((a, b) =>
-          String(a.name || "").localeCompare(String(b.name || ""))
-        );
-
-        if (!cancelled) {
-          setStores(list);
-
-          if (list.length) {
-            const preferred = readPreferredStoreId();
-            const picked =
-              list.find((s) => String(s.id) === String(preferred))?.id ?? list[0].id;
-            const pickedId = String(picked);
-
-            setPreviewStoreId(pickedId);
-            setSelectedStoreIds([pickedId]);
-            setSelectedItemStoreIds([pickedId]);
-            savePreferredStoreId(pickedId);
-          }
-        }
-      } catch (e) {
-        if (!cancelled) setErr(e?.message || "Failed to load stores.");
+      } catch (error) {
+        if (!cancelled) toast.error(error?.message || "Failed to load partner stores.");
       } finally {
         if (!cancelled) setLoadingStores(false);
       }
@@ -490,110 +513,49 @@ export default function CatalogueImagesPage() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
-    if (!previewStoreId) return;
-    savePreferredStoreId(previewStoreId);
+    if (!selectedStoreId) return;
+    savePreferredStoreId(selectedStoreId);
 
-    if (!applyAllStores) setSelectedStoreIds([String(previewStoreId)]);
-    if (!applyAllItemStores) setSelectedItemStoreIds([String(previewStoreId)]);
-  }, [previewStoreId, applyAllStores, applyAllItemStores]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const syncStoreFromSidebar = () => {
-      const preferred = readPreferredStoreId();
-      if (!preferred) return;
-      const exists = stores.some((s) => String(s.id) === String(preferred));
-      if (!exists) return;
-      if (String(preferred) !== String(previewStoreId)) {
-        setPreviewStoreId(String(preferred));
+    (async () => {
+      try {
+        await loadCatalogueData(selectedStoreId);
+      } catch (error) {
+        toast.error(error?.message || `Failed to load ${selectedSectionLabel.toLowerCase()}.`);
       }
-    };
-
-    window.addEventListener("focus", syncStoreFromSidebar);
-    window.addEventListener("storage", syncStoreFromSidebar);
-
-    return () => {
-      window.removeEventListener("focus", syncStoreFromSidebar);
-      window.removeEventListener("storage", syncStoreFromSidebar);
-    };
-  }, [stores, previewStoreId]);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedStoreId]);
 
   useEffect(() => {
-    const store = storeMap.get(String(previewStoreId));
-    const sched = store?.metadata?.pickupScheduling || {};
-
-    setSlotEnabled(Boolean(sched?.enabled));
-    setSlotMode(sched?.mode === "REQUIRED" ? "REQUIRED" : "OPTIONAL");
-    setSlotDuration(String(sched?.slotDurationMinutes ?? 30));
-    setSlotBuffer(String(sched?.slotBufferMinutes ?? 0));
-    setSlotAdvanceDays(String(sched?.advanceBookingDays ?? 30));
-    setSlotMaxPerWindow(String(sched?.maxPerSlot ?? 1));
-    setSlotDays(
-      Array.isArray(sched?.days) && sched.days.length
-        ? sched.days
-        : ["MON", "TUE", "WED", "THU", "FRI", "SAT"]
-    );
-    setSlotStart(sched?.startTime || "09:00");
-    setSlotEnd(sched?.endTime || "19:00");
-  }, [previewStoreId, storeMap]);
-
-  const loadCatalogueForStore = async (storeId) => {
-    if (!storeId) return;
-    setLoadingCatalogue(true);
-    setErr("");
-
-    try {
-      const { data, error } = await supabaseBrowser
-        .from("store_catalogue_items")
-        .select("id,title,image_url,created_at,sort_order,price")
-        .eq("store_id", storeId)
-        .not("image_url", "is", null)
-        .order("sort_order", { ascending: true })
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setCatalogueImages(data || []);
-    } catch (e) {
-      setErr(e?.message || "Failed to load catalogue images.");
-      setCatalogueImages([]);
-    } finally {
-      setLoadingCatalogue(false);
-    }
-  };
-
-  useEffect(() => {
-    if (previewStoreId) loadCatalogueForStore(previewStoreId);
-  }, [previewStoreId]);
-
-  const onPickFiles = (e) => {
-    const incoming = Array.from(e.target.files || []);
-    const onlyImages = incoming.filter(isImage);
-    if (!onlyImages.length) return;
-
-    setFiles((prev) => {
-      const map = new Map();
-      [...prev, ...onlyImages].forEach((f) => {
-        const k = `${f.name}_${f.size}_${f.lastModified}`;
-        map.set(k, f);
-      });
-      return Array.from(map.values());
+    setScheduleForm({
+      supports_time_slots: Boolean(selectedStore?.supports_time_slots),
+      slot_duration_minutes: String(selectedStore?.slot_duration_minutes ?? 30),
+      slot_buffer_minutes: String(selectedStore?.slot_buffer_minutes ?? 0),
+      slot_advance_days: String(selectedStore?.slot_advance_days ?? 30),
+      slot_max_per_window: String(selectedStore?.slot_max_per_window ?? 1),
     });
+    setScheduleScope("CURRENT");
+    setScheduleTargetIds(selectedStoreId ? [String(selectedStoreId)] : []);
+  }, [selectedStoreId, selectedStore]);
 
-    e.target.value = "";
-  };
+  useEffect(() => {
+    setItemForm((prev) => {
+      const fallbackCategoryId = sortedCategories[0]?.id ? String(sortedCategories[0].id) : "";
+      const nextCategoryId =
+        prev.category_id && sortedCategories.some((category) => String(category.id) === String(prev.category_id))
+          ? prev.category_id
+          : fallbackCategoryId;
 
-  const onPickItemImage = (e) => {
-    const file = e.target.files?.[0];
-    if (!file || !isImage(file)) return;
-    setItemImage(file);
-    e.target.value = "";
-  };
-
-  const removeFile = (idx) => setFiles((prev) => prev.filter((_, i) => i !== idx));
+      return {
+        ...prev,
+        category_id: nextCategoryId,
+      };
+    });
+  }, [sortedCategories]);
 
   const uploadImage = async (storeId, file) => {
     const ext = getExt(file);
@@ -608,641 +570,1249 @@ export default function CatalogueImagesPage() {
     return data.publicUrl;
   };
 
-  const ensureCategoryByTitle = async (storeId, title) => {
-    const cleanTitle = String(title || "").trim() || DEFAULT_CATEGORY_TITLE;
-
-    const existing = await supabaseBrowser
-      .from("store_catalogue_categories")
-      .select("id")
-      .eq("store_id", storeId)
-      .eq("title", cleanTitle)
-      .limit(1);
-
-    if (existing.error) throw existing.error;
-    if (existing.data?.length) return existing.data[0].id;
-
-    const created = await supabaseBrowser
-      .from("store_catalogue_categories")
-      .insert({
-        store_id: storeId,
-        title: cleanTitle,
-        enabled: true,
-        sort_order: 0,
-      })
-      .select("id")
-      .single();
-
-    if (created.error) throw created.error;
-    return created.data.id;
-  };
-
-  const getBaseSort = async (storeId) => {
-    const { data, error } = await supabaseBrowser
-      .from("store_catalogue_items")
-      .select("sort_order")
-      .eq("store_id", storeId)
-      .order("sort_order", { ascending: false })
-      .limit(1);
-
-    if (error) throw error;
-    if (!data?.length) return 0;
-    return Number(data[0].sort_order || 0) + 1;
-  };
-
-  const handleSubmitBulk = async () => {
-    if (!canSubmitBulk || savingBulk) return;
-
+  const refreshCurrentStore = async () => {
+    if (!selectedStoreId) return;
     try {
-      setSavingBulk(true);
-      setErr("");
-      setOk("");
-
-      const targets = stores.filter((s) => effectiveStoreIds.includes(String(s.id)));
-      if (!targets.length) throw new Error("No stores selected.");
-
-      for (const store of targets) {
-        const categoryId = await ensureCategoryByTitle(store.id, DEFAULT_CATEGORY_TITLE);
-        let sortBase = await getBaseSort(store.id);
-
-        const rows = [];
-        for (const file of files) {
-          const imageUrl = await uploadImage(store.id, file);
-          rows.push({
-            store_id: store.id,
-            category_id: categoryId,
-            title: `Image ${new Date().toISOString().slice(0, 19).replace("T", " ")}`,
-            price: null,
-            sku: null,
-            description: null,
-            is_available: true,
-            image_url: imageUrl,
-            sort_order: sortBase++,
-            track_inventory: false,
-            stock_qty: null,
-            low_stock_threshold: 5,
-            stock_status: null,
-          });
-        }
-
-        const { error: insErr } = await supabaseBrowser.from("store_catalogue_items").insert(rows);
-        if (insErr) throw insErr;
-      }
-
-      setOk(`Uploaded ${files.length} image(s) to ${targets.length} store(s).`);
-      setFiles([]);
-      if (previewStoreId) loadCatalogueForStore(previewStoreId);
-    } catch (e) {
-      setErr(e?.message || "Failed to upload catalogue images.");
-    } finally {
-      setSavingBulk(false);
+      setLoadingData(true);
+      const freshStores = await loadStores();
+      setStores(freshStores);
+      await loadCatalogueData(selectedStoreId);
+    } catch (error) {
+      toast.error(error?.message || "Failed to refresh catalogue data.");
+      setLoadingData(false);
     }
   };
 
-  const toggleSlotDay = (day) => {
-    setSlotDays((prev) => {
-      const has = prev.includes(day);
-      if (has) return prev.filter((d) => d !== day);
-      return [...prev, day];
+  const resetCategoryForm = () => {
+    setCategoryForm(getInitialCategoryForm());
+    setEditingCategoryId("");
+  };
+
+  const resetItemForm = () => {
+    setEditingItemId("");
+    setItemImageFile(null);
+    setItemImagePreviewUrl("");
+    setItemForm({
+      ...getInitialItemForm(selectedStoreType),
+      category_id: sortedCategories[0]?.id ? String(sortedCategories[0].id) : "",
     });
   };
 
-  const saveSchedulingConfig = async () => {
-    if (!previewStoreId) return;
+  const handleSaveCategory = async () => {
+    if (!selectedStoreId || !categoryForm.title.trim()) {
+      toast.error("Enter a category title first.");
+      return;
+    }
+
     try {
-      setSavingSchedule(true);
-      setErr("");
-      setOk("");
+      setSavingCategory(true);
 
-      const store = storeMap.get(String(previewStoreId));
-      const existingMetadata = store?.metadata || {};
+      const sortOrder =
+        safeNum(categoryForm.sort_order) ??
+        (editingCategoryId
+          ? Number(categories.find((category) => String(category.id) === String(editingCategoryId))?.sort_order || 0)
+          : categories.length);
 
-      const pickupScheduling = {
-        enabled: Boolean(slotEnabled),
-        mode: slotMode === "REQUIRED" ? "REQUIRED" : "OPTIONAL",
-        slotDurationMinutes: Math.max(5, Number(slotDuration || 30)),
-        slotBufferMinutes: Math.max(0, Number(slotBuffer || 0)),
-        advanceBookingDays: Math.max(1, Number(slotAdvanceDays || 30)),
-        maxPerSlot: Math.max(1, Number(slotMaxPerWindow || 1)),
-        days: slotDays.length ? slotDays : ["MON", "TUE", "WED", "THU", "FRI", "SAT"],
-        startTime: slotStart || "09:00",
-        endTime: slotEnd || "19:00",
-        updatedAt: new Date().toISOString(),
+      const payload = {
+        store_id: selectedStoreId,
+        title: categoryForm.title.trim(),
+        starting_from: safeNum(categoryForm.starting_from),
+        enabled: Boolean(categoryForm.enabled),
+        sort_order: sortOrder,
       };
 
-      const nextMetadata = { ...existingMetadata, pickupScheduling };
+      if (editingCategoryId) {
+        const { error } = await supabaseBrowser
+          .from("store_catalogue_categories")
+          .update(payload)
+          .eq("id", editingCategoryId);
+        if (error) throw error;
+        toast.success("Category updated.");
+      } else {
+        const { error } = await supabaseBrowser.from("store_catalogue_categories").insert(payload);
+        if (error) throw error;
+        toast.success("Category created.");
+      }
 
-      const { error } = await supabaseBrowser
-        .from("stores")
-        .update({ metadata: nextMetadata })
-        .eq("id", previewStoreId);
-
-      if (error) throw error;
-
-      setStores((prev) =>
-        prev.map((s) => (String(s.id) === String(previewStoreId) ? { ...s, metadata: nextMetadata } : s))
-      );
-
-      setOk("Scheduling configuration saved.");
-    } catch (e) {
-      setErr(e?.message || "Failed to save scheduling configuration.");
+      await loadCatalogueData(selectedStoreId);
+      resetCategoryForm();
+    } catch (error) {
+      toast.error(error?.message || "Failed to save category.");
     } finally {
-      setSavingSchedule(false);
+      setSavingCategory(false);
     }
   };
 
-  const openPremiumModal = () => {
-    setPremiumError("");
-    setCardName("");
-    setCardNumber("");
-    setCardExpiry("");
-    setCardCvv("");
-    setPremiumModalOpen(true);
+  const handleEditCategory = (category) => {
+    setEditingCategoryId(String(category.id));
+    setCategoryForm({
+      title: category.title || "",
+      starting_from: category.starting_from ?? "",
+      enabled: category.enabled !== false,
+      sort_order: category.sort_order ?? "",
+    });
   };
 
-  const handleSubscribePremium = async () => {
-    setPremiumError("");
-
-    const isDemoNumber = normalizeCardNumber(cardNumber) === normalizeCardNumber(DEMO_CARD.number);
-    const isDemoExpiry = cardExpiry === DEMO_CARD.expiry;
-    const isDemoCvv = cardCvv === DEMO_CARD.cvv;
-
-    if (!cardName.trim()) {
-      setPremiumError("Enter cardholder name.");
+  const handleDeleteCategory = async (category) => {
+    const linkedItems = items.filter((item) => String(item.category_id) === String(category.id));
+    if (linkedItems.length) {
+      toast.error("Delete or move the items in this category before removing it.");
       return;
     }
-    if (!isDemoNumber || !isDemoExpiry || !isDemoCvv) {
-      setPremiumError("Use demo card details exactly as shown.");
-      return;
+
+    if (typeof window !== "undefined") {
+      const ok = window.confirm(`Delete "${category.title}"?`);
+      if (!ok) return;
     }
 
     try {
-      setPremiumSaving(true);
-
-      const ids = targetPremiumStoreIds;
-      if (!ids.length) {
-        setPremiumModalOpen(false);
-        return;
-      }
-
-      const now = new Date();
-      const nextMonth = new Date(now);
-      nextMonth.setMonth(nextMonth.getMonth() + 1);
-
+      setDeletingCategoryId(String(category.id));
       const { error } = await supabaseBrowser
-        .from("stores")
-        .update({
-          pickup_premium_enabled: true,
-          pickup_premium_plan: PICKUP_PREMIUM_PLAN.code,
-          pickup_premium_started_at: now.toISOString(),
-          pickup_premium_expires_at: nextMonth.toISOString(),
-        })
-        .in("id", ids);
-
+        .from("store_catalogue_categories")
+        .delete()
+        .eq("id", category.id);
       if (error) throw error;
-
-      setStores((prev) =>
-        prev.map((s) =>
-          ids.includes(String(s.id))
-            ? {
-                ...s,
-                pickup_premium_enabled: true,
-                pickup_premium_plan: PICKUP_PREMIUM_PLAN.code,
-                pickup_premium_started_at: now.toISOString(),
-                pickup_premium_expires_at: nextMonth.toISOString(),
-              }
-            : s
-        )
-      );
-
-      setOk(`Premium activated for ${ids.length} store(s).`);
-      setPremiumModalOpen(false);
-    } catch (e) {
-      setPremiumError(e?.message || "Failed to activate premium.");
+      toast.success("Category deleted.");
+      await loadCatalogueData(selectedStoreId);
+      if (String(editingCategoryId) === String(category.id)) resetCategoryForm();
+    } catch (error) {
+      toast.error(error?.message || "Failed to delete category.");
     } finally {
-      setPremiumSaving(false);
+      setDeletingCategoryId("");
     }
   };
 
-  const handleSubmitItem = async () => {
-    if (!canSubmitItem || savingItem) return;
+  const validateItemForm = () => {
+    if (!itemForm.category_id) return "Create a category first, then add an item to it.";
+
+    const hasImage = Boolean(itemImageFile || itemForm.image_url);
+    const price = safeNum(itemForm.price);
+    const duration = safeNum(itemForm.duration_minutes);
+
+    if (isProductStore && !hasImage) return "Product catalogue entries need an image.";
+    if (isServiceStore && !itemForm.title.trim()) return "Service title is required.";
+
+    if (isProductStore && premiumUnlocked && !currentItemIsImageOnly && !itemForm.title.trim()) {
+      return "Full product items need a title.";
+    }
+
+    if (isProductStore && premiumUnlocked && !currentItemIsImageOnly && itemForm.is_billable && price === null) {
+      return "Billable products need a price.";
+    }
+
+    if (isServiceStore && premiumUnlocked && itemForm.supports_slot_booking && duration === null) {
+      return "Slot-bookable services need a duration.";
+    }
+
+    if (isServiceStore && premiumUnlocked && itemForm.is_billable && price === null) {
+      return "Billable services need a price.";
+    }
+
+    return "";
+  };
+
+  const handleSaveItem = async () => {
+    const validationError = validateItemForm();
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
 
     try {
       setSavingItem(true);
-      setErr("");
-      setOk("");
 
-      const targets = stores.filter((s) => effectiveItemStoreIds.includes(String(s.id)));
-      if (!targets.length) throw new Error("No stores selected.");
+      const nextImageUrl = itemImageFile ? await uploadImage(selectedStoreId, itemImageFile) : itemForm.image_url || null;
+      const price = safeNum(itemForm.price);
+      const duration = safeNum(itemForm.duration_minutes);
+      const stockQty = Math.max(0, Number(itemForm.stock_qty || 0));
+      const lowThreshold = Math.max(0, Number(itemForm.low_stock_threshold || 5));
 
-      const initialStock = Math.max(0, Number(itemInitialStock || 0));
-      const lowThreshold = Math.max(0, Number(itemLowThreshold || 5));
+      let payload;
 
-      for (const store of targets) {
-        const categoryId = await ensureCategoryByTitle(store.id, itemCategoryTitle || DEFAULT_ITEM_CATEGORY_TITLE);
-        const sortOrder = await getBaseSort(store.id);
-        const imageUrl = await uploadImage(store.id, itemImage);
+      if (isProductStore) {
+        const imageOnly = !premiumUnlocked || Boolean(itemForm.is_image_catalogue);
+        const trackInventory = premiumUnlocked && !imageOnly && Boolean(itemForm.track_inventory);
 
-        const status = stockStatusFromQty(initialStock, lowThreshold);
-
-        const row = {
-          store_id: store.id,
-          category_id: categoryId,
-          title: itemTitle.trim(),
-          price: safeNum(itemPrice),
-          sku: itemSku.trim() || null,
-          description: itemDescription.trim() || null,
-          is_available: status !== "out_of_stock" && !!itemAvailable,
-          image_url: imageUrl,
-          sort_order: sortOrder,
-          track_inventory: true,
-          stock_qty: initialStock,
-          low_stock_threshold: lowThreshold,
-          stock_status: status,
+        payload = {
+          store_id: selectedStoreId,
+          category_id: itemForm.category_id,
+          item_type: "PRODUCT",
+          image_url: nextImageUrl,
+          title: imageOnly ? asText(itemForm.title) : itemForm.title.trim(),
+          price,
+          description: asText(itemForm.description),
+          sku: premiumUnlocked ? asText(itemForm.sku) : null,
+          is_available: Boolean(itemForm.is_available),
+          is_billable: premiumUnlocked && !imageOnly ? Boolean(itemForm.is_billable) : false,
+          duration_minutes: null,
+          supports_slot_booking: false,
+          track_inventory: trackInventory,
+          stock_qty: trackInventory ? stockQty : null,
+          low_stock_threshold: trackInventory ? lowThreshold : 5,
+          stock_status: trackInventory ? stockStatusFromQty(stockQty, lowThreshold) : null,
+          allow_backorder: trackInventory ? Boolean(itemForm.allow_backorder) : false,
+          is_image_catalogue: imageOnly,
         };
-
-        const { error } = await supabaseBrowser.from("store_catalogue_items").insert(row);
-        if (error) throw error;
+      } else {
+        payload = {
+          store_id: selectedStoreId,
+          category_id: itemForm.category_id,
+          item_type: "SERVICE",
+          image_url: nextImageUrl,
+          title: itemForm.title.trim(),
+          price,
+          description: asText(itemForm.description),
+          sku: null,
+          is_available: Boolean(itemForm.is_available),
+          is_billable: premiumUnlocked ? Boolean(itemForm.is_billable) : false,
+          duration_minutes: duration,
+          supports_slot_booking: premiumUnlocked ? Boolean(itemForm.supports_slot_booking) : false,
+          track_inventory: false,
+          stock_qty: null,
+          low_stock_threshold: 5,
+          stock_status: null,
+          allow_backorder: false,
+          is_image_catalogue: false,
+        };
       }
 
-      setOk(`Added item "${itemTitle.trim()}" to ${targets.length} store(s).`);
-      setItemTitle("");
-      setItemPrice("");
-      setItemSku("");
-      setItemDescription("");
-      setItemCategoryTitle(DEFAULT_ITEM_CATEGORY_TITLE);
-      setItemAvailable(true);
-      setItemImage(null);
-      setItemInitialStock("0");
-      setItemLowThreshold("5");
+      if (editingItemId) {
+        const { error } = await supabaseBrowser
+          .from("store_catalogue_items")
+          .update(payload)
+          .eq("id", editingItemId);
+        if (error) throw error;
+        toast.success(`${isServiceStore ? "Service" : "Item"} updated.`);
+      } else {
+        const nextSort =
+          sortedItems.reduce((max, item) => Math.max(max, Number(item.sort_order || 0)), -1) + 1;
+        const { error } = await supabaseBrowser.from("store_catalogue_items").insert({
+          ...payload,
+          sort_order: nextSort,
+        });
+        if (error) throw error;
+        toast.success(`${isServiceStore ? "Service" : "Item"} added.`);
+      }
 
-      if (previewStoreId) loadCatalogueForStore(previewStoreId);
-    } catch (e) {
-      setErr(e?.message || "Failed to add item.");
+      await loadCatalogueData(selectedStoreId);
+      resetItemForm();
+    } catch (error) {
+      toast.error(error?.message || "Failed to save item.");
     } finally {
       setSavingItem(false);
     }
   };
 
+  const handleEditItem = (item) => {
+    setEditingItemId(String(item.id));
+    setItemImageFile(null);
+    setItemImagePreviewUrl(item.image_url || "");
+    setItemForm({
+      category_id: String(item.category_id || ""),
+      title: item.title || "",
+      description: item.description || "",
+      price: item.price ?? "",
+      sku: item.sku || "",
+      image_url: item.image_url || "",
+      is_available: item.is_available !== false,
+      is_billable: Boolean(item.is_billable),
+      duration_minutes: item.duration_minutes ?? "",
+      supports_slot_booking: Boolean(item.supports_slot_booking),
+      track_inventory: Boolean(item.track_inventory),
+      stock_qty: item.stock_qty ?? "0",
+      low_stock_threshold: item.low_stock_threshold ?? "5",
+      allow_backorder: Boolean(item.allow_backorder),
+      is_image_catalogue: Boolean(item.is_image_catalogue),
+    });
+  };
+
+  const handleDeleteItem = async (item) => {
+    if (typeof window !== "undefined") {
+      const ok = window.confirm(`Delete "${item.title || "this item"}"?`);
+      if (!ok) return;
+    }
+
+    try {
+      setDeletingItemId(String(item.id));
+      const { error } = await supabaseBrowser.from("store_catalogue_items").delete().eq("id", item.id);
+      if (error) throw error;
+      toast.success(`${isServiceStore ? "Service" : "Item"} deleted.`);
+      await loadCatalogueData(selectedStoreId);
+      if (String(editingItemId) === String(item.id)) resetItemForm();
+    } catch (error) {
+      toast.error(error?.message || "Failed to delete item.");
+    } finally {
+      setDeletingItemId("");
+    }
+  };
+
+  const toggleScheduleTarget = (storeId, checked) => {
+    setScheduleTargetIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(String(storeId));
+      else next.delete(String(storeId));
+      return Array.from(next);
+    });
+  };
+
+  const handleSaveSchedule = async () => {
+    if (!selectedStoreId) return;
+    if (!effectiveScheduleTargetIds.length) {
+      toast.error("Select at least one branch to apply slot settings.");
+      return;
+    }
+
+    if (typeof window !== "undefined" && effectiveScheduleTargetIds.length > 1) {
+      const targetNames = effectiveScheduleTargetIds
+        .map((id) => storeMap.get(String(id))?.name || "Branch")
+        .join(", ");
+      const ok = window.confirm(`Apply these slot settings to ${effectiveScheduleTargetIds.length} branches?\n\n${targetNames}`);
+      if (!ok) return;
+    }
+
+    try {
+      setSavingSchedule(true);
+
+      const payload = {
+        supports_time_slots: Boolean(scheduleForm.supports_time_slots),
+        slot_duration_minutes: Math.max(5, Number(scheduleForm.slot_duration_minutes || 30)),
+        slot_buffer_minutes: Math.max(0, Number(scheduleForm.slot_buffer_minutes || 0)),
+        slot_advance_days: Math.max(1, Number(scheduleForm.slot_advance_days || 30)),
+        slot_max_per_window: Math.max(1, Number(scheduleForm.slot_max_per_window || 1)),
+      };
+
+      for (const storeId of effectiveScheduleTargetIds) {
+        const { error } = await supabaseBrowser.from("stores").update(payload).eq("id", storeId);
+        if (error) throw error;
+      }
+
+      setStores((prev) =>
+        prev.map((store) =>
+          effectiveScheduleTargetIds.includes(String(store.id))
+            ? { ...store, ...payload }
+            : store
+        )
+      );
+
+      toast.success(
+        effectiveScheduleTargetIds.length > 1
+          ? "Slot settings updated across linked branches."
+          : "Slot settings updated for this branch."
+      );
+    } catch (error) {
+      toast.error(error?.message || "Failed to update slot settings.");
+    } finally {
+      setSavingSchedule(false);
+    }
+  };
+
+  const onPickItemImage = (event) => {
+    const file = event.target.files?.[0];
+    if (!file || !isImage(file)) {
+      toast.error("Select an image file.");
+      return;
+    }
+
+    setItemImageFile(file);
+    setItemImagePreviewUrl(URL.createObjectURL(file));
+    setItemForm((prev) => ({ ...prev, image_url: prev.image_url || "" }));
+    event.target.value = "";
+  };
+
+  const heroDescription = isServiceStore
+    ? premiumUnlocked
+      ? "Create a service menu that is ready for slot booking and payment flows."
+      : "Build a visible service menu now. Slot booking and billable actions stay gated until premium is active."
+    : premiumUnlocked
+    ? "Manage a full pickup-ready product catalogue with pricing, availability, and inventory."
+    : "Build an image-first catalogue. Non-premium product stores stay in visual catalogue mode only.";
+
   return (
     <div className="min-h-screen" style={{ fontFamily: '"Space Grotesk", "Sora", sans-serif' }}>
-      <div className="mx-auto max-w-6xl px-6 py-4 space-y-6">
-        {err ? <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{err}</div> : null}
-        {ok ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{ok}</div> : null}
-
-        <Card title="Upload Catalogue Images" subtitle="Image-only catalogue is available to all stores.">
-          {loadingStores ? (
-            <SectionSkeleton />
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div>
-                <StoreSelector
-                  stores={stores}
-                  applyAll={applyAllStores}
-                  setApplyAll={setApplyAllStores}
-                  selectedStoreIds={selectedStoreIds}
-                  setSelectedStoreIds={setSelectedStoreIds}
-                  disabled={savingBulk}
-                />
-
-                <div className="space-y-2 mt-4">
-                  <label
-                    htmlFor="catalogue-image-input"
-                    className="h-11 px-4 rounded-full border border-gray-200 bg-white text-sm font-semibold inline-flex items-center gap-2 cursor-pointer hover:bg-gray-50"
-                  >
-                    <ImagePlus className="h-4 w-4" />
-                    Select Images
-                  </label>
-                  <input id="catalogue-image-input" type="file" accept="image/*" multiple onChange={onPickFiles} className="hidden" />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleSubmitBulk}
-                  disabled={!canSubmitBulk || savingBulk || loadingStores}
-                  className="mt-4 h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 disabled:opacity-60 shadow-lg shadow-orange-200"
-                  style={{ background: "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)" }}
-                >
-                  {savingBulk ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
-                  Upload To Catalogue
-                </button>
-
-                {files.length ? (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-4">
-                    {files.map((file, idx) => (
-                      <div key={`${file.name}_${file.size}_${idx}`} className="rounded-2xl border border-gray-200 bg-white p-2">
-                        <div className="aspect-square rounded-xl overflow-hidden bg-gray-100">
-                          <img src={URL.createObjectURL(file)} alt={file.name} className="h-full w-full object-cover" />
-                        </div>
-                        <button type="button" onClick={() => removeFile(idx)} className="mt-2 h-8 w-full rounded-xl border border-gray-200 text-xs font-medium hover:bg-gray-50">
-                          Remove
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600 mt-4">
-                    No images selected.
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-gray-900">How this looks on the app</div>
-                  <button
-                    type="button"
-                    onClick={() => previewStoreId && loadCatalogueForStore(previewStoreId)}
-                    className="h-9 rounded-full border border-gray-200 bg-white px-3 text-sm font-medium hover:bg-gray-50 inline-flex items-center gap-2"
-                  >
-                    <RefreshCw className={`h-4 w-4 ${loadingCatalogue ? "animate-spin" : ""}`} />
-                    Refresh
-                  </button>
-                </div>
-
-                <select
-                  value={previewStoreId}
-                  onChange={(e) => setPreviewStoreId(e.target.value)}
-                  className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                >
-                  {stores.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-
-                {loadingCatalogue ? (
-                  <div className="rounded-2xl border border-gray-200 bg-white p-4 animate-pulse">
-                    <div className="h-40 rounded-xl bg-gray-100 border border-gray-200" />
-                  </div>
-                ) : catalogueImages.length ? (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {catalogueImages.map((it) => (
-                      <div key={it.id} className="rounded-2xl border border-gray-200 bg-white p-2">
-                        <div className="aspect-square rounded-xl overflow-hidden bg-gray-100">
-                          <img src={it.image_url} alt={it.title || "catalogue"} className="h-full w-full object-cover" />
-                        </div>
-                        <div className="mt-2 text-xs text-gray-700 truncate">{it.title || "Untitled"}</div>
-                        {it.price !== null && it.price !== undefined ? (
-                          <div className="text-[11px] text-gray-500">MUR {it.price}</div>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
-                    No catalogue images/items found for this store.
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </Card>
-
+      <div className="mx-auto max-w-7xl space-y-6 px-6 py-4">
         <Card
           title={
             <div className="flex items-center gap-2">
-              <span>PickUp / Service Catalogue</span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                <Crown className="h-3 w-3" />
-                Premium
-              </span>
+              {isServiceStore ? <BriefcaseBusiness className="h-5 w-5 text-sky-600" /> : <Boxes className="h-5 w-5 text-orange-600" />}
+              <span>{selectedSectionLabel}</span>
             </div>
           }
-          subtitle={
-            previewStorePremiumUnlocked
-              ? "Premium unlocked for this store."
-              : "This section is hidden for this store until premium is active."
-          }
+          subtitle={heroDescription}
           right={
-            !previewStorePremiumUnlocked ? (
-              <button
-                type="button"
-                onClick={openPremiumModal}
-                className="h-9 rounded-full border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-amber-700 hover:bg-amber-100"
-              >
-                Subscribe Premium
-              </button>
-            ) : null
+            <button
+              type="button"
+              onClick={refreshCurrentStore}
+              disabled={loadingStores || loadingData}
+              className="inline-flex h-10 items-center gap-2 rounded-full border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+            >
+              {loadingData ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              Refresh
+            </button>
           }
         >
           {loadingStores ? (
             <SectionSkeleton />
-          ) : !previewStorePremiumUnlocked ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              <div className="font-semibold flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4" />
-                Premium section locked for selected store
-              </div>
-              <div className="mt-1">
-                This store does not have active premium. Subscribe premium to unlock PickUp / Service catalogue and scheduling.
-              </div>
-            </div>
+          ) : !stores.length ? (
+            <EmptyState
+              title="No linked branches found"
+              body="This partner account is not linked to any store branches yet."
+            />
           ) : (
-            <div className="space-y-6">
-              <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-gray-900 inline-flex items-center gap-2">
-                    <CalendarClock className="h-4 w-4" />
-                    Scheduling Configuration (Store-level)
+            <div className="space-y-5">
+              <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr]">
+                <div className="rounded-3xl border border-gray-200 bg-gray-50 p-4">
+                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <Store className="h-4 w-4" />
+                    Branch
                   </div>
+                  <Select value={selectedStoreId} onChange={(e) => setSelectedStoreId(e.target.value)}>
+                    {stores.map((store) => (
+                      <option key={store.id} value={store.id}>
+                        {store.name} {store.city ? `• ${store.city}` : ""}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div className="rounded-3xl border border-gray-200 bg-white p-4">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Store Type</div>
+                  <div className="mt-3 text-lg font-semibold text-gray-900">{selectedStoreType}</div>
+                  <div className="mt-1 text-sm text-gray-500">Portal label: {selectedSectionLabel}</div>
+                </div>
+
+                <div className="rounded-3xl border border-gray-200 bg-white p-4">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Premium State</div>
+                  <div className="mt-3">
+                    <Badge tone={premiumUnlocked ? "green" : "amber"}>
+                      {premiumUnlocked ? "Premium active" : "Premium gated"}
+                    </Badge>
+                  </div>
+                  <div className="mt-2 text-sm text-gray-500">
+                    {selectedStore?.pickup_mode ? `Pickup mode: ${selectedStore.pickup_mode}` : "Using standard pickup mode."}
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-gray-200 bg-white p-4">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Current Content</div>
+                  <div className="mt-3 text-lg font-semibold text-gray-900">
+                    {categories.length} categories
+                  </div>
+                  <div className="mt-1 text-sm text-gray-500">{items.length} items configured</div>
+                </div>
+              </div>
+
+              {!premiumUnlocked ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <Crown className="h-4 w-4" />
+                    Premium-only actions are gated
+                  </div>
+                  <div className="mt-1">
+                    {isServiceStore
+                      ? "This branch can publish a service menu now, but slot booking and billable service actions stay disabled until premium is active."
+                      : "This branch stays in image catalogue mode. Full pickup-ready products, billable items, and inventory controls unlock only with premium."}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </Card>
+
+        {loadingStores || !selectedStore ? null : (
+          <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+            <Card
+              title="Category Manager"
+              subtitle={`Create and order ${selectedSectionLabel.toLowerCase()} categories.`}
+              right={
+                editingCategoryId ? (
                   <button
                     type="button"
-                    onClick={saveSchedulingConfig}
-                    disabled={savingSchedule || !previewStoreId}
-                    className="h-9 rounded-xl border border-gray-200 bg-white px-3 text-xs font-semibold hover:bg-gray-50 inline-flex items-center gap-2 disabled:opacity-60"
+                    onClick={resetCategoryForm}
+                    className="rounded-full border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
                   >
-                    {savingSchedule ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                    Save Scheduling
+                    Cancel Edit
                   </button>
+                ) : null
+              }
+            >
+              <div className="space-y-4">
+                <Field label="Category Title">
+                  <Input
+                    value={categoryForm.title}
+                    onChange={(e) => setCategoryForm((prev) => ({ ...prev, title: e.target.value }))}
+                    placeholder={isServiceStore ? "Haircuts" : "New Arrivals"}
+                  />
+                </Field>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Starting From">
+                    <Input
+                      value={categoryForm.starting_from}
+                      onChange={(e) => setCategoryForm((prev) => ({ ...prev, starting_from: e.target.value }))}
+                      placeholder="Optional price hint"
+                      inputMode="decimal"
+                    />
+                  </Field>
+
+                  <Field label="Sort Order">
+                    <Input
+                      value={categoryForm.sort_order}
+                      onChange={(e) => setCategoryForm((prev) => ({ ...prev, sort_order: e.target.value }))}
+                      placeholder="0"
+                      inputMode="numeric"
+                    />
+                  </Field>
                 </div>
 
-                <div className="grid md:grid-cols-3 gap-3 mt-3">
-                  <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-                    <input type="checkbox" checked={slotEnabled} onChange={(e) => setSlotEnabled(e.target.checked)} />
-                    Enable slots
-                  </label>
+                <Toggle
+                  checked={categoryForm.enabled}
+                  onChange={(checked) => setCategoryForm((prev) => ({ ...prev, enabled: checked }))}
+                  label="Category enabled"
+                  description="Disabled categories stay hidden from the customer-facing preview."
+                />
 
-                  <div>
-                    <p className="text-xs text-gray-600 mb-1">Slot mode</p>
-                    <select value={slotMode} onChange={(e) => setSlotMode(e.target.value)} className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none">
-                      <option value="OPTIONAL">Optional for customer</option>
-                      <option value="REQUIRED">Required for customer</option>
-                    </select>
-                  </div>
+                <button
+                  type="button"
+                  onClick={handleSaveCategory}
+                  disabled={savingCategory}
+                  className="inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white shadow-lg shadow-orange-200 disabled:opacity-60"
+                  style={{ background: "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)" }}
+                >
+                  {savingCategory ? <Loader2 className="h-4 w-4 animate-spin" /> : editingCategoryId ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                  {editingCategoryId ? "Save Category" : "Create Category"}
+                </button>
+              </div>
+            </Card>
 
-                  <div>
-                    <p className="text-xs text-gray-600 mb-1">Store for config</p>
-                    <select value={previewStoreId} onChange={(e) => setPreviewStoreId(e.target.value)} className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none">
-                      {stores.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
+            <Card
+              title={isServiceStore ? "Service Form" : "Item Form"}
+              subtitle={
+                isServiceStore
+                  ? "Keep service creation guided, with slot-booking and billing gated by premium."
+                  : premiumUnlocked
+                  ? "Choose between image-only catalogue entries and full pickup-ready product items."
+                  : "Non-premium product branches stay in image-first catalogue mode."
+              }
+              right={
+                editingItemId ? (
+                  <button
+                    type="button"
+                    onClick={resetItemForm}
+                    className="rounded-full border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Cancel Edit
+                  </button>
+                ) : null
+              }
+            >
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Category">
+                    <Select
+                      value={itemForm.category_id}
+                      onChange={(e) => setItemForm((prev) => ({ ...prev, category_id: e.target.value }))}
+                      disabled={!sortedCategories.length}
+                    >
+                      <option value="">Select category</option>
+                      {sortedCategories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.title}
                         </option>
                       ))}
-                    </select>
-                  </div>
+                    </Select>
+                  </Field>
+
+                  {isProductStore && premiumUnlocked ? (
+                    <Field label="Product Mode">
+                      <Select
+                        value={itemForm.is_image_catalogue ? "IMAGE_ONLY" : "FULL_PRODUCT"}
+                        onChange={(e) =>
+                          setItemForm((prev) => ({
+                            ...prev,
+                            is_image_catalogue: e.target.value === "IMAGE_ONLY",
+                            track_inventory: e.target.value === "IMAGE_ONLY" ? false : prev.track_inventory,
+                            is_billable: e.target.value === "IMAGE_ONLY" ? false : prev.is_billable,
+                          }))
+                        }
+                      >
+                        <option value="IMAGE_ONLY">Image-only catalogue item</option>
+                        <option value="FULL_PRODUCT">Full product entry</option>
+                      </Select>
+                    </Field>
+                  ) : null}
                 </div>
 
-                <div className="grid md:grid-cols-5 gap-3 mt-3">
-                  <div>
-                    <p className="text-xs text-gray-600 mb-1">Duration (min)</p>
-                    <input type="number" min="5" value={slotDuration} onChange={(e) => setSlotDuration(e.target.value)} className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-600 mb-1">Buffer (min)</p>
-                    <input type="number" min="0" value={slotBuffer} onChange={(e) => setSlotBuffer(e.target.value)} className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-600 mb-1">Advance days</p>
-                    <input type="number" min="1" value={slotAdvanceDays} onChange={(e) => setSlotAdvanceDays(e.target.value)} className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-600 mb-1">Max per slot</p>
-                    <input type="number" min="1" value={slotMaxPerWindow} onChange={(e) => setSlotMaxPerWindow(e.target.value)} className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <p className="text-xs text-gray-600 mb-1">Start</p>
-                      <input type="time" value={slotStart} onChange={(e) => setSlotStart(e.target.value)} className="h-10 w-full rounded-xl border border-gray-200 bg-white px-2 text-sm outline-none" />
+                <Field label={isServiceStore ? "Image" : "Image"} hint={isServiceStore ? "Optional" : "Required"}>
+                  <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label
+                        htmlFor="catalogue-item-image"
+                        className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        <ImagePlus className="h-4 w-4" />
+                        Upload image
+                      </label>
+                      <input
+                        id="catalogue-item-image"
+                        type="file"
+                        accept="image/*"
+                        onChange={onPickItemImage}
+                        className="hidden"
+                      />
+                      <span className="text-sm text-gray-500">
+                        {itemImageFile ? itemImageFile.name : itemForm.image_url ? "Using current image" : "No image selected yet"}
+                      </span>
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-600 mb-1">End</p>
-                      <input type="time" value={slotEnd} onChange={(e) => setSlotEnd(e.target.value)} className="h-10 w-full rounded-xl border border-gray-200 bg-white px-2 text-sm outline-none" />
-                    </div>
+
+                    {itemImagePreviewUrl || itemForm.image_url ? (
+                      <div className="mt-4 h-36 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                        <img
+                          src={itemImagePreviewUrl || itemForm.image_url}
+                          alt="Preview"
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    ) : null}
                   </div>
+                </Field>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label={isServiceStore ? "Title" : currentItemIsImageOnly ? "Title (optional)" : "Title"}>
+                    <Input
+                      value={itemForm.title}
+                      onChange={(e) => setItemForm((prev) => ({ ...prev, title: e.target.value }))}
+                      placeholder={isServiceStore ? "Classic Beard Trim" : "Canvas Tote Bag"}
+                    />
+                  </Field>
+
+                  <Field label={isServiceStore ? (premiumUnlocked && itemForm.is_billable ? "Price" : "Price (optional)") : currentItemIsImageOnly ? "Price (optional)" : itemForm.is_billable ? "Price" : "Price (optional)"}>
+                    <Input
+                      value={itemForm.price}
+                      onChange={(e) => setItemForm((prev) => ({ ...prev, price: e.target.value }))}
+                      placeholder="0.00"
+                      inputMode="decimal"
+                    />
+                  </Field>
                 </div>
 
-                <div className="mt-3">
-                  <p className="text-xs text-gray-600 mb-2">Available days</p>
-                  <div className="flex flex-wrap gap-2">
-                    {WEEK_DAYS.map((d) => {
-                      const active = slotDays.includes(d.key);
+                <Field label="Description">
+                  <Textarea
+                    value={itemForm.description}
+                    onChange={(e) => setItemForm((prev) => ({ ...prev, description: e.target.value }))}
+                    placeholder={isServiceStore ? "Service details, inclusions, and preparation notes." : "Short description for customers."}
+                  />
+                </Field>
+
+                {isProductStore && premiumUnlocked && !currentItemIsImageOnly ? (
+                  <Field label="SKU">
+                    <Input
+                      value={itemForm.sku}
+                      onChange={(e) => setItemForm((prev) => ({ ...prev, sku: e.target.value }))}
+                      placeholder="Optional SKU"
+                    />
+                  </Field>
+                ) : null}
+
+                {isServiceStore ? (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field label="Duration (minutes)" hint={itemForm.supports_slot_booking ? "Required for slot booking" : "Optional"}>
+                      <Input
+                        value={itemForm.duration_minutes}
+                        onChange={(e) => setItemForm((prev) => ({ ...prev, duration_minutes: e.target.value }))}
+                        placeholder="30"
+                        inputMode="numeric"
+                      />
+                    </Field>
+
+                    <Field label="Availability">
+                      <Select
+                        value={itemForm.is_available ? "AVAILABLE" : "UNAVAILABLE"}
+                        onChange={(e) => setItemForm((prev) => ({ ...prev, is_available: e.target.value === "AVAILABLE" }))}
+                      >
+                        <option value="AVAILABLE">Available</option>
+                        <option value="UNAVAILABLE">Unavailable</option>
+                      </Select>
+                    </Field>
+                  </div>
+                ) : null}
+
+                {isProductStore && premiumUnlocked && !currentItemIsImageOnly ? (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field label="Availability">
+                      <Select
+                        value={itemForm.is_available ? "AVAILABLE" : "UNAVAILABLE"}
+                        onChange={(e) => setItemForm((prev) => ({ ...prev, is_available: e.target.value === "AVAILABLE" }))}
+                      >
+                        <option value="AVAILABLE">Available for pickup</option>
+                        <option value="UNAVAILABLE">Unavailable</option>
+                      </Select>
+                    </Field>
+
+                    <Field label="Billing">
+                      <Select
+                        value={itemForm.is_billable ? "BILLABLE" : "NOT_BILLABLE"}
+                        onChange={(e) => setItemForm((prev) => ({ ...prev, is_billable: e.target.value === "BILLABLE" }))}
+                      >
+                        <option value="NOT_BILLABLE">Not billable</option>
+                        <option value="BILLABLE">Billable / orderable</option>
+                      </Select>
+                    </Field>
+                  </div>
+                ) : null}
+
+                {isServiceStore ? (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <Toggle
+                      checked={itemForm.supports_slot_booking}
+                      onChange={(checked) => setItemForm((prev) => ({ ...prev, supports_slot_booking: checked }))}
+                      label="Supports slot booking"
+                      description="Customers can choose a time slot for this service."
+                      disabled={!premiumUnlocked}
+                    />
+                    <Toggle
+                      checked={itemForm.is_billable}
+                      onChange={(checked) => setItemForm((prev) => ({ ...prev, is_billable: checked }))}
+                      label="Billable service"
+                      description="Marks the service ready for payment flows."
+                      disabled={!premiumUnlocked}
+                    />
+                  </div>
+                ) : null}
+
+                {isProductStore && premiumUnlocked && !currentItemIsImageOnly ? (
+                  <div className="space-y-3">
+                    <Toggle
+                      checked={itemForm.track_inventory}
+                      onChange={(checked) =>
+                        setItemForm((prev) => ({
+                          ...prev,
+                          track_inventory: checked,
+                          allow_backorder: checked ? prev.allow_backorder : false,
+                        }))
+                      }
+                      label="Track inventory"
+                      description="Show stock controls only when this product needs inventory management."
+                    />
+
+                    {itemForm.track_inventory ? (
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <Field label="Stock Qty">
+                          <Input
+                            value={itemForm.stock_qty}
+                            onChange={(e) => setItemForm((prev) => ({ ...prev, stock_qty: e.target.value }))}
+                            inputMode="numeric"
+                            placeholder="0"
+                          />
+                        </Field>
+
+                        <Field label="Low Stock Threshold">
+                          <Input
+                            value={itemForm.low_stock_threshold}
+                            onChange={(e) =>
+                              setItemForm((prev) => ({ ...prev, low_stock_threshold: e.target.value }))
+                            }
+                            inputMode="numeric"
+                            placeholder="5"
+                          />
+                        </Field>
+
+                        <div className="flex items-end">
+                          <Toggle
+                            checked={itemForm.allow_backorder}
+                            onChange={(checked) => setItemForm((prev) => ({ ...prev, allow_backorder: checked }))}
+                            label="Allow backorder"
+                            description="Let orders continue after stock reaches zero."
+                          />
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={handleSaveItem}
+                  disabled={savingItem || !sortedCategories.length}
+                  className="inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white shadow-lg shadow-orange-200 disabled:opacity-60"
+                  style={{ background: "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)" }}
+                >
+                  {savingItem ? <Loader2 className="h-4 w-4 animate-spin" /> : editingItemId ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                  {editingItemId
+                    ? `Save ${isServiceStore ? "Service" : "Item"}`
+                    : `Add ${isServiceStore ? "Service" : currentItemIsImageOnly ? "Catalogue Entry" : "Product"}`}
+                </button>
+
+                {!sortedCategories.length ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                    Create at least one category before adding {isServiceStore ? "services" : "catalogue items"}.
+                  </div>
+                ) : null}
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {loadingStores || !selectedStore ? null : isServiceStore ? (
+          <Card
+            title={
+              <div className="flex items-center gap-2">
+                <CalendarClock className="h-5 w-5 text-sky-600" />
+                <span>Slot & Schedule Management</span>
+              </div>
+            }
+            subtitle="Apply service slot settings to this branch, all linked branches, or a custom branch set."
+          >
+            <div className="space-y-5">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                <Field label="Slot Booking">
+                  <Select
+                    value={scheduleForm.supports_time_slots ? "ENABLED" : "DISABLED"}
+                    onChange={(e) =>
+                      setScheduleForm((prev) => ({
+                        ...prev,
+                        supports_time_slots: e.target.value === "ENABLED",
+                      }))
+                    }
+                  >
+                    <option value="DISABLED">Disabled</option>
+                    <option value="ENABLED">Enabled</option>
+                  </Select>
+                </Field>
+
+                <Field label="Slot Duration">
+                  <Input
+                    value={scheduleForm.slot_duration_minutes}
+                    onChange={(e) =>
+                      setScheduleForm((prev) => ({ ...prev, slot_duration_minutes: e.target.value }))
+                    }
+                    inputMode="numeric"
+                  />
+                </Field>
+
+                <Field label="Buffer">
+                  <Input
+                    value={scheduleForm.slot_buffer_minutes}
+                    onChange={(e) =>
+                      setScheduleForm((prev) => ({ ...prev, slot_buffer_minutes: e.target.value }))
+                    }
+                    inputMode="numeric"
+                  />
+                </Field>
+
+                <Field label="Advance Days">
+                  <Input
+                    value={scheduleForm.slot_advance_days}
+                    onChange={(e) =>
+                      setScheduleForm((prev) => ({ ...prev, slot_advance_days: e.target.value }))
+                    }
+                    inputMode="numeric"
+                  />
+                </Field>
+
+                <Field label="Max Per Window">
+                  <Input
+                    value={scheduleForm.slot_max_per_window}
+                    onChange={(e) =>
+                      setScheduleForm((prev) => ({ ...prev, slot_max_per_window: e.target.value }))
+                    }
+                    inputMode="numeric"
+                  />
+                </Field>
+              </div>
+
+              <div className="rounded-3xl border border-gray-200 bg-gray-50 p-4">
+                <div className="text-sm font-semibold text-gray-900">Apply Scope</div>
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  {[
+                    { value: "CURRENT", label: "This branch only", description: "Update only the active branch." },
+                    { value: "ALL", label: "All linked branches", description: "Apply the same values to every linked service branch." },
+                    { value: "CUSTOM", label: "Choose branches", description: "Pick a practical subset of linked service branches." },
+                  ].map((option) => (
+                    <label
+                      key={option.value}
+                      className={[
+                        "rounded-2xl border px-4 py-3",
+                        scheduleScope === option.value
+                          ? "border-gray-900 bg-white"
+                          : "border-gray-200 bg-white",
+                      ].join(" ")}
+                    >
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="radio"
+                          name="schedule-scope"
+                          checked={scheduleScope === option.value}
+                          onChange={() => setScheduleScope(option.value)}
+                          className="mt-1"
+                        />
+                        <div>
+                          <div className="text-sm font-semibold text-gray-900">{option.label}</div>
+                          <div className="mt-1 text-xs text-gray-500">{option.description}</div>
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4">
+                  <div className="text-sm font-semibold text-gray-900">Linked service branches</div>
+                  <div className="mt-1 text-xs text-gray-500">
+                    These branches come from the current partner&apos;s linked stores and are used for branch-wide slot updates.
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    {linkedServiceBranches.map((store) => {
+                      const checked =
+                        scheduleScope === "ALL" ||
+                        (scheduleScope === "CURRENT" && String(store.id) === String(selectedStoreId)) ||
+                        (scheduleScope === "CUSTOM" && scheduleTargetIds.includes(String(store.id)));
+
                       return (
-                        <button
-                          key={d.key}
-                          type="button"
-                          onClick={() => toggleSlotDay(d.key)}
-                          className={`rounded-full px-3 py-1.5 text-xs border ${
-                            active ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                          }`}
+                        <label
+                          key={store.id}
+                          className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 px-4 py-3"
                         >
-                          {d.label}
-                        </button>
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {store.name} {store.city ? `• ${store.city}` : ""}
+                            </div>
+                            <div className="mt-1 flex items-center gap-2">
+                              <Badge tone={String(store.id) === String(selectedStoreId) ? "blue" : "gray"}>
+                                {String(store.id) === String(selectedStoreId) ? "Current branch" : "Linked branch"}
+                              </Badge>
+                              <Badge tone={isPremiumActive(store) ? "green" : "amber"}>
+                                {isPremiumActive(store) ? "Premium" : "Non-premium"}
+                              </Badge>
+                            </div>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={scheduleScope !== "CUSTOM"}
+                            onChange={(e) => toggleScheduleTarget(store.id, e.target.checked)}
+                          />
+                        </label>
                       );
                     })}
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div>
-                  <StoreSelector
-                    stores={stores}
-                    applyAll={applyAllItemStores}
-                    setApplyAll={setApplyAllItemStores}
-                    selectedStoreIds={selectedItemStoreIds}
-                    setSelectedStoreIds={setSelectedItemStoreIds}
-                    disabled={savingItem}
-                  />
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                    <div className="md:col-span-2">
-                      <div className="text-xs font-semibold text-gray-600 mb-2">Item Title *</div>
-                      <input value={itemTitle} onChange={(e) => setItemTitle(e.target.value)} className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300" placeholder="e.g. Haircut Service / Shirt" />
-                    </div>
-
-                    <div>
-                      <div className="text-xs font-semibold text-gray-600 mb-2">Price (MUR)</div>
-                      <input type="number" min="0" value={itemPrice} onChange={(e) => setItemPrice(e.target.value)} className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300" placeholder="e.g. 250" />
-                    </div>
-
-                    <div>
-                      <div className="text-xs font-semibold text-gray-600 mb-2">SKU</div>
-                      <input value={itemSku} onChange={(e) => setItemSku(e.target.value)} className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300" placeholder="e.g. BRG-001" />
-                    </div>
-
-                    <div>
-                      <div className="text-xs font-semibold text-gray-600 mb-2">Initial Stock</div>
-                      <input type="number" min="0" value={itemInitialStock} onChange={(e) => setItemInitialStock(e.target.value)} className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300" placeholder="e.g. 10" />
-                    </div>
-
-                    <div>
-                      <div className="text-xs font-semibold text-gray-600 mb-2">Low Stock Threshold</div>
-                      <input type="number" min="0" value={itemLowThreshold} onChange={(e) => setItemLowThreshold(e.target.value)} className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300" placeholder="e.g. 5" />
-                    </div>
-
-                    <div className="md:col-span-2 mt-1">
-                      <div className="mt-2">
-                        <label className="block text-xs font-semibold text-gray-600 mb-2">Description</label>
-                        <textarea className="min-h-[80px] w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-gray-300" placeholder="Add details..." value={itemDescription} onChange={(e) => setItemDescription(e.target.value)} />
-                      </div>
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-                        <input type="checkbox" checked={itemAvailable} onChange={(e) => setItemAvailable(e.target.checked)} />
-                        Item available
-                      </label>
-                    </div>
+              {!premiumUnlocked ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <AlertTriangle className="h-4 w-4" />
+                    Premium gating reminder
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={handleSubmitItem}
-                    disabled={!canSubmitItem || savingItem}
-                    className="mt-4 h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 disabled:opacity-60 shadow-lg shadow-orange-200"
-                    style={{ background: "linear-gradient(90deg, #2563eb 0%, #0ea5e9 100%)" }}
-                  >
-                    {savingItem ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}
-                    Add Item
-                  </button>
+                  <div className="mt-1">
+                    Slot settings can be prepared here, but the customer-facing booking flow should remain gated until this service branch is premium-enabled.
+                  </div>
                 </div>
+              ) : null}
 
-                <div>
-                  <div className="text-sm font-semibold text-gray-900 mb-2">Item Image *</div>
-                  <label htmlFor="item-image-input" className="h-11 px-4 rounded-full border border-gray-200 bg-white text-sm font-semibold inline-flex items-center gap-2 cursor-pointer hover:bg-gray-50">
-                    <ImagePlus className="h-4 w-4" />
-                    Select Item Image
-                  </label>
-                  <input id="item-image-input" type="file" accept="image/*" onChange={onPickItemImage} className="hidden" />
+              <button
+                type="button"
+                onClick={handleSaveSchedule}
+                disabled={savingSchedule}
+                className="inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white shadow-lg shadow-sky-200 disabled:opacity-60"
+                style={{ background: "linear-gradient(90deg, #0f766e 0%, #0284c7 100%)" }}
+              >
+                {savingSchedule ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {effectiveScheduleTargetIds.length > 1 ? "Apply To Linked Branches" : "Save Branch Schedule"}
+              </button>
+            </div>
+          </Card>
+        ) : null}
 
-                  {itemImage ? (
-                    <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-3">
-                      <div className="aspect-square rounded-xl overflow-hidden bg-gray-100">
-                        <img src={URL.createObjectURL(itemImage)} alt="item preview" className="h-full w-full object-cover" />
+        {loadingStores || !selectedStore ? null : (
+          <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+            <Card
+              title={`${selectedSectionLabel} Structure`}
+              subtitle="Manage categories and items with clear separation between visual-only and orderable flows."
+            >
+              {loadingData ? (
+                <SectionSkeleton />
+              ) : !sortedCategories.length ? (
+                <EmptyState
+                  title={`No ${selectedSectionLabel.toLowerCase()} categories yet`}
+                  body={`Create the first ${selectedSectionLabel.toLowerCase()} category to start building the partner-facing flow.`}
+                />
+              ) : (
+                <div className="space-y-4">
+                  {sortedCategories.map((category) => {
+                    const categoryItems = itemsByCategory.get(String(category.id)) || [];
+                    return (
+                      <div key={category.id} className="rounded-3xl border border-gray-200 bg-white p-5">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className="text-lg font-semibold text-gray-900">{category.title}</div>
+                              <Badge tone={category.enabled !== false ? "green" : "red"}>
+                                {category.enabled !== false ? "Enabled" : "Disabled"}
+                              </Badge>
+                              {category.starting_from !== null && category.starting_from !== undefined ? (
+                                <Badge tone="blue">Starting from {money(category.starting_from)}</Badge>
+                              ) : null}
+                            </div>
+                            <div className="mt-2 text-sm text-gray-500">
+                              Sort order: {category.sort_order ?? 0} • {categoryItems.length} item(s)
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleEditCategory(category)}
+                              className="inline-flex h-9 items-center gap-2 rounded-full border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCategory(category)}
+                              disabled={deletingCategoryId === String(category.id)}
+                              className="inline-flex h-9 items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+                            >
+                              {deletingCategoryId === String(category.id) ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 space-y-3">
+                          {categoryItems.length ? (
+                            categoryItems.map((item) => {
+                              const statusTone =
+                                item.is_available === false
+                                  ? "red"
+                                  : item.track_inventory
+                                  ? stockStatusFromQty(item.stock_qty, item.low_stock_threshold) === "low_stock"
+                                    ? "amber"
+                                    : stockStatusFromQty(item.stock_qty, item.low_stock_threshold) === "out_of_stock"
+                                    ? "red"
+                                    : "green"
+                                  : "green";
+
+                              return (
+                                <div
+                                  key={item.id}
+                                  className="grid gap-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 md:grid-cols-[96px_1fr_auto]"
+                                >
+                                  <div className="h-24 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                                    {item.image_url ? (
+                                      <img src={item.image_url} alt={item.title || "Catalogue"} className="h-full w-full object-cover" />
+                                    ) : (
+                                      <div className="flex h-full items-center justify-center text-xs text-gray-400">No image</div>
+                                    )}
+                                  </div>
+
+                                  <div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <div className="font-semibold text-gray-900">
+                                        {item.title || (item.is_image_catalogue ? "Image-only catalogue entry" : "Untitled item")}
+                                      </div>
+                                      <Badge tone={statusTone}>
+                                        {item.is_available === false ? "Unavailable" : "Available"}
+                                      </Badge>
+                                      <Badge tone="gray">{item.item_type}</Badge>
+                                      {item.is_image_catalogue ? <Badge tone="blue">Image-only</Badge> : null}
+                                      {item.is_billable ? <Badge tone="green">Billable</Badge> : null}
+                                      {item.supports_slot_booking ? <Badge tone="blue">Slot-bookable</Badge> : null}
+                                      {item.track_inventory ? <Badge tone="amber">Inventory tracked</Badge> : null}
+                                    </div>
+
+                                    <div className="mt-2 text-sm text-gray-500">
+                                      {item.description || "No description added yet."}
+                                    </div>
+
+                                    <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                                      {item.price !== null && item.price !== undefined ? <span>Price: {money(item.price)}</span> : null}
+                                      {item.sku ? <span>SKU: {item.sku}</span> : null}
+                                      {item.duration_minutes ? <span>Duration: {item.duration_minutes} mins</span> : null}
+                                      {item.track_inventory ? (
+                                        <span>
+                                          Stock: {item.stock_qty ?? 0} • {stockStatusFromQty(item.stock_qty, item.low_stock_threshold).replaceAll("_", " ")}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-start gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEditItem(item)}
+                                      className="inline-flex h-9 items-center gap-2 rounded-full border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteItem(item)}
+                                      disabled={deletingItemId === String(item.id)}
+                                      className="inline-flex h-9 items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+                                    >
+                                      {deletingItemId === String(item.id) ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Trash2 className="h-4 w-4" />
+                                      )}
+                                      Delete
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <EmptyState
+                              title="No items in this category"
+                              body={`Use the ${isServiceStore ? "service" : "item"} form to add entries here.`}
+                            />
+                          )}
+                        </div>
                       </div>
-                      <button type="button" onClick={() => setItemImage(null)} className="mt-3 h-9 w-full rounded-xl border border-gray-200 bg-white text-sm font-medium hover:bg-gray-50">
-                        Remove Image
-                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+
+            <Card
+              title={
+                <div className="flex items-center gap-2">
+                  <Eye className="h-5 w-5 text-violet-600" />
+                  <span>Preview Mode</span>
+                </div>
+              }
+              subtitle={
+                isServiceStore
+                  ? "Customer-facing service menu preview with duration, billing, and slot-booking indicators."
+                  : premiumUnlocked
+                  ? "Customer-facing pickup catalogue preview for full products and image-only entries."
+                  : "Customer-facing image catalogue preview for non-premium product stores."
+              }
+            >
+              {loadingData ? (
+                <SectionSkeleton />
+              ) : !previewCategories.length ? (
+                <EmptyState
+                  title="Nothing to preview yet"
+                  body={`Enabled categories with available ${isServiceStore ? "services" : "items"} will appear here.`}
+                />
+              ) : (
+                <div className="space-y-5">
+                  {previewCategories.map((category) => (
+                    <div key={category.id} className="rounded-3xl border border-gray-200 bg-white p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-base font-semibold text-gray-900">{category.title}</div>
+                        {category.starting_from !== null && category.starting_from !== undefined ? (
+                          <Badge tone="blue">Starting from {money(category.starting_from)}</Badge>
+                        ) : null}
+                      </div>
+
+                      <div className="mt-4 space-y-3">
+                        {category.items.map((item) =>
+                          isServiceStore ? (
+                            <div
+                              key={item.id}
+                              className="grid gap-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 md:grid-cols-[84px_1fr]"
+                            >
+                              <div className="h-20 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                                {item.image_url ? (
+                                  <img src={item.image_url} alt={item.title || "Service"} className="h-full w-full object-cover" />
+                                ) : (
+                                  <div className="flex h-full items-center justify-center text-xs text-gray-400">No image</div>
+                                )}
+                              </div>
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div className="font-semibold text-gray-900">{item.title}</div>
+                                  {item.price !== null && item.price !== undefined ? <Badge tone="green">{money(item.price)}</Badge> : null}
+                                  {item.duration_minutes ? <Badge tone="blue">{item.duration_minutes} mins</Badge> : null}
+                                  {item.supports_slot_booking ? <Badge tone="blue">Slot-bookable</Badge> : null}
+                                  {item.is_billable ? <Badge tone="green">Billable</Badge> : null}
+                                </div>
+                                <div className="mt-2 text-sm text-gray-500">{item.description || "No description added yet."}</div>
+                              </div>
+                            </div>
+                          ) : premiumUnlocked && !item.is_image_catalogue ? (
+                            <div
+                              key={item.id}
+                              className="grid gap-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 md:grid-cols-[96px_1fr_auto]"
+                            >
+                              <div className="h-24 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                                {item.image_url ? (
+                                  <img src={item.image_url} alt={item.title || "Product"} className="h-full w-full object-cover" />
+                                ) : (
+                                  <div className="flex h-full items-center justify-center text-xs text-gray-400">No image</div>
+                                )}
+                              </div>
+                              <div>
+                                <div className="font-semibold text-gray-900">{item.title}</div>
+                                <div className="mt-2 text-sm text-gray-500">{item.description || "No description added yet."}</div>
+                              </div>
+                              <div className="flex flex-col items-end gap-2">
+                                {item.price !== null && item.price !== undefined ? <Badge tone="green">{money(item.price)}</Badge> : null}
+                                {item.is_billable ? <Badge tone="green">Ready for pickup order flow</Badge> : null}
+                              </div>
+                            </div>
+                          ) : (
+                            <div
+                              key={item.id}
+                              className="rounded-2xl border border-gray-200 bg-gray-50 p-3"
+                            >
+                              <div className="aspect-square overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                                {item.image_url ? (
+                                  <img src={item.image_url} alt={item.title || "Catalogue image"} className="h-full w-full object-cover" />
+                                ) : (
+                                  <div className="flex h-full items-center justify-center text-xs text-gray-400">No image</div>
+                                )}
+                              </div>
+                              {(item.title || item.price !== null) && premiumUnlocked ? (
+                                <div className="mt-3 flex items-center justify-between gap-3">
+                                  <div className="text-sm font-medium text-gray-900">{item.title || "Image-only entry"}</div>
+                                  {item.price !== null && item.price !== undefined ? <div className="text-sm text-gray-500">{money(item.price)}</div> : null}
+                                </div>
+                              ) : null}
+                            </div>
+                          )
+                        )}
+                      </div>
                     </div>
-                  ) : (
-                    <div className="mt-4 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
-                      No item image selected.
-                    </div>
-                  )}
+                  ))}
+                </div>
+              )}
+            </Card>
+          </div>
+        )}
+
+        {loadingStores ? null : !stores.length ? null : (
+          <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+                <CheckCircle2 className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-lg font-semibold text-gray-900">Flow Summary</div>
+                <div className="mt-2 text-sm text-gray-600">
+                  {isProductStore && !premiumUnlocked
+                    ? "This branch is correctly constrained to image-only catalogue behavior. Price, billing, and inventory stay optional or hidden."
+                    : isProductStore
+                    ? "This branch is ready for full product catalogue management, pickup ordering readiness, and optional inventory controls."
+                    : premiumUnlocked
+                    ? "This branch is ready for service menu publishing, slot booking readiness, and billable service setup."
+                    : "This branch can publish a service menu now while premium-only slot booking and payment readiness remain clearly gated."}
                 </div>
               </div>
             </div>
-          )}
-        </Card>
+          </div>
+        )}
       </div>
-
-      <PremiumModal
-        open={premiumModalOpen}
-        onClose={() => !premiumSaving && setPremiumModalOpen(false)}
-        onConfirm={handleSubscribePremium}
-        loading={premiumSaving}
-        cardName={cardName}
-        setCardName={setCardName}
-        cardNumber={cardNumber}
-        setCardNumber={setCardNumber}
-        cardExpiry={cardExpiry}
-        setCardExpiry={setCardExpiry}
-        cardCvv={cardCvv}
-        setCardCvv={setCardCvv}
-        error={premiumError}
-        targetCount={targetPremiumStoreIds.length}
-      />
     </div>
   );
 }

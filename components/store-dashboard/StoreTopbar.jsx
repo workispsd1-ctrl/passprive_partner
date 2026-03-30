@@ -37,6 +37,10 @@ function normalizeMemberStore(storesField) {
   return storesField || null;
 }
 
+function normalizeStoreType(value) {
+  return String(value || "PRODUCT").toUpperCase() === "SERVICE" ? "SERVICE" : "PRODUCT";
+}
+
 function flowTypeFromOrder(order) {
   const raw = String(order?.order_flow || order?.metadata?.order_flow || "").toUpperCase();
   if (raw === "PREMIUM") return "pickup";
@@ -51,6 +55,8 @@ export default function StoreTopbar() {
 
   const [roleLabel, setRoleLabel] = useState("Outlet Manager");
   const [storeIds, setStoreIds] = useState([]);
+  const [stores, setStores] = useState([]);
+  const [selectedStoreId, setSelectedStoreId] = useState("");
   const [storeNameById, setStoreNameById] = useState({});
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifLoading, setNotifLoading] = useState(false);
@@ -67,8 +73,13 @@ export default function StoreTopbar() {
       return best;
     }, null);
 
+    if (match?.prefix === "/store-partner/catalogue") {
+      const activeStore = stores.find((store) => String(store.id) === String(selectedStoreId));
+      return normalizeStoreType(activeStore?.store_type) === "SERVICE" ? "Services" : "Catalogue";
+    }
+
     return match?.title || "Dashboard";
-  }, [pathname]);
+  }, [pathname, stores, selectedStoreId]);
 
   const unseenNotifications = useMemo(
     () => notifications.filter((n) => !n.partner_seen_at),
@@ -109,14 +120,14 @@ export default function StoreTopbar() {
 
         const ownerRes = await supabaseBrowser
           .from("stores")
-          .select("id,name")
+          .select("id,name,store_type")
           .eq("owner_user_id", userId);
 
         if (ownerRes.error) throw ownerRes.error;
 
         const memberRes = await supabaseBrowser
           .from("store_members")
-          .select("store_id, stores:store_id(id,name)")
+          .select("store_id, stores:store_id(id,name,store_type)")
           .eq("user_id", userId);
 
         if (memberRes.error) throw memberRes.error;
@@ -132,6 +143,7 @@ export default function StoreTopbar() {
 
         if (cancelled) return;
 
+        setStores(allStores);
         const ids = allStores.map((s) => s.id);
         const names = {};
         allStores.forEach((s) => {
@@ -152,6 +164,28 @@ export default function StoreTopbar() {
 
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const syncSelectedStore = () => {
+      try {
+        const nextId = localStorage.getItem("store_partner_selected_store_id") || "";
+        setSelectedStoreId(String(nextId || ""));
+      } catch {
+        setSelectedStoreId("");
+      }
+    };
+
+    syncSelectedStore();
+    window.addEventListener("storage", syncSelectedStore);
+    window.addEventListener("store-selection-changed", syncSelectedStore);
+    window.addEventListener("focus", syncSelectedStore);
+
+    return () => {
+      window.removeEventListener("storage", syncSelectedStore);
+      window.removeEventListener("store-selection-changed", syncSelectedStore);
+      window.removeEventListener("focus", syncSelectedStore);
     };
   }, []);
 

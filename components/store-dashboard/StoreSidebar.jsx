@@ -35,7 +35,7 @@ const baseNav = [
   { label: "Dashboard", href: "/store-partner/dashboard", icon: LayoutDashboard },
   { label: "Pickup Orders", href: "/store-partner/pickup-orders", icon: ShoppingCart, key: "pickup-orders", premium: true },
   { label: "Payment Orders", href: "/store-partner/payment-orders", icon: CreditCard, key: "payment-orders" },
-  { label: "Catalogue", href: "/store-partner/catalogue", icon: Boxes, key: "pickup-catalogue" },
+  { label: "Catalogue", href: "/store-partner/catalogue", icon: Boxes, key: "pickup-catalogue", dynamicLabel: true },
   { label: "Inventory", href: "/store-partner/inventory", icon: Package, key: "inventory", premium: true },
   { label: "My Stores", href: "/store-partner/all-stores", icon: Store },
   { label: "Offers", href: "/store-partner/offers", icon: Tag },
@@ -55,6 +55,10 @@ function isPremiumActive(store) {
 function normalizeMemberStore(storesField) {
   if (Array.isArray(storesField)) return storesField[0] || null;
   return storesField || null;
+}
+
+function normalizeStoreType(value) {
+  return String(value || "PRODUCT").toUpperCase() === "SERVICE" ? "SERVICE" : "PRODUCT";
 }
 
 function StatusSwitch({ checked, onChange, disabled = false }) {
@@ -194,10 +198,13 @@ export default function StoreSidebar() {
 
   const storeIds = useMemo(() => stores.map((s) => s.id), [stores]);
   const selectedStoreHasPremium = useMemo(() => isPremiumActive(selectedStore), [selectedStore]);
+  const selectedCatalogueLabel = normalizeStoreType(selectedStore?.store_type) === "SERVICE" ? "Services" : "Catalogue";
 
   const nav = useMemo(() => {
-    return baseNav.filter((n) => !n.premium || selectedStoreHasPremium);
-  }, [selectedStoreHasPremium]);
+    return baseNav
+      .filter((n) => !n.premium || selectedStoreHasPremium)
+      .map((item) => (item.dynamicLabel ? { ...item, label: selectedCatalogueLabel } : item));
+  }, [selectedStoreHasPremium, selectedCatalogueLabel]);
 
   const showStoreSwitcher = userRole === "owner" && stores.length > 1;
 
@@ -322,7 +329,7 @@ export default function StoreSidebar() {
 
         const ownerRes = await supabaseBrowser
           .from("stores")
-          .select("id,name,city,is_active,pickup_premium_enabled,pickup_premium_expires_at")
+          .select("id,name,city,is_active,store_type,pickup_premium_enabled,pickup_premium_expires_at")
           .eq("owner_user_id", userId)
           .order("name", { ascending: true });
 
@@ -330,7 +337,7 @@ export default function StoreSidebar() {
 
         const memberRes = await supabaseBrowser
           .from("store_members")
-          .select("store_id,role,stores:store_id(id,name,city,is_active,pickup_premium_enabled,pickup_premium_expires_at)")
+          .select("store_id,role,stores:store_id(id,name,city,is_active,store_type,pickup_premium_enabled,pickup_premium_expires_at)")
           .eq("user_id", userId);
 
         if (memberRes.error) throw memberRes.error;
@@ -626,7 +633,7 @@ export default function StoreSidebar() {
                 href="/store-partner/catalogue"
                 className="h-9 px-3 rounded-xl border border-gray-200 bg-white text-sm inline-flex items-center justify-between w-full hover:bg-gray-50"
               >
-                <span>Catalogue</span>
+                <span>{selectedCatalogueLabel}</span>
                 <ArrowUpRight className="h-4 w-4 text-gray-500" />
               </Link>
             </div>
