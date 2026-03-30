@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
@@ -121,7 +121,7 @@ function getInitialCategoryForm() {
 function getInitialItemForm(storeType = "PRODUCT") {
   if (normalizeStoreType(storeType) === "SERVICE") {
     return {
-      category_id: "",
+      category_title: "",
       title: "",
       description: "",
       price: "",
@@ -140,7 +140,7 @@ function getInitialItemForm(storeType = "PRODUCT") {
   }
 
   return {
-    category_id: "",
+    category_title: "",
     title: "",
     description: "",
     price: "",
@@ -166,6 +166,12 @@ function getInitialScheduleForm() {
     slot_advance_days: "30",
     slot_max_per_window: "1",
   };
+}
+
+function findCategoryByTitle(categories, title) {
+  const clean = String(title || "").trim().toLowerCase();
+  if (!clean) return null;
+  return categories.find((category) => String(category.title || "").trim().toLowerCase() === clean) || null;
 }
 
 function Card({ title, subtitle, right, children }) {
@@ -290,6 +296,8 @@ function EmptyState({ title, body }) {
 
 export default function PartnerCataloguePage() {
   const router = useRouter();
+  const categoryFormRef = useRef(null);
+  const itemFormRef = useRef(null);
 
   const [loadingStores, setLoadingStores] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
@@ -306,8 +314,8 @@ export default function PartnerCataloguePage() {
 
   const [itemForm, setItemForm] = useState(getInitialItemForm("PRODUCT"));
   const [editingItemId, setEditingItemId] = useState("");
-  const [itemImageFile, setItemImageFile] = useState(null);
-  const [itemImagePreviewUrl, setItemImagePreviewUrl] = useState("");
+  const [itemImageFiles, setItemImageFiles] = useState([]);
+  const [itemImagePreviewUrls, setItemImagePreviewUrls] = useState([]);
   const [savingItem, setSavingItem] = useState(false);
   const [deletingItemId, setDeletingItemId] = useState("");
 
@@ -466,17 +474,23 @@ export default function PartnerCataloguePage() {
       setCategoryForm(getInitialCategoryForm());
       setEditingCategoryId("");
       setEditingItemId("");
-      setItemImageFile(null);
-      setItemImagePreviewUrl("");
+      setItemImageFiles([]);
+      setItemImagePreviewUrls([]);
 
       setItemForm((prev) => {
         const next = getInitialItemForm(selectedStoreType);
-        const fallbackCategoryId = loadedCategories[0]?.id ? String(loadedCategories[0].id) : "";
+        const fallbackCategoryTitle = loadedCategories[0]?.title ? String(loadedCategories[0].title) : "";
         return {
           ...next,
-          category_id: prev.category_id && loadedCategories.some((cat) => String(cat.id) === String(prev.category_id))
-            ? prev.category_id
-            : fallbackCategoryId,
+          category_title:
+            prev.category_title &&
+            loadedCategories.some(
+              (category) =>
+                String(category.title || "").trim().toLowerCase() ===
+                String(prev.category_title || "").trim().toLowerCase()
+            )
+              ? prev.category_title
+              : fallbackCategoryTitle,
         };
       });
     } finally {
@@ -544,15 +558,20 @@ export default function PartnerCataloguePage() {
 
   useEffect(() => {
     setItemForm((prev) => {
-      const fallbackCategoryId = sortedCategories[0]?.id ? String(sortedCategories[0].id) : "";
-      const nextCategoryId =
-        prev.category_id && sortedCategories.some((category) => String(category.id) === String(prev.category_id))
-          ? prev.category_id
-          : fallbackCategoryId;
+      const fallbackCategoryTitle = sortedCategories[0]?.title ? String(sortedCategories[0].title) : "";
+      const nextCategoryTitle =
+        prev.category_title &&
+        sortedCategories.some(
+          (category) =>
+            String(category.title || "").trim().toLowerCase() ===
+            String(prev.category_title || "").trim().toLowerCase()
+        )
+          ? prev.category_title
+          : fallbackCategoryTitle;
 
       return {
         ...prev,
-        category_id: nextCategoryId,
+        category_title: nextCategoryTitle,
       };
     });
   }, [sortedCategories]);
@@ -590,11 +609,11 @@ export default function PartnerCataloguePage() {
 
   const resetItemForm = () => {
     setEditingItemId("");
-    setItemImageFile(null);
-    setItemImagePreviewUrl("");
+    setItemImageFiles([]);
+    setItemImagePreviewUrls([]);
     setItemForm({
       ...getInitialItemForm(selectedStoreType),
-      category_id: sortedCategories[0]?.id ? String(sortedCategories[0].id) : "",
+      category_title: sortedCategories[0]?.title ? String(sortedCategories[0].title) : "",
     });
   };
 
@@ -651,6 +670,7 @@ export default function PartnerCataloguePage() {
       enabled: category.enabled !== false,
       sort_order: category.sort_order ?? "",
     });
+    categoryFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const handleDeleteCategory = async (category) => {
@@ -683,9 +703,12 @@ export default function PartnerCataloguePage() {
   };
 
   const validateItemForm = () => {
-    if (!itemForm.category_id) return "Create a category first, then add an item to it.";
+    if (!itemForm.category_title.trim()) return "Pick a category title first.";
+    if (!findCategoryByTitle(sortedCategories, itemForm.category_title)) {
+      return "Choose an existing category title from the categories you created above.";
+    }
 
-    const hasImage = Boolean(itemImageFile || itemForm.image_url);
+    const hasImage = Boolean(itemImageFiles.length || itemForm.image_url);
     const price = safeNum(itemForm.price);
     const duration = safeNum(itemForm.duration_minutes);
 
@@ -721,13 +744,22 @@ export default function PartnerCataloguePage() {
     try {
       setSavingItem(true);
 
-      const nextImageUrl = itemImageFile ? await uploadImage(selectedStoreId, itemImageFile) : itemForm.image_url || null;
+      const matchedCategory = findCategoryByTitle(sortedCategories, itemForm.category_title);
+      if (!matchedCategory?.id) {
+        throw new Error("Choose a valid category title before saving.");
+      }
+
       const price = safeNum(itemForm.price);
       const duration = safeNum(itemForm.duration_minutes);
       const stockQty = Math.max(0, Number(itemForm.stock_qty || 0));
       const lowThreshold = Math.max(0, Number(itemForm.low_stock_threshold || 5));
 
       let payload;
+      const uploadedImageUrls = itemImageFiles.length
+        ? await Promise.all(itemImageFiles.map((file) => uploadImage(selectedStoreId, file)))
+        : itemForm.image_url
+        ? [itemForm.image_url]
+        : [];
 
       if (isProductStore) {
         const imageOnly = !premiumUnlocked || Boolean(itemForm.is_image_catalogue);
@@ -735,9 +767,9 @@ export default function PartnerCataloguePage() {
 
         payload = {
           store_id: selectedStoreId,
-          category_id: itemForm.category_id,
+          category_id: matchedCategory.id,
           item_type: "PRODUCT",
-          image_url: nextImageUrl,
+          image_url: uploadedImageUrls[0] || null,
           title: imageOnly ? asText(itemForm.title) : itemForm.title.trim(),
           price,
           description: asText(itemForm.description),
@@ -756,9 +788,9 @@ export default function PartnerCataloguePage() {
       } else {
         payload = {
           store_id: selectedStoreId,
-          category_id: itemForm.category_id,
+          category_id: matchedCategory.id,
           item_type: "SERVICE",
-          image_url: nextImageUrl,
+          image_url: uploadedImageUrls[0] || null,
           title: itemForm.title.trim(),
           price,
           description: asText(itemForm.description),
@@ -786,12 +818,27 @@ export default function PartnerCataloguePage() {
       } else {
         const nextSort =
           sortedItems.reduce((max, item) => Math.max(max, Number(item.sort_order || 0)), -1) + 1;
-        const { error } = await supabaseBrowser.from("store_catalogue_items").insert({
-          ...payload,
-          sort_order: nextSort,
-        });
+        const rows =
+          isProductStore && (!premiumUnlocked || Boolean(itemForm.is_image_catalogue)) && uploadedImageUrls.length > 1
+            ? uploadedImageUrls.map((imageUrl, index) => ({
+                ...payload,
+                image_url: imageUrl,
+                sort_order: nextSort + index,
+              }))
+            : [
+                {
+                  ...payload,
+                  sort_order: nextSort,
+                },
+              ];
+
+        const { error } = await supabaseBrowser.from("store_catalogue_items").insert(rows);
         if (error) throw error;
-        toast.success(`${isServiceStore ? "Service" : "Item"} added.`);
+        toast.success(
+          rows.length > 1
+            ? `${rows.length} catalogue items added.`
+            : `${isServiceStore ? "Service" : "Item"} added.`
+        );
       }
 
       await loadCatalogueData(selectedStoreId);
@@ -805,10 +852,11 @@ export default function PartnerCataloguePage() {
 
   const handleEditItem = (item) => {
     setEditingItemId(String(item.id));
-    setItemImageFile(null);
-    setItemImagePreviewUrl(item.image_url || "");
+    setItemImageFiles([]);
+    setItemImagePreviewUrls(item.image_url ? [item.image_url] : []);
+    const linkedCategory = categories.find((category) => String(category.id) === String(item.category_id));
     setItemForm({
-      category_id: String(item.category_id || ""),
+      category_title: linkedCategory?.title || "",
       title: item.title || "",
       description: item.description || "",
       price: item.price ?? "",
@@ -824,6 +872,7 @@ export default function PartnerCataloguePage() {
       allow_backorder: Boolean(item.allow_backorder),
       is_image_catalogue: Boolean(item.is_image_catalogue),
     });
+    itemFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const handleDeleteItem = async (item) => {
@@ -907,14 +956,17 @@ export default function PartnerCataloguePage() {
   };
 
   const onPickItemImage = (event) => {
-    const file = event.target.files?.[0];
-    if (!file || !isImage(file)) {
+    const incoming = Array.from(event.target.files || []).filter(isImage);
+    if (!incoming.length) {
       toast.error("Select an image file.");
       return;
     }
 
-    setItemImageFile(file);
-    setItemImagePreviewUrl(URL.createObjectURL(file));
+    const allowMultiple = isProductStore && currentItemIsImageOnly && !editingItemId;
+    const nextFiles = allowMultiple ? incoming : [incoming[0]];
+
+    setItemImageFiles(nextFiles);
+    setItemImagePreviewUrls(nextFiles.map((file) => URL.createObjectURL(file)));
     setItemForm((prev) => ({ ...prev, image_url: prev.image_url || "" }));
     event.target.value = "";
   };
@@ -1020,6 +1072,7 @@ export default function PartnerCataloguePage() {
 
         {loadingStores || !selectedStore ? null : (
           <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+            <div ref={categoryFormRef}>
             <Card
               title="Category Manager"
               subtitle={`Create and order ${selectedSectionLabel.toLowerCase()} categories.`}
@@ -1083,7 +1136,9 @@ export default function PartnerCataloguePage() {
                 </button>
               </div>
             </Card>
+            </div>
 
+            <div ref={itemFormRef}>
             <Card
               title={isServiceStore ? "Service Form" : "Item Form"}
               subtitle={
@@ -1107,22 +1162,27 @@ export default function PartnerCataloguePage() {
             >
               <div className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
-                  <Field label="Category">
-                    <Select
-                      value={itemForm.category_id}
-                      onChange={(e) => setItemForm((prev) => ({ ...prev, category_id: e.target.value }))}
-                      disabled={!sortedCategories.length}
-                    >
-                      <option value="">Select category</option>
-                      {sortedCategories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.title}
-                        </option>
-                      ))}
-                    </Select>
+                  <Field label="Category Title" hint="Select one of the categories created above">
+                    <div>
+                      <Select
+                        value={itemForm.category_title}
+                        onChange={(e) => setItemForm((prev) => ({ ...prev, category_title: e.target.value }))}
+                        disabled={!sortedCategories.length}
+                      >
+                        <option value="">{sortedCategories.length ? "Choose category title" : "Create category first"}</option>
+                        {sortedCategories.map((category) => (
+                          <option key={category.id} value={category.title}>
+                            {category.title}
+                          </option>
+                        ))}
+                      </Select>
+                      <div className="mt-2 text-xs text-gray-500">
+                        Each item belongs to one category in the current schema.
+                      </div>
+                    </div>
                   </Field>
 
-                  {isProductStore && premiumUnlocked ? (
+                  {isProductStore ? (
                     <Field label="Product Mode">
                       <Select
                         value={itemForm.is_image_catalogue ? "IMAGE_ONLY" : "FULL_PRODUCT"}
@@ -1134,10 +1194,16 @@ export default function PartnerCataloguePage() {
                             is_billable: e.target.value === "IMAGE_ONLY" ? false : prev.is_billable,
                           }))
                         }
+                        disabled={!premiumUnlocked}
                       >
                         <option value="IMAGE_ONLY">Image-only catalogue item</option>
                         <option value="FULL_PRODUCT">Full product entry</option>
                       </Select>
+                      {!premiumUnlocked ? (
+                        <div className="mt-2 text-xs text-amber-700">
+                          Non-premium product branches are locked to image-only catalogue items.
+                        </div>
+                      ) : null}
                     </Field>
                   ) : null}
                 </div>
@@ -1156,21 +1222,37 @@ export default function PartnerCataloguePage() {
                         id="catalogue-item-image"
                         type="file"
                         accept="image/*"
+                        multiple={isProductStore && currentItemIsImageOnly && !editingItemId}
                         onChange={onPickItemImage}
                         className="hidden"
                       />
                       <span className="text-sm text-gray-500">
-                        {itemImageFile ? itemImageFile.name : itemForm.image_url ? "Using current image" : "No image selected yet"}
+                        {itemImageFiles.length
+                          ? `${itemImageFiles.length} image(s) selected`
+                          : itemForm.image_url
+                          ? "Using current image"
+                          : "No image selected yet"}
                       </span>
                     </div>
 
-                    {itemImagePreviewUrl || itemForm.image_url ? (
-                      <div className="mt-4 h-36 overflow-hidden rounded-2xl border border-gray-200 bg-white">
-                        <img
-                          src={itemImagePreviewUrl || itemForm.image_url}
-                          alt="Preview"
-                          className="h-full w-full object-cover"
-                        />
+                    {isProductStore && currentItemIsImageOnly && !editingItemId ? (
+                      <div className="mt-2 text-xs text-gray-500">
+                        You can select multiple images here. Each image will be saved as its own catalogue item.
+                      </div>
+                    ) : null}
+
+                    {itemImagePreviewUrls.length || itemForm.image_url ? (
+                      <div
+                        className={[
+                          "mt-4 gap-3",
+                          itemImagePreviewUrls.length > 1 ? "grid grid-cols-2 md:grid-cols-3" : "grid grid-cols-1",
+                        ].join(" ")}
+                      >
+                        {(itemImagePreviewUrls.length ? itemImagePreviewUrls : itemForm.image_url ? [itemForm.image_url] : []).map((src, index) => (
+                          <div key={`${src}_${index}`} className="h-36 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                            <img src={src} alt={`Preview ${index + 1}`} className="h-full w-full object-cover" />
+                          </div>
+                        ))}
                       </div>
                     ) : null}
                   </div>
@@ -1349,6 +1431,7 @@ export default function PartnerCataloguePage() {
                 ) : null}
               </div>
             </Card>
+            </div>
           </div>
         )}
 
