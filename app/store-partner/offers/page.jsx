@@ -122,6 +122,134 @@ function normalizeMemberStores(rows) {
   return out;
 }
 
+function OfferCard({ offer, onDelete }) {
+  const isVisit = String(offer?.type || "").toUpperCase() === "VISIT";
+  const isExpired = new Date(offer.end_at) < new Date();
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-2">
+            <h3 className="font-semibold text-gray-900">
+              {offer.title || "Visit Reward"}
+            </h3>
+            {isVisit && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                Loyalty
+              </span>
+            )}
+            {isExpired && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                Expired
+              </span>
+            )}
+            {!isExpired && offer.enabled && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                Active
+              </span>
+            )}
+          </div>
+
+          {!isVisit && (
+            <>
+              <div className="text-2xl font-bold text-orange-600 mb-2">
+                {offer.badge_text}
+              </div>
+
+              {offer.min_bill && (
+                <div className="text-xs text-gray-600 mb-1">
+                  Min bill: <span className="font-semibold">MUR {offer.min_bill}</span>
+                </div>
+              )}
+
+              {offer.coupon_code && (
+                <div className="text-xs text-gray-600 mb-1">
+                  Code: <span className="font-mono font-semibold">{offer.coupon_code}</span>
+                </div>
+              )}
+
+              <div className="text-xs text-gray-500 mb-1">
+                Valid from {new Date(offer.start_at).toLocaleDateString()} to{" "}
+                {new Date(offer.end_at).toLocaleDateString()}
+              </div>
+            </>
+          )}
+
+          {isVisit && offer.visit_rewards && (
+            <div className="text-xs text-gray-700 mt-2">
+              <div className="font-semibold mb-1">Rewards:</div>
+              {offer.visit_rewards.map((reward, idx) => (
+                <div key={idx} className="text-gray-600">
+                  {reward.visit_number}th visit:{" "}
+                  {reward.reward_type === "GIFT"
+                    ? reward.description
+                    : `${reward.amount}${reward.reward_type === "PERCENT" ? "%" : " MUR"}`}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {offer.store_name && (
+            <div className="text-xs text-gray-500 mt-2">
+              Store: <span className="font-semibold">{offer.store_name}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => onDelete(offer.id, offer.store_id)}
+            className="h-9 px-3 rounded-xl text-xs font-medium text-red-600 hover:bg-red-50 border border-red-200 transition-colors"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OfferDisplay({ offers, onDelete }) {
+  const standardOffers = offers.filter((o) => String(o?.type || "").toUpperCase() !== "VISIT");
+  const visitOffers = offers.filter((o) => String(o?.type || "").toUpperCase() === "VISIT");
+
+  return (
+    <>
+      {standardOffers.length > 0 && (
+        <Card title="Your Offers" subtitle="Manage your created standard offers">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {standardOffers.map((offer) => (
+              <OfferCard key={`${offer.id}-${offer.store_id}`} offer={offer} onDelete={onDelete} />
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {visitOffers.length > 0 && (
+        <Card title="Digital Loyalty Stamps" subtitle="Your visit reward programs">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {visitOffers.map((offer) => (
+              <OfferCard key={`${offer.id}-${offer.store_id}`} offer={offer} onDelete={onDelete} />
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {offers.length === 0 && (
+        <Card title="Your Offers">
+          <div className="text-center py-8">
+            <div className="text-gray-500 mb-2">No offers created yet</div>
+            <div className="text-xs text-gray-400">
+              Create your first offer or Digital Loyalty Stamp above
+            </div>
+          </div>
+        </Card>
+      )}
+    </>
+  );
+}
+
 function toLocalDateTimeInput(d) {
   const pad = (n) => String(n).padStart(2, "0");
   const date = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
@@ -183,6 +311,7 @@ export default function CreateOfferPage() {
   );
 
   const [visitRewards, setVisitRewards] = useState(createDefaultVisitRewards);
+  const [offers, setOffers] = useState([]);
 
   const minDateTime = useMemo(() => toLocalDateTimeInput(new Date()), []);
   const endMinDateTime = useMemo(() => {
@@ -334,6 +463,18 @@ export default function CreateOfferPage() {
             setSelectedStoreIds([first]);
             setVisitSelectedStoreIds([first]);
           }
+          // Load and merge all offers from all stores
+          const allOffers = [];
+          list.forEach((store) => {
+            if (Array.isArray(store.offers)) {
+              store.offers.forEach((offer) => {
+                if (!allOffers.find((o) => o.id === offer.id)) {
+                  allOffers.push({ ...offer, store_id: store.id, store_name: store.name });
+                }
+              });
+            }
+          });
+          setOffers(allOffers);
         }
       } catch (e) {
         if (!cancelled) setErr(e?.message || "Failed to load stores.");
@@ -432,8 +573,29 @@ export default function CreateOfferPage() {
 
       await Promise.all(targets.map((s) => appendOfferAndUpdateStore(s, offer)));
 
+      // Refresh offers list
+      setOffers((prev) => {
+        const updated = [...prev];
+        targets.forEach((store) => {
+          if (!updated.find((o) => o.id === offer.id && o.store_id === store.id)) {
+            updated.push({ ...offer, store_id: store.id, store_name: store.name });
+          }
+        });
+        return updated;
+      });
+
       setOk(`Standard offer created for ${targets.length} store(s).`);
-      setTimeout(() => router.push("/store-partner/offers"), 800);
+      // Clear form after successful creation
+      setTimeout(() => {
+        setTitle("");
+        setValue("");
+        setMinBill("");
+        setCouponCode("");
+        setStartAt("");
+        setEndAt("");
+        setStackable(false);
+        setAcceptedTerms(TERMS.reduce((acc, t) => ({ ...acc, [t.id]: false }), {}));
+      }, 500);
     } catch (e) {
       setErr(e?.message || "Failed to create offer.");
     } finally {
@@ -456,11 +618,51 @@ export default function CreateOfferPage() {
 
       await Promise.all(targets.map((s) => upsertVisitOfferAndUpdateStore(s, visitOffer)));
 
+      // Refresh offers list - remove old visit offers and add new one
+      setOffers((prev) => {
+        const nonVisit = prev.filter((o) => String(o?.type || "").toUpperCase() !== "VISIT");
+        const updated = [...nonVisit];
+        targets.forEach((store) => {
+          if (!updated.find((o) => o.id === visitOffer.id && o.store_id === store.id)) {
+            updated.push({ ...visitOffer, store_id: store.id, store_name: store.name });
+          }
+        });
+        return updated;
+      });
+
       setOk(`Digital Loyalty Stamp saved for ${targets.length} store(s).`);
+      // Reset visit rewards
+      setTimeout(() => {
+        setVisitRewards(createDefaultVisitRewards());
+      }, 500);
     } catch (e) {
       setErr(e?.message || "Failed to save Digital Loyalty Stamp.");
     } finally {
       setSavingVisit(false);
+    }
+  };
+
+  const handleDeleteOffer = async (offerId, storeId) => {
+    if (!confirm("Are you sure you want to delete this offer?")) return;
+
+    try {
+      const targetStore = stores.find((s) => String(s.id) === String(storeId));
+      if (!targetStore) throw new Error("Store not found.");
+
+      const existing = Array.isArray(targetStore.offers) ? targetStore.offers : [];
+      const nextOffers = existing.filter((o) => String(o.id) !== String(offerId));
+
+      const { error } = await supabaseBrowser
+        .from("stores")
+        .update({ offers: nextOffers })
+        .eq("id", storeId);
+
+      if (error) throw error;
+
+      setOffers((prev) => prev.filter((o) => !(o.id === offerId && String(o.store_id) === String(storeId))));
+      setOk("Offer deleted successfully.");
+    } catch (e) {
+      setErr(e?.message || "Failed to delete offer.");
     }
   };
 
@@ -745,6 +947,8 @@ export default function CreateOfferPage() {
                 </button>
               </div>
             </Card>
+
+            <OfferDisplay offers={offers} onDelete={handleDeleteOffer} />
           </>
         )}
       </div>
