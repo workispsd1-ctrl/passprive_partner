@@ -530,29 +530,42 @@ export default function CreateOfferPage() {
     };
   };
 
-  const appendOfferAndUpdateStore = async (store, offer) => {
-    const existing = Array.isArray(store.offers) ? store.offers : [];
+  const fetchStoreOffersById = async (storeId) => {
+    const { data, error } = await supabaseBrowser
+      .from("stores")
+      .select("offers")
+      .eq("id", storeId)
+      .single();
+
+    if (error) throw error;
+    return Array.isArray(data?.offers) ? data.offers : [];
+  };
+
+  const appendOfferAndUpdateStore = async (storeId, offer) => {
+    const existing = await fetchStoreOffersById(storeId);
     const nextOffers = [...existing, offer];
 
     const { error } = await supabaseBrowser
       .from("stores")
       .update({ offers: nextOffers })
-      .eq("id", store.id);
+      .eq("id", storeId);
 
     if (error) throw error;
+    return nextOffers;
   };
 
-  const upsertVisitOfferAndUpdateStore = async (store, visitOffer) => {
-    const existing = Array.isArray(store.offers) ? store.offers : [];
+  const upsertVisitOfferAndUpdateStore = async (storeId, visitOffer) => {
+    const existing = await fetchStoreOffersById(storeId);
     const nonVisit = existing.filter((o) => String(o?.type || "").toUpperCase() !== "VISIT");
     const nextOffers = [...nonVisit, visitOffer];
 
     const { error } = await supabaseBrowser
       .from("stores")
       .update({ offers: nextOffers })
-      .eq("id", store.id);
+      .eq("id", storeId);
 
     if (error) throw error;
+    return nextOffers;
   };
 
   const handleSubmitStandard = async () => {
@@ -571,7 +584,19 @@ export default function CreateOfferPage() {
 
       if (!targets.length) throw new Error("No stores selected.");
 
-      await Promise.all(targets.map((s) => appendOfferAndUpdateStore(s, offer)));
+      const updatedStores = await Promise.all(
+        targets.map(async (s) => ({
+          id: s.id,
+          offers: await appendOfferAndUpdateStore(s.id, offer),
+        }))
+      );
+
+      setStores((prev) => {
+        const updates = new Map(updatedStores.map((u) => [String(u.id), u.offers]));
+        return prev.map((s) =>
+          updates.has(String(s.id)) ? { ...s, offers: updates.get(String(s.id)) } : s
+        );
+      });
 
       // Refresh offers list
       setOffers((prev) => {
@@ -616,7 +641,19 @@ export default function CreateOfferPage() {
 
       if (!targets.length) throw new Error("No stores selected.");
 
-      await Promise.all(targets.map((s) => upsertVisitOfferAndUpdateStore(s, visitOffer)));
+      const updatedStores = await Promise.all(
+        targets.map(async (s) => ({
+          id: s.id,
+          offers: await upsertVisitOfferAndUpdateStore(s.id, visitOffer),
+        }))
+      );
+
+      setStores((prev) => {
+        const updates = new Map(updatedStores.map((u) => [String(u.id), u.offers]));
+        return prev.map((s) =>
+          updates.has(String(s.id)) ? { ...s, offers: updates.get(String(s.id)) } : s
+        );
+      });
 
       // Refresh offers list - remove old visit offers and add new one
       setOffers((prev) => {
@@ -646,10 +683,7 @@ export default function CreateOfferPage() {
     if (!confirm("Are you sure you want to delete this offer?")) return;
 
     try {
-      const targetStore = stores.find((s) => String(s.id) === String(storeId));
-      if (!targetStore) throw new Error("Store not found.");
-
-      const existing = Array.isArray(targetStore.offers) ? targetStore.offers : [];
+      const existing = await fetchStoreOffersById(storeId);
       const nextOffers = existing.filter((o) => String(o.id) !== String(offerId));
 
       const { error } = await supabaseBrowser
@@ -659,6 +693,13 @@ export default function CreateOfferPage() {
 
       if (error) throw error;
 
+      setStores((prev) =>
+        prev.map((s) =>
+          String(s.id) === String(storeId)
+            ? { ...s, offers: nextOffers }
+            : s
+        )
+      );
       setOffers((prev) => prev.filter((o) => !(o.id === offerId && String(o.store_id) === String(storeId))));
       setOk("Offer deleted successfully.");
     } catch (e) {
