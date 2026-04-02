@@ -392,11 +392,13 @@ function formatOfferLine(o) {
 
   const amt = o.discountType === "PERCENT" ? `${o.discountValue || 0}% OFF` : `Rs ${o.discountValue || 0} OFF`;
   const datePart = o.startDate || o.endDate ? `Valid ${o.startDate || "-"} -> ${o.endDate || "-"}` : "No date range";
+  const minBill = Number(o?.conditions?.minBillAmount);
+  const minBillPart = Number.isFinite(minBill) && minBill > 0 ? `Min bill Rs ${minBill}` : "";
 
   if (o.offerKind === OFFER_KIND.TIME_SLOT) {
     const slotPart = o.slotStart && o.slotEnd ? `${o.slotStart} - ${o.slotEnd}` : "No time slot";
     const dayPart = formatWeekdays(o.weekdays);
-    return `${amt} • ${datePart} • ${dayPart} • ${slotPart}`;
+    return [amt, datePart, minBillPart, dayPart, slotPart].filter(Boolean).join(" • ");
   }
 
   if (o.offerKind === OFFER_KIND.DISH) {
@@ -404,7 +406,7 @@ function formatOfferLine(o) {
     return `${dishName} • ${amt} • ${datePart}`;
   }
 
-  return `${amt} • ${datePart}`;
+  return [amt, datePart, minBillPart].filter(Boolean).join(" • ");
 }
 
 function planForKind(kind) {
@@ -1361,6 +1363,29 @@ export default function OffersPage() {
                       </label>
                     </div>
                   </div>
+
+                  {!isDishForm && (
+                    <div>
+                      <p className="text-xs text-slate-600 mb-2">Minimum bill amount (optional)</p>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        placeholder="500"
+                        value={formOffer?.conditions?.minBillAmount ?? ""}
+                        onChange={(e) =>
+                          setFormOffer((prev) => ({
+                            ...prev,
+                            conditions: {
+                              ...(prev.conditions || {}),
+                              minBillAmount: onlyDigits(e.target.value),
+                            },
+                          }))
+                        }
+                        className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
+                      />
+                    </div>
+                  )}
 
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
