@@ -255,12 +255,29 @@ export default function StorePartnerSettingsPage() {
     [stores, selectedStoreId]
   );
 
+  const selectedPaymentDetails = useMemo(
+    () => paymentByStore[String(selectedStoreId)] || null,
+    [paymentByStore, selectedStoreId]
+  );
+
+  const selectedKycStatus = useMemo(
+    () => String(selectedPaymentDetails?.kyc_status || "NOT_STARTED").toUpperCase(),
+    [selectedPaymentDetails]
+  );
+
+  const canEditPayment = useMemo(() => {
+    if (!selectedStore) return false;
+    if (!selectedPaymentDetails) return true;
+    return selectedKycStatus === "VERIFIED";
+  }, [selectedKycStatus, selectedPaymentDetails, selectedStore]);
+
   const canSaveStore = useMemo(() => !!form.name.trim(), [form.name]);
   const subcategoryOptions = useMemo(() => {
     return CATEGORY_OPTIONS[form.category] || [];
   }, [form.category]);
 
   const canSavePayment = useMemo(() => {
+    if (!canEditPayment) return false;
     if (!paymentForm.legal_business_name.trim()) return false;
     if (!paymentForm.payout_method) return false;
     if (paymentForm.payout_method === "UPI" && !paymentForm.payout_upi_id.trim()) return false;
@@ -270,7 +287,7 @@ export default function StorePartnerSettingsPage() {
     )
       return false;
     return true;
-  }, [paymentForm]);
+  }, [paymentForm, canEditPayment]);
 
   const canChangePassword = useMemo(() => {
     return newPassword.length >= 6 && confirmPassword.length >= 6 && newPassword === confirmPassword;
@@ -380,6 +397,10 @@ export default function StorePartnerSettingsPage() {
       setSavingPayment(true);
       setErr("");
       setOk("");
+
+      if (!canEditPayment) {
+        throw new Error("Payment details can be updated only when KYC is VERIFIED.");
+      }
 
       const invalidPaymentField = findInvalidField([
         ["Legal Business Name", paymentForm.legal_business_name],
@@ -741,6 +762,18 @@ export default function StorePartnerSettingsPage() {
               subtitle="Partner can update payout destination and Mauritius tax reference. KYC, commission, and settlement cycle are managed by PassPrive."
             >
               <div className="space-y-5">
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                  <div>
+                    KYC Status: <span className="font-semibold">{selectedKycStatus}</span>
+                  </div>
+                  {!canEditPayment ? (
+                    <div className="mt-1 text-xs text-amber-700">
+                      Payment details are locked until PassPrive verifies this store's KYC.
+                    </div>
+                  ) : null}
+                </div>
+
+                <fieldset disabled={!canEditPayment} className={!canEditPayment ? "opacity-60" : ""}>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <Field label="Legal Business Name *">
                     <input
@@ -869,12 +902,13 @@ export default function StorePartnerSettingsPage() {
                     className="min-h-[90px] w-full rounded-2xl border border-gray-200 bg-white px-3 py-3 text-sm outline-none focus:border-gray-300"
                   />
                 </Field>
+                </fieldset>
 
                 <div className="pt-4 border-t border-gray-200 flex justify-end">
                   <button
                     type="button"
                     onClick={handleSavePayment}
-                    disabled={!canSavePayment || savingPayment || !selectedStore}
+                    disabled={!canSavePayment || savingPayment || !selectedStore || !canEditPayment}
                     className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 disabled:opacity-60"
                     style={{
                       background:

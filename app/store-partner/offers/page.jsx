@@ -122,7 +122,7 @@ function normalizeMemberStores(rows) {
   return out;
 }
 
-function OfferCard({ offer, onDelete }) {
+function OfferCard({ offer, onDelete, onEdit }) {
   const isVisit = String(offer?.type || "").toUpperCase() === "VISIT";
   const isExpired = new Date(offer.end_at) < new Date();
 
@@ -153,6 +153,10 @@ function OfferCard({ offer, onDelete }) {
 
           {!isVisit && (
             <>
+              {(offer.description || offer.subtitle) && (
+                <div className="text-sm text-gray-600 mb-2">{offer.description || offer.subtitle}</div>
+              )}
+
               <div className="text-2xl font-bold text-orange-600 mb-2">
                 {offer.badge_text}
               </div>
@@ -198,6 +202,14 @@ function OfferCard({ offer, onDelete }) {
         </div>
 
         <div className="flex gap-2">
+          {!isVisit && onEdit ? (
+            <button
+              onClick={() => onEdit(offer)}
+              className="h-9 px-3 rounded-xl text-xs font-medium text-gray-700 hover:bg-gray-50 border border-gray-200 transition-colors"
+            >
+              Edit
+            </button>
+          ) : null}
           <button
             onClick={() => onDelete(offer.id, offer.store_id)}
             className="h-9 px-3 rounded-xl text-xs font-medium text-red-600 hover:bg-red-50 border border-red-200 transition-colors"
@@ -210,7 +222,7 @@ function OfferCard({ offer, onDelete }) {
   );
 }
 
-function OfferDisplay({ offers, onDelete }) {
+function OfferDisplay({ offers, onDelete, onEdit }) {
   const standardOffers = offers.filter((o) => String(o?.type || "").toUpperCase() !== "VISIT");
   const visitOffers = offers.filter((o) => String(o?.type || "").toUpperCase() === "VISIT");
 
@@ -220,7 +232,7 @@ function OfferDisplay({ offers, onDelete }) {
         <Card title="Your Offers" subtitle="Manage your created standard offers">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {standardOffers.map((offer) => (
-              <OfferCard key={`${offer.id}-${offer.store_id}`} offer={offer} onDelete={onDelete} />
+              <OfferCard key={`${offer.id}-${offer.store_id}`} offer={offer} onDelete={onDelete} onEdit={onEdit} />
             ))}
           </div>
         </Card>
@@ -230,7 +242,7 @@ function OfferDisplay({ offers, onDelete }) {
         <Card title="Digital Loyalty Stamps" subtitle="Your visit reward programs">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {visitOffers.map((offer) => (
-              <OfferCard key={`${offer.id}-${offer.store_id}`} offer={offer} onDelete={onDelete} />
+              <OfferCard key={`${offer.id}-${offer.store_id}`} offer={offer} onDelete={onDelete} onEdit={onEdit} />
             ))}
           </div>
         </Card>
@@ -281,6 +293,17 @@ function sanitizeNonNegative(v) {
   return String(n);
 }
 
+function toDateTimeLocalInput(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}T${pad(
+    local.getHours()
+  )}:${pad(local.getMinutes())}`;
+}
+
 export default function CreateOfferPage() {
   const router = useRouter();
 
@@ -299,6 +322,7 @@ export default function CreateOfferPage() {
   const [visitSelectedStoreIds, setVisitSelectedStoreIds] = useState([]);
 
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [discountType, setDiscountType] = useState("PERCENT");
   const [value, setValue] = useState("");
   const [minBill, setMinBill] = useState("");
@@ -306,6 +330,7 @@ export default function CreateOfferPage() {
   const [startAt, setStartAt] = useState("");
   const [endAt, setEndAt] = useState("");
   const [stackable, setStackable] = useState(false);
+  const [editingOfferId, setEditingOfferId] = useState(null);
   const [acceptedTerms, setAcceptedTerms] = useState(
     TERMS.reduce((acc, t) => ({ ...acc, [t.id]: false }), {})
   );
@@ -491,12 +516,15 @@ export default function CreateOfferPage() {
   const buildStandardOfferPayload = () => {
     const nValue = Number(value || 0);
     const nMinBill = minBill ? Number(minBill) : null;
+    const trimmedDescription = description.trim();
+    const offerId = editingOfferId || uid();
 
     return {
-      id: uid(),
+      id: offerId,
       type: "CUSTOM",
       title: title.trim(),
-      subtitle: null,
+      subtitle: trimmedDescription || null,
+      description: trimmedDescription || null,
       badge_text: discountType === "PERCENT" ? `${nValue}% OFF` : `MUR ${nValue} OFF`,
       value_type: discountType,
       percent: discountType === "PERCENT" ? nValue : null,
@@ -543,7 +571,9 @@ export default function CreateOfferPage() {
 
   const appendOfferAndUpdateStore = async (storeId, offer) => {
     const existing = await fetchStoreOffersById(storeId);
-    const nextOffers = [...existing, offer];
+    const nextOffers = existing.some((o) => String(o.id) === String(offer.id))
+      ? existing.map((o) => (String(o.id) === String(offer.id) ? offer : o))
+      : [...existing, offer];
 
     const { error } = await supabaseBrowser
       .from("stores")
@@ -580,7 +610,13 @@ export default function CreateOfferPage() {
       setOk("");
 
       const offer = buildStandardOfferPayload();
-      const targets = stores.filter((s) => effectiveStoreIds.includes(String(s.id)));
+      const targets = editingOfferId
+        ? stores.filter(
+            (s) =>
+              Array.isArray(s.offers) &&
+              s.offers.some((existingOffer) => String(existingOffer.id) === String(editingOfferId))
+          )
+        : stores.filter((s) => effectiveStoreIds.includes(String(s.id)));
 
       if (!targets.length) throw new Error("No stores selected.");
 
@@ -602,23 +638,33 @@ export default function CreateOfferPage() {
       setOffers((prev) => {
         const updated = [...prev];
         targets.forEach((store) => {
-          if (!updated.find((o) => o.id === offer.id && o.store_id === store.id)) {
-            updated.push({ ...offer, store_id: store.id, store_name: store.name });
-          }
+          const nextEntry = { ...offer, store_id: store.id, store_name: store.name };
+          const index = updated.findIndex(
+            (o) => String(o.id) === String(offer.id) && String(o.store_id) === String(store.id)
+          );
+
+          if (index >= 0) updated[index] = nextEntry;
+          else updated.push(nextEntry);
         });
         return updated;
       });
 
-      setOk(`Standard offer created for ${targets.length} store(s).`);
-      // Clear form after successful creation
+      setOk(
+        editingOfferId
+          ? `Standard offer updated for ${targets.length} store(s).`
+          : `Standard offer created for ${targets.length} store(s).`
+      );
+      // Clear form after successful save
       setTimeout(() => {
         setTitle("");
+        setDescription("");
         setValue("");
         setMinBill("");
         setCouponCode("");
         setStartAt("");
         setEndAt("");
         setStackable(false);
+        setEditingOfferId(null);
         setAcceptedTerms(TERMS.reduce((acc, t) => ({ ...acc, [t.id]: false }), {}));
       }, 500);
     } catch (e) {
@@ -707,6 +753,37 @@ export default function CreateOfferPage() {
     }
   };
 
+  const handleEditOffer = (offer) => {
+    if (!offer || String(offer.type || "").toUpperCase() === "VISIT") return;
+
+    const targetStoreIds = stores
+      .filter(
+        (s) =>
+          Array.isArray(s.offers) &&
+          s.offers.some((existingOffer) => String(existingOffer.id) === String(offer.id))
+      )
+      .map((s) => String(s.id));
+
+    setEditingOfferId(offer.id);
+    setTitle(offer.title || "");
+    setDescription(offer.description || offer.subtitle || "");
+    setDiscountType(offer.value_type || "PERCENT");
+    setValue(
+      offer.value_type === "FLAT"
+        ? String(offer.flat_amount ?? "")
+        : String(offer.percent ?? "")
+    );
+    setMinBill(offer.min_bill == null ? "" : String(offer.min_bill));
+    setCouponCode(offer.coupon_code || "");
+    setStartAt(toDateTimeLocalInput(offer.start_at));
+    setEndAt(toDateTimeLocalInput(offer.end_at));
+    setStackable(Boolean(offer.stackable));
+    setAcceptedTerms(TERMS.reduce((acc, t) => ({ ...acc, [t.id]: true }), {}));
+    setApplyAllStores(targetStoreIds.length > 1 && targetStoreIds.length === stores.length);
+    setSelectedStoreIds(targetStoreIds.length ? targetStoreIds : offer.store_id ? [String(offer.store_id)] : []);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   return (
     <div
       className="min-h-screen"
@@ -732,7 +809,7 @@ export default function CreateOfferPage() {
         ) : (
           <>
             <Card
-              title="Create Standard Offer"
+              title={editingOfferId ? "Edit Standard Offer" : "Create Standard Offer"}
               subtitle="This is your regular offer with title, validity, and conditions."
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -753,6 +830,16 @@ export default function CreateOfferPage() {
                     onChange={(e) => setTitle(e.target.value)}
                     className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
                     placeholder="Weekend Special"
+                  />
+                </Field>
+
+                <Field label="Description (optional)">
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-gray-300"
+                    placeholder="Short offer description"
+                    rows={3}
                   />
                 </Field>
 
@@ -842,6 +929,26 @@ export default function CreateOfferPage() {
               </div>
 
               <div className="mt-6 pt-4 border-t border-gray-200 flex justify-end">
+                {editingOfferId ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingOfferId(null);
+                      setTitle("");
+                      setDescription("");
+                      setValue("");
+                      setMinBill("");
+                      setCouponCode("");
+                      setStartAt("");
+                      setEndAt("");
+                      setStackable(false);
+                      setAcceptedTerms(TERMS.reduce((acc, t) => ({ ...acc, [t.id]: false }), {}));
+                    }}
+                    className="h-10 rounded-full px-4 text-sm font-semibold text-gray-700 inline-flex items-center gap-2 border border-gray-200 bg-white mr-3"
+                  >
+                    Cancel edit
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={handleSubmitStandard}
@@ -850,7 +957,7 @@ export default function CreateOfferPage() {
                   style={{ background: "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)" }}
                 >
                   {savingStandard ? <Loader2 className="h-4 w-4 animate-spin" /> : <Tag className="h-4 w-4" />}
-                  Create Standard Offer
+                  {editingOfferId ? "Update Standard Offer" : "Create Standard Offer"}
                 </button>
               </div>
             </Card>
@@ -989,7 +1096,7 @@ export default function CreateOfferPage() {
               </div>
             </Card>
 
-            <OfferDisplay offers={offers} onDelete={handleDeleteOffer} />
+            <OfferDisplay offers={offers} onDelete={handleDeleteOffer} onEdit={handleEditOffer} />
           </>
         )}
       </div>

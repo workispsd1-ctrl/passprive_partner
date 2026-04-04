@@ -10,6 +10,7 @@ const TITLE_BY_ROUTE = [
   { prefix: "/store-partner/all-stores", title: "My Stores" },
   { prefix: "/store-partner/pickup-orders", title: "Pickup Orders" },
   { prefix: "/store-partner/payment-orders", title: "Payment Orders" },
+  { prefix: "/store-partner/transactions", title: "Transactions" },
   { prefix: "/store-partner/offers", title: "Offers" },
   { prefix: "/store-partner/catalogue", title: "Catalogue" },
   { prefix: "/store-partner/inventory", title: "Inventory" },

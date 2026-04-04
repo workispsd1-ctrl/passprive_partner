@@ -74,14 +74,15 @@ function Input({ value, onChange, placeholder, type = "text", disabled = false }
   );
 }
 
-function Textarea({ value, onChange, placeholder, rows = 4 }) {
+function Textarea({ value, onChange, placeholder, rows = 4, disabled = false }) {
   return (
     <textarea
       value={value ?? ""}
       rows={rows}
+      disabled={disabled}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
+      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-60"
     />
   );
 }
@@ -210,6 +211,33 @@ function safeNum(v, fallback = "") {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function normalizeInput(v) {
+  return String(v || "").replace(/\s+/g, " ").trim();
+}
+
+function asText(v) {
+  const t = normalizeInput(v);
+  return t || null;
+}
+
+const PAYMENT_DEFAULTS = {
+  legal_business_name: "",
+  display_name_on_invoice: "",
+  payout_method: "BANK_TRANSFER",
+  beneficiary_name: "",
+  bank_name: "",
+  account_number: "",
+  ifsc: "",
+  iban: "",
+  swift: "",
+  payout_upi_id: "",
+  tax_id_label: "VAT",
+  tax_id_value: "",
+  billing_email: "",
+  billing_phone: "",
+  notes: "",
+};
+
 /* =========================================================
    Storage (same idea as your AddRestaurantPage)
    Bucket name you are already using: "restaurants"
@@ -335,6 +363,11 @@ export default function Page() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  // Payment
+  const [paymentDetails, setPaymentDetails] = useState(null);
+  const [paymentForm, setPaymentForm] = useState(PAYMENT_DEFAULTS);
+  const [savingPayment, setSavingPayment] = useState(false);
+
   // Toast
   const [toast, setToast] = useState({ show: false, tone: "slate", title: "", desc: "" });
 
@@ -412,6 +445,21 @@ export default function Page() {
     setFoodUrls(Array.isArray(data.food_images) ? data.food_images : []);
     setAmbienceUrls(Array.isArray(data.ambience_images) ? data.ambience_images : []);
 
+    const paymentRes = await supabaseBrowser
+      .from("restaurant_payment_details")
+      .select("*")
+      .eq("restaurant_id", data.id)
+      .maybeSingle();
+
+    if (paymentRes.error) {
+      showToast("rose", "Payment load failed", paymentRes.error.message || "Failed to load payment details.");
+      setPaymentDetails(null);
+      hydratePaymentForm(null, setPaymentForm, data.name, data.phone);
+    } else {
+      setPaymentDetails(paymentRes.data || null);
+      hydratePaymentForm(paymentRes.data || null, setPaymentForm, data.name, data.phone);
+    }
+
     // reset pending files
     setNewFoodFiles([]);
     setNewAmbFiles([]);
@@ -473,6 +521,30 @@ export default function Page() {
     newCoverFile,
   ]);
 
+  const kycStatus = useMemo(
+    () => String(paymentDetails?.kyc_status || "NOT_STARTED").toUpperCase(),
+    [paymentDetails]
+  );
+
+  const canEditPayment = useMemo(() => {
+    if (!restaurantId) return false;
+    if (!paymentDetails) return true;
+    return kycStatus === "VERIFIED";
+  }, [restaurantId, paymentDetails, kycStatus]);
+
+  const canSavePayment = useMemo(() => {
+    if (!canEditPayment) return false;
+    if (!paymentForm.legal_business_name.trim()) return false;
+    if (!paymentForm.payout_method) return false;
+    if (paymentForm.payout_method === "UPI" && !paymentForm.payout_upi_id.trim()) return false;
+    if (
+      paymentForm.payout_method === "BANK_TRANSFER" &&
+      (!paymentForm.account_number.trim() || !paymentForm.beneficiary_name.trim())
+    )
+      return false;
+    return true;
+  }, [canEditPayment, paymentForm]);
+
   async function saveRestaurantUpdates(partialUpdates) {
     if (!restaurantId) return;
     const { data, error } = await supabaseBrowser
@@ -491,6 +563,58 @@ export default function Page() {
     setFoodUrls(Array.isArray(data.food_images) ? data.food_images : []);
     setAmbienceUrls(Array.isArray(data.ambience_images) ? data.ambience_images : []);
     setCoverImage(data.cover_image || "");
+  }
+
+  async function handleSavePayment() {
+    if (!restaurantId || savingPayment) return;
+    if (!canEditPayment) {
+      showToast("rose", "Update blocked", "Payment details can be updated only when KYC is VERIFIED.");
+      return;
+    }
+    if (!canSavePayment) {
+      showToast("rose", "Missing fields", "Please complete required payment details before saving.");
+      return;
+    }
+
+    setSavingPayment(true);
+    try {
+      const payload = {
+        restaurant_id: restaurantId,
+        legal_business_name: normalizeInput(paymentForm.legal_business_name),
+        display_name_on_invoice: asText(paymentForm.display_name_on_invoice),
+        payout_method: paymentForm.payout_method,
+        beneficiary_name: asText(paymentForm.beneficiary_name),
+        bank_name: asText(paymentForm.bank_name),
+        account_number: asText(paymentForm.account_number),
+        ifsc: asText(paymentForm.ifsc),
+        iban: asText(paymentForm.iban),
+        swift: asText(paymentForm.swift),
+        payout_upi_id: asText(paymentForm.payout_upi_id),
+        settlement_cycle: paymentDetails?.settlement_cycle || "T+1",
+        currency: paymentDetails?.currency || "MUR",
+        tax_id_label: paymentForm.tax_id_label || "VAT",
+        tax_id_value: asText(paymentForm.tax_id_value),
+        billing_email: asText(paymentForm.billing_email),
+        billing_phone: asText(paymentForm.billing_phone),
+        notes: asText(paymentForm.notes),
+      };
+
+      const { data, error } = await supabaseBrowser
+        .from("restaurant_payment_details")
+        .upsert(payload, { onConflict: "restaurant_id" })
+        .select("*")
+        .single();
+
+      if (error) throw error;
+
+      setPaymentDetails(data || null);
+      hydratePaymentForm(data, setPaymentForm, name, phone);
+      showToast("emerald", "Payment saved", "Restaurant payment details updated.");
+    } catch (e) {
+      showToast("rose", "Payment save failed", e?.message || "Could not update payment details.");
+    } finally {
+      setSavingPayment(false);
+    }
   }
 
   async function onSaveAll() {
@@ -828,6 +952,187 @@ export default function Page() {
           </div>
         </Section>
 
+        <Section
+          title="Payment & payout details"
+          subtitle="Update payout destination and billing details. Editing is locked unless KYC is VERIFIED."
+          right={<Badge tone={kycStatus === "VERIFIED" ? "emerald" : "amber"}>KYC: {kycStatus}</Badge>}
+        >
+          {!canEditPayment ? (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Payment details are locked. PassPrive must set KYC status to VERIFIED before any update.
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div>
+              <Label>Legal business name *</Label>
+              <Input
+                value={paymentForm.legal_business_name}
+                onChange={(v) => setPaymentForm((p) => ({ ...p, legal_business_name: v }))}
+                placeholder="Registered legal entity name"
+                disabled={!canEditPayment}
+              />
+            </div>
+
+            <div>
+              <Label>Display name on invoice</Label>
+              <Input
+                value={paymentForm.display_name_on_invoice}
+                onChange={(v) => setPaymentForm((p) => ({ ...p, display_name_on_invoice: v }))}
+                placeholder="Billing display name"
+                disabled={!canEditPayment}
+              />
+            </div>
+
+            <div>
+              <Label>Payout method *</Label>
+              <select
+                value={paymentForm.payout_method}
+                onChange={(e) => setPaymentForm((p) => ({ ...p, payout_method: e.target.value }))}
+                disabled={!canEditPayment}
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-60"
+              >
+                <option value="BANK_TRANSFER">BANK_TRANSFER</option>
+                <option value="UPI">UPI</option>
+                <option value="MANUAL">MANUAL</option>
+              </select>
+            </div>
+
+            <div>
+              <Label>Beneficiary name</Label>
+              <Input
+                value={paymentForm.beneficiary_name}
+                onChange={(v) => setPaymentForm((p) => ({ ...p, beneficiary_name: v }))}
+                placeholder="Account holder name"
+                disabled={!canEditPayment}
+              />
+            </div>
+
+            <div>
+              <Label>Bank name</Label>
+              <Input
+                value={paymentForm.bank_name}
+                onChange={(v) => setPaymentForm((p) => ({ ...p, bank_name: v }))}
+                placeholder="Bank"
+                disabled={!canEditPayment}
+              />
+            </div>
+
+            <div>
+              <Label>Account number</Label>
+              <Input
+                value={paymentForm.account_number}
+                onChange={(v) => setPaymentForm((p) => ({ ...p, account_number: v }))}
+                placeholder="Account number"
+                disabled={!canEditPayment}
+              />
+            </div>
+
+            <div>
+              <Label>IFSC</Label>
+              <Input
+                value={paymentForm.ifsc}
+                onChange={(v) => setPaymentForm((p) => ({ ...p, ifsc: v }))}
+                placeholder="IFSC"
+                disabled={!canEditPayment}
+              />
+            </div>
+
+            <div>
+              <Label>IBAN</Label>
+              <Input
+                value={paymentForm.iban}
+                onChange={(v) => setPaymentForm((p) => ({ ...p, iban: v }))}
+                placeholder="IBAN"
+                disabled={!canEditPayment}
+              />
+            </div>
+
+            <div>
+              <Label>SWIFT</Label>
+              <Input
+                value={paymentForm.swift}
+                onChange={(v) => setPaymentForm((p) => ({ ...p, swift: v }))}
+                placeholder="SWIFT"
+                disabled={!canEditPayment}
+              />
+            </div>
+
+            <div>
+              <Label>Payout UPI ID</Label>
+              <Input
+                value={paymentForm.payout_upi_id}
+                onChange={(v) => setPaymentForm((p) => ({ ...p, payout_upi_id: v }))}
+                placeholder="name@upi"
+                disabled={!canEditPayment}
+              />
+            </div>
+
+            <div>
+              <Label>Tax label</Label>
+              <select
+                value={paymentForm.tax_id_label}
+                onChange={(e) => setPaymentForm((p) => ({ ...p, tax_id_label: e.target.value }))}
+                disabled={!canEditPayment}
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-60"
+              >
+                <option value="VAT">VAT</option>
+                <option value="GST">GST</option>
+                <option value="BRN">BRN</option>
+                <option value="TIN">TIN</option>
+                <option value="OTHER">OTHER</option>
+              </select>
+            </div>
+
+            <div>
+              <Label>Tax ID value</Label>
+              <Input
+                value={paymentForm.tax_id_value}
+                onChange={(v) => setPaymentForm((p) => ({ ...p, tax_id_value: v }))}
+                placeholder="Tax number"
+                disabled={!canEditPayment}
+              />
+            </div>
+
+            <div>
+              <Label>Billing email</Label>
+              <Input
+                value={paymentForm.billing_email}
+                onChange={(v) => setPaymentForm((p) => ({ ...p, billing_email: v }))}
+                placeholder="billing@example.com"
+                disabled={!canEditPayment}
+              />
+            </div>
+
+            <div>
+              <Label>Billing phone</Label>
+              <Input
+                value={paymentForm.billing_phone}
+                onChange={(v) => setPaymentForm((p) => ({ ...p, billing_phone: v }))}
+                placeholder="+230 ..."
+                disabled={!canEditPayment}
+              />
+            </div>
+          </div>
+
+          <div className="mt-5">
+            <Label>Notes</Label>
+            <Textarea
+              value={paymentForm.notes}
+              onChange={(v) => setPaymentForm((p) => ({ ...p, notes: v }))}
+              placeholder="Internal payout notes"
+              rows={3}
+              disabled={!canEditPayment}
+            />
+          </div>
+
+          <div className="mt-6 flex items-center justify-end">
+            <PrimaryButton onClick={handleSavePayment} disabled={savingPayment || !canSavePayment}>
+              {savingPayment ? "Saving..." : "Save payment details"}
+            </PrimaryButton>
+          </div>
+        </Section>
+
         {/* 5) Security */}
         <Section title="Security" subtitle="Change your login password (Supabase Auth)" right={<Badge tone="slate">Private</Badge>}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -858,6 +1163,37 @@ export default function Page() {
       </div>
     </div>
   );
+}
+
+function hydratePaymentForm(payment, setPaymentForm, restaurantName, restaurantPhone) {
+  if (!payment) {
+    setPaymentForm({
+      ...PAYMENT_DEFAULTS,
+      legal_business_name: restaurantName || "",
+      display_name_on_invoice: restaurantName || "",
+      billing_phone: restaurantPhone || "",
+      tax_id_label: "VAT",
+    });
+    return;
+  }
+
+  setPaymentForm({
+    legal_business_name: payment?.legal_business_name || "",
+    display_name_on_invoice: payment?.display_name_on_invoice || "",
+    payout_method: payment?.payout_method || "BANK_TRANSFER",
+    beneficiary_name: payment?.beneficiary_name || "",
+    bank_name: payment?.bank_name || "",
+    account_number: payment?.account_number || "",
+    ifsc: payment?.ifsc || "",
+    iban: payment?.iban || "",
+    swift: payment?.swift || "",
+    payout_upi_id: payment?.payout_upi_id || "",
+    tax_id_label: payment?.tax_id_label || "VAT",
+    tax_id_value: payment?.tax_id_value || "",
+    billing_email: payment?.billing_email || "",
+    billing_phone: payment?.billing_phone || "",
+    notes: payment?.notes || "",
+  });
 }
 
 /* =========================================================

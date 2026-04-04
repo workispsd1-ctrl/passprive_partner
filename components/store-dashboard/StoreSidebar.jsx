@@ -19,6 +19,7 @@ import {
   Check,
   Crown,
   CreditCard,
+  ReceiptText,
   Package,
   ArrowUpRight,
 } from "lucide-react";
@@ -35,6 +36,7 @@ const baseNav = [
   { label: "Dashboard", href: "/store-partner/dashboard", icon: LayoutDashboard },
   { label: "Pickup Orders", href: "/store-partner/pickup-orders", icon: ShoppingCart, key: "pickup-orders", premium: true },
   { label: "Payment Orders", href: "/store-partner/payment-orders", icon: CreditCard, key: "payment-orders" },
+  { label: "Transactions", href: "/store-partner/transactions", icon: ReceiptText },
   { label: "Catalogue", href: "/store-partner/catalogue", icon: Boxes, key: "pickup-catalogue", dynamicLabel: true },
   { label: "Inventory", href: "/store-partner/inventory", icon: Package, key: "inventory", premium: true },
   { label: "My Stores", href: "/store-partner/all-stores", icon: Store },

@@ -149,6 +149,7 @@ const EMPTY_OFFER = (kind = OFFER_KIND.GENERAL) => ({
   id: uid(),
   offerKind: kind,
   title: "",
+  description: "",
   promoCode: "",
   discountType: "PERCENT",
   discountValue: "",
@@ -227,6 +228,7 @@ function sanitizeOffer(o) {
       visitRewards: { enabled: true, tiers },
       isActive: true,
       title: "",
+      description: "",
       promoCode: "",
       discountType: "",
       discountValue: "",
@@ -249,6 +251,7 @@ function sanitizeOffer(o) {
       id: o.id || uid(),
       offerKind: OFFER_KIND.DISH,
       title: String(o.title || "").trim(),
+      description: String(o.description || "").trim(),
       promoCode: String(o.promoCode || "").toUpperCase(),
       discountType: o.discountType || "PERCENT",
       discountValue,
@@ -272,6 +275,7 @@ function sanitizeOffer(o) {
   return {
     ...o,
     offerKind: kind,
+    description: String(o.description || "").trim(),
     promoCode: String(o.promoCode || "").toUpperCase(),
     discountValue,
     isActive: Boolean(o.isActive),
@@ -296,6 +300,7 @@ function normalizeOneOffer(o) {
       id: o.id || uid(),
       offerKind: OFFER_KIND.VISIT,
       title: "",
+      description: "",
       promoCode: "",
       discountType: "",
       discountValue: "",
@@ -316,6 +321,7 @@ function normalizeOneOffer(o) {
       id: o.id || uid(),
       offerKind: OFFER_KIND.DISH,
       title: o.title || "",
+      description: o.description || "",
       promoCode: (o.promoCode || "").toUpperCase(),
       discountType: o.discountType || "PERCENT",
       discountValue: o.discountValue ?? "",
@@ -340,6 +346,7 @@ function normalizeOneOffer(o) {
     id: o.id || uid(),
     offerKind,
     title: o.title || "",
+    description: o.description || "",
     promoCode: (o.promoCode || "").toUpperCase(),
     discountType: o.discountType || "PERCENT",
     discountValue: o.discountValue ?? "",
@@ -699,6 +706,7 @@ export default function OffersPage() {
         ...found,
         offerKind: OFFER_KIND.VISIT,
         title: "",
+        description: "",
         promoCode: "",
         startDate: "",
         endDate: "",
@@ -985,6 +993,7 @@ export default function OffersPage() {
                     </div>
 
                     <p className="text-xs text-slate-500 mt-1">{formatOfferLine(o)}</p>
+                    {!isVisit && o.description ? <p className="text-xs text-slate-600 mt-1">{o.description}</p> : null}
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -1293,6 +1302,17 @@ export default function OffersPage() {
                         className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm font-mono outline-none focus:ring-2 focus:ring-slate-200"
                       />
                     </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-slate-600 mb-2">Description (optional)</p>
+                    <textarea
+                      placeholder="e.g. Valid on selected menu items only"
+                      value={formOffer.description || ""}
+                      onChange={(e) => setFormOffer({ ...formOffer, description: e.target.value })}
+                      className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
+                      rows={3}
+                    />
                   </div>
 
                   {isDishForm && (

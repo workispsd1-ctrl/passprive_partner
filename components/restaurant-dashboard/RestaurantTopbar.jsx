@@ -19,6 +19,7 @@ const TITLE_MAP = {
   "/restaurant/offers": "Offers",
   "/restaurant/reviews": "Reviews",
   "/restaurant/analytics": "Analytics",
+  "/restaurant/transactions": "Transactions",
   "/restaurant/payouts": "Payouts",
   "/restaurant/settings": "Settings",
   "/restaurant/orders": "Orders",
