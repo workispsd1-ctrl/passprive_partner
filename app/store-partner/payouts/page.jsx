@@ -1,54 +1,166 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Wallet,
-  Download,
-  Search,
-  SlidersHorizontal,
+  Building2,
   CheckCircle2,
-  Clock3,
-  Loader2,
-  CalendarClock,
   CircleDollarSign,
-  Store,
-  X,
+  CreditCard,
+  Download,
+  Landmark,
+  Loader2,
   ReceiptText,
+  RefreshCw,
+  Search,
+  Wallet,
+  X,
 } from "lucide-react";
+import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { useStores } from "@/lib/store-partner/useStores";
 
-function CardShell({ title, right, children }) {
+const THEME_ACCENT = "#771FA8";
+const THEME_ACCENT_SOFT = "rgba(119, 31, 168, 0.12)";
+const THEME_BORDER = "rgba(119, 31, 168, 0.18)";
+const SUCCESS_STATUSES = new Set(["VERIFIED_SUCCESS", "FINALIZED"]);
+const CANCELLED_STATUSES = new Set(["CANCELLED"]);
+const IN_TRANSIT_PAYOUT_STATUSES = new Set(["REQUESTED", "PENDING", "PROCESSING", "APPROVED"]);
+const PAID_PAYOUT_STATUSES = new Set(["PAID"]);
+
+function formatMoney(value) {
+  return Number(value || 0).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function amountNode(value, strong = false) {
   return (
-    <div className="rounded-3xl border border-gray-200 bg-white shadow-sm">
-      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-        <div className="font-semibold text-gray-900">{title}</div>
-        {right ? <div>{right}</div> : null}
-      </div>
-      <div className="p-6">{children}</div>
-    </div>
+    <span className="inline-flex items-baseline gap-1">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">MUR</span>
+      <span className={strong ? "text-2xl font-bold text-slate-900" : "font-semibold text-slate-900"}>
+        {formatMoney(value)}
+      </span>
+    </span>
   );
 }
 
-function StatMini({ title, value, icon: Icon, tone = "slate", helper = "" }) {
-  const toneMap = {
-    slate: "bg-slate-50 text-slate-700 border-slate-200",
-    orange: "bg-orange-50 text-orange-700 border-orange-200",
-    emerald: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    indigo: "bg-indigo-50 text-indigo-700 border-indigo-200",
-  };
+function toCsvCell(value) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function asNumber(value) {
+  const n = Number(value || 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function getSessionStatus(row) {
+  return String(row?.status || row?.gateway_status || "").toUpperCase();
+}
+
+function isSuccessfulSession(row) {
+  return SUCCESS_STATUSES.has(getSessionStatus(row));
+}
+
+function isCancelledSession(row) {
+  return CANCELLED_STATUSES.has(getSessionStatus(row));
+}
+
+function getSessionTimestamp(row) {
+  return row?.verified_at || row?.created_at || null;
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return parsed.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function maskAccount(value) {
+  const clean = String(value || "").trim();
+  if (!clean) return "Not added";
+  if (clean.length <= 4) return clean;
+  return `•••• ${clean.slice(-4)}`;
+}
+
+function payoutStatusTone(status) {
+  const normalized = String(status || "").toUpperCase();
+  if (PAID_PAYOUT_STATUSES.has(normalized)) {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (IN_TRANSIT_PAYOUT_STATUSES.has(normalized)) {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (["FAILED", "REJECTED", "ON_HOLD", "CANCELLED"].includes(normalized)) {
+    return "border-red-200 bg-red-50 text-red-700";
+  }
+  return "border-slate-200 bg-slate-50 text-slate-700";
+}
+
+function paymentStatusTone(status) {
+  const normalized = String(status || "").toUpperCase();
+  if (normalized === "PAID") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (normalized === "CANCELLED") return "border-red-200 bg-red-50 text-red-700";
+  return "border-slate-200 bg-slate-50 text-slate-700";
+}
+
+function StatusPill({ status, tone = "payout" }) {
+  const cls = tone === "payment" ? paymentStatusTone(status) : payoutStatusTone(status);
+  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${cls}`}>{status}</span>;
+}
+
+function Card({ title, subtitle, right, children }) {
+  return (
+    <section className="rounded-[30px] border bg-white shadow-sm" style={{ borderColor: THEME_BORDER }}>
+      <div className="flex flex-col gap-3 border-b px-6 py-5 md:flex-row md:items-center md:justify-between" style={{ borderColor: THEME_BORDER }}>
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+          {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
+        </div>
+        {right ? <div>{right}</div> : null}
+      </div>
+      <div className="p-6">{children}</div>
+    </section>
+  );
+}
+
+function StatCard({ label, value, helper, icon: Icon, accent = "purple" }) {
+  const iconStyle =
+    accent === "green"
+      ? {
+          background: "rgba(16, 185, 129, 0.10)",
+          color: "#047857",
+          borderColor: "rgba(16, 185, 129, 0.18)",
+        }
+      : accent === "amber"
+      ? {
+          background: "rgba(245, 158, 11, 0.12)",
+          color: "#B45309",
+          borderColor: "rgba(245, 158, 11, 0.18)",
+        }
+      : {
+          background: THEME_ACCENT_SOFT,
+          color: THEME_ACCENT,
+          borderColor: THEME_BORDER,
+        };
 
   return (
-    <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-xs text-gray-500">{title}</div>
-          <div className="mt-1 text-2xl font-bold text-gray-900">{value}</div>
-          {helper ? <div className="text-[11px] text-gray-500 mt-1">{helper}</div> : null}
+    <div className="rounded-[28px] border bg-white p-5 shadow-sm" style={{ borderColor: THEME_BORDER }}>
+      <div className="flex min-h-[128px] items-start justify-between gap-4">
+        <div className="flex min-h-[128px] flex-1 flex-col">
+          <div className="min-h-[52px] text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</div>
+          <div className="mt-3 flex min-h-[56px] items-end">{value}</div>
+          {helper ? <div className="mt-2 text-sm text-slate-600">{helper}</div> : null}
         </div>
         <div
-          className={`h-11 w-11 rounded-2xl border flex items-center justify-center ${
-            toneMap[tone] || toneMap.slate
-          }`}
+          className="mt-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border"
+          style={iconStyle}
         >
           <Icon className="h-5 w-5" />
         </div>
@@ -57,59 +169,14 @@ function StatMini({ title, value, icon: Icon, tone = "slate", helper = "" }) {
   );
 }
 
-function Amount({ value, className = "", valueClassName = "", currencyClassName = "" }) {
-  const n = Number(value || 0);
-  const num = n.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-
+function EmptyState({ icon: Icon, title, body }) {
   return (
-    <span className={className}>
-      <span className={currencyClassName || "text-[10px] font-semibold uppercase tracking-wide text-gray-500"}>
-        MUR
-      </span>{" "}
-      <span className={valueClassName || "font-semibold text-gray-900"}>{num}</span>
-    </span>
-  );
-}
-
-function StatusPill({ status }) {
-  const s = String(status || "").toLowerCase();
-  const cls =
-    s === "paid" || s === "approved" || s === "verified"
-      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-      : s === "processing" || s === "scheduled" || s === "requested" || s === "pending"
-      ? "bg-amber-50 text-amber-700 border-amber-200"
-      : s === "failed" || s === "rejected" || s === "on hold" || s === "not_started"
-      ? "bg-red-50 text-red-700 border-red-200"
-      : "bg-gray-50 text-gray-700 border-gray-200";
-
-  return (
-    <span className={`px-2 py-1 rounded-lg border text-xs font-medium ${cls}`}>
-      {status}
-    </span>
-  );
-}
-
-function SkeletonBlock({ className = "" }) {
-  return <div className={`animate-pulse rounded-2xl bg-gray-100 border border-gray-200 ${className}`} />;
-}
-
-function SkeletonRow() {
-  return (
-    <div className="flex items-center justify-between gap-4 py-3 border-t border-gray-100 animate-pulse">
-      <div className="flex items-center gap-3 w-full">
-        <SkeletonBlock className="h-10 w-10" />
-        <div className="space-y-2 w-full">
-          <SkeletonBlock className="h-4 w-40" />
-          <SkeletonBlock className="h-3 w-28" />
-        </div>
+    <div className="rounded-[28px] border border-dashed p-10 text-center" style={{ borderColor: THEME_BORDER, background: "rgba(248,250,252,0.7)" }}>
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[20px]" style={{ background: THEME_ACCENT_SOFT, color: THEME_ACCENT }}>
+        <Icon className="h-6 w-6" />
       </div>
-      <SkeletonBlock className="h-6 w-20" />
-      <SkeletonBlock className="h-6 w-24" />
-      <SkeletonBlock className="h-6 w-20" />
-      <SkeletonBlock className="h-6 w-20" />
+      <div className="mt-4 text-lg font-semibold text-slate-900">{title}</div>
+      <div className="mt-2 text-sm text-slate-600">{body}</div>
     </div>
   );
 }
@@ -120,105 +187,108 @@ function RequestPayoutModal({
   onConfirm,
   requesting,
   storeName,
-  amount,
+  maxAmount,
+  customAmount,
+  onCustomAmountChange,
   method,
-  kyc,
-  cycle,
-  onlineCollected,
-  commissionDue,
-  toPassPrive,
+  gross,
+  paidOut,
+  inTransit,
 }) {
   if (!open) return null;
+  const safeCustomAmount = typeof customAmount === "string" ? customAmount : String(customAmount ?? "");
+  const enteredAmount = asNumber(safeCustomAmount);
+  const isInvalidAmount = enteredAmount <= 0 || enteredAmount > maxAmount;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-2xl rounded-3xl border border-gray-200 bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+      <div className="w-full max-w-2xl rounded-[32px] border bg-white shadow-2xl" style={{ borderColor: THEME_BORDER }}>
+        <div className="flex items-center justify-between border-b px-6 py-5" style={{ borderColor: THEME_BORDER }}>
           <div>
-            <div className="text-sm font-semibold text-gray-900">Confirm Payout Request</div>
-            <div className="text-xs text-gray-500 mt-1">Review details before sending to PassPrive.</div>
+            <h3 className="text-lg font-semibold text-slate-900">Confirm payout request</h3>
+            <p className="mt-1 text-sm text-slate-500">Review the settlement details before sending this request.</p>
           </div>
           <button
             type="button"
             onClick={onClose}
             disabled={requesting}
-            className="h-9 w-9 rounded-xl border border-gray-200 inline-flex items-center justify-center text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border text-slate-600 disabled:opacity-60"
+            style={{ borderColor: THEME_BORDER }}
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
-          <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
-            <div className="text-xs text-orange-700">Amount You Are Requesting</div>
-            <div className="mt-1">
-              <Amount
-                value={amount}
-                className="inline-flex items-baseline gap-1"
-                currencyClassName="text-xs font-semibold uppercase tracking-wide text-orange-700"
-                valueClassName="text-2xl font-bold text-orange-900"
+        <div className="space-y-4 px-6 py-5">
+          <div className="rounded-[24px] p-5" style={{ background: "rgba(119, 31, 168, 0.08)" }}>
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[#771FA8]">Request amount</div>
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-[#771FA8]">MUR</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                max={maxAmount || undefined}
+                value={safeCustomAmount}
+                onChange={(e) => onCustomAmountChange(e.target.value)}
+                inputMode="decimal"
+                className="h-12 w-full appearance-none rounded-2xl border border-[rgba(119,31,168,0.18)] bg-white/90 px-4 text-2xl font-bold text-[#5B1685] outline-none [moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
             </div>
+            <div className="mt-2 text-xs text-slate-500">Maximum available: MUR {formatMoney(maxAmount)}</div>
+            {isInvalidAmount ? (
+              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                Enter an amount greater than 0 and not more than the total payout amount.
+              </div>
+            ) : null}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-              <div className="text-xs text-gray-500">Store</div>
-              <div className="mt-1 text-sm font-semibold text-gray-900">{storeName || "-"}</div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-2xl border bg-slate-50 p-4" style={{ borderColor: THEME_BORDER }}>
+              <div className="text-xs text-slate-500">Store</div>
+              <div className="mt-1 text-sm font-semibold text-slate-900">{storeName || "-"}</div>
             </div>
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-              <div className="text-xs text-gray-500">Payout Method</div>
-              <div className="mt-1 text-sm font-semibold text-gray-900">{method || "-"}</div>
-            </div>
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-              <div className="text-xs text-gray-500">KYC</div>
-              <div className="mt-1">
-                <StatusPill status={kyc || "NOT_STARTED"} />
-              </div>
-            </div>
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-              <div className="text-xs text-gray-500">Settlement Cycle</div>
-              <div className="mt-1 text-sm font-semibold text-gray-900">{cycle || "-"}</div>
+            <div className="rounded-2xl border bg-slate-50 p-4" style={{ borderColor: THEME_BORDER }}>
+              <div className="text-xs text-slate-500">Payout method</div>
+              <div className="mt-1 text-sm font-semibold text-slate-900">{method || "-"}</div>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-200 bg-white p-4">
-            <div className="text-xs font-semibold text-gray-700 mb-3">Settlement Breakdown</div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                <div className="text-[11px] text-gray-500">Online Collected</div>
-                <div className="mt-1 text-sm font-semibold text-gray-900">MUR {formatMoney(onlineCollected)}</div>
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                <div className="text-[11px] text-gray-500">Commission Due</div>
-                <div className="mt-1 text-sm font-semibold text-gray-900">MUR {formatMoney(commissionDue)}</div>
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                <div className="text-[11px] text-gray-500">You Owe PassPrive</div>
-                <div className="mt-1 text-sm font-semibold text-gray-900">MUR {formatMoney(toPassPrive)}</div>
-              </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-2xl border bg-white p-4" style={{ borderColor: THEME_BORDER }}>
+              <div className="text-xs text-slate-500">Gross collected</div>
+              <div className="mt-2 text-sm font-semibold text-slate-900">MUR {formatMoney(gross)}</div>
+            </div>
+            <div className="rounded-2xl border bg-white p-4" style={{ borderColor: THEME_BORDER }}>
+              <div className="text-xs text-slate-500">Already paid out</div>
+              <div className="mt-2 text-sm font-semibold text-slate-900">MUR {formatMoney(paidOut)}</div>
+            </div>
+            <div className="rounded-2xl border bg-white p-4" style={{ borderColor: THEME_BORDER }}>
+              <div className="text-xs text-slate-500">In transit</div>
+              <div className="mt-2 text-sm font-semibold text-slate-900">MUR {formatMoney(inTransit)}</div>
             </div>
           </div>
         </div>
 
-        <div className="border-t border-gray-200 px-6 py-4 flex items-center justify-end gap-2">
+        <div className="flex items-center justify-end gap-3 border-t px-6 py-5" style={{ borderColor: THEME_BORDER }}>
           <button
             type="button"
             onClick={onClose}
             disabled={requesting}
-            className="h-10 rounded-full border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+            className="rounded-full border px-5 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-60"
+            style={{ borderColor: THEME_BORDER }}
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            disabled={requesting}
-            className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 shadow-lg shadow-orange-200 disabled:opacity-60"
-            style={{ background: "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)" }}
+            disabled={requesting || isInvalidAmount}
+            className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            style={{ background: THEME_ACCENT, boxShadow: "0 12px 24px rgba(119, 31, 168, 0.24)" }}
           >
             {requesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CircleDollarSign className="h-4 w-4" />}
-            {requesting ? "Sending..." : "Confirm Request"}
+            {requesting ? "Sending..." : "Confirm request"}
           </button>
         </div>
       </div>
@@ -226,67 +296,34 @@ function RequestPayoutModal({
   );
 }
 
-function toCsvCell(value) {
-  const safe = String(value ?? "").replace(/"/g, '""');
-  return `"${safe}"`;
-}
-
-function formatDateTime(dateStr) {
-  if (!dateStr) return "-";
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return String(dateStr);
-  return d.toLocaleString();
-}
-
-function formatMoney(value) {
-  return Number(value || 0).toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
-function isCashMethod(paymentMethod) {
-  const p = String(paymentMethod || "").toUpperCase();
-  return p === "COD" || p === "CASH";
-}
-
-function isValidOrderForSettlement(order) {
-  const status = String(order?.status || "").toUpperCase();
-  const paymentStatus = String(order?.payment_status || "").toUpperCase();
-
-  if (status === "CANCELLED" || status === "REJECTED") return false;
-  if (paymentStatus === "FAILED" || paymentStatus === "REFUNDED") return false;
-  return true;
-}
-
 function isSchemaError(error) {
   const msg = String(error?.message || "").toLowerCase();
   return msg.includes("does not exist") || msg.includes("relation") || msg.includes("column");
 }
 
-async function loadPayoutRequests(userId, storeIds) {
-  const ids = (storeIds || []).map((id) => String(id));
+async function loadPayoutRequests(userId, storeId) {
+  if (!userId || !storeId) return [];
+
   const { data, error } = await supabaseBrowser
     .from("partner_payout_requests")
     .select("id,store_id,status,requested_amount,method,requested_at,created_at,processed_at,paid_at,reference_no,notes")
     .eq("user_id", userId)
+    .eq("store_id", storeId)
     .order("created_at", { ascending: false })
-    .limit(50);
+    .limit(100);
 
   if (error && isSchemaError(error)) return [];
   if (error) throw error;
 
-  const rows = (data || []).filter((r) => !r.store_id || ids.includes(String(r.store_id)));
-  return rows.map((r) => ({
-    id: String(r.id),
-    store_id: r.store_id || null,
-    status: r.status || "REQUESTED",
-    amount: Number(r.requested_amount || 0),
-    method: r.method || "BANK_TRANSFER",
-    requested_at: r.requested_at || r.created_at || null,
-    processed_at: r.processed_at || r.paid_at || null,
-    reference_no: r.reference_no || "",
-    notes: r.notes || "",
+  return (data || []).map((row) => ({
+    id: String(row.id),
+    status: row.status || "REQUESTED",
+    amount: asNumber(row.requested_amount),
+    method: row.method || "BANK_TRANSFER",
+    requested_at: row.requested_at || row.created_at || null,
+    processed_at: row.processed_at || row.paid_at || null,
+    reference_no: row.reference_no || "",
+    notes: row.notes || "",
   }));
 }
 
@@ -303,722 +340,496 @@ async function createPayoutRequest(userId, storeId, amount, method, details) {
       status: "REQUESTED",
       requested_at: nowIso,
     })
-    .select("id,status,requested_amount,method,requested_at,created_at")
+    .select("id,status,requested_amount,method,requested_at,created_at,processed_at,paid_at,reference_no,notes")
     .single();
 
   if (error) throw error;
+
   return {
-    id: String(data?.id || `${Date.now()}`),
-    store_id: storeId,
-    status: data?.status || "REQUESTED",
-    amount: Number(data?.requested_amount || amount || 0),
-    method: data?.method || method,
-    requested_at: data?.requested_at || data?.created_at || nowIso,
-    processed_at: null,
-    reference_no: "",
-    notes: "",
+    id: String(data.id),
+    status: data.status || "REQUESTED",
+    amount: asNumber(data.requested_amount),
+    method: data.method || method,
+    requested_at: data.requested_at || data.created_at || nowIso,
+    processed_at: data.processed_at || data.paid_at || null,
+    reference_no: data.reference_no || "",
+    notes: data.notes || "",
   };
 }
 
 export default function StorePartnerPayoutsPage() {
-  const ACTIVE_STORE_KEY = "store_partner_selected_store_id";
+  const { loading: storesLoading, stores, selectedStoreId, selectedStore, changeStore } = useStores();
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("all");
+  const [refreshing, setRefreshing] = useState(false);
   const [requesting, setRequesting] = useState(false);
-  const [requestError, setRequestError] = useState("");
-  const [requestSuccess, setRequestSuccess] = useState("");
-  const [error, setError] = useState("");
-  const [selectedStoreId, setSelectedStoreId] = useState("ALL");
   const [showRequestModal, setShowRequestModal] = useState(false);
-
-  const [stores, setStores] = useState([]);
-  const [orders, setOrders] = useState([]);
-  const [paymentDetailsByStore, setPaymentDetailsByStore] = useState({});
+  const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [query, setQuery] = useState("");
+  const [requestStatusFilter, setRequestStatusFilter] = useState("all");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
+  const [paymentDetails, setPaymentDetails] = useState(null);
+  const [paymentSessions, setPaymentSessions] = useState([]);
   const [payoutRequests, setPayoutRequests] = useState([]);
+  const [userId, setUserId] = useState("");
+  const [customRequestAmount, setCustomRequestAmount] = useState("");
 
   useEffect(() => {
     let cancelled = false;
 
-    (async () => {
+    async function loadPage(silent = false) {
+      if (!selectedStoreId) {
+        if (!cancelled) {
+          setLoading(false);
+          setRefreshing(false);
+          setPaymentDetails(null);
+          setPaymentSessions([]);
+          setPayoutRequests([]);
+        }
+        return;
+      }
+
       try {
-        setLoading(true);
+        if (silent) setRefreshing(true);
+        else setLoading(true);
         setError("");
 
-        const { data: sess, error: sessErr } = await supabaseBrowser.auth.getSession();
-        if (sessErr) throw sessErr;
-        const userId = sess?.session?.user?.id;
-        if (!userId) throw new Error("Please sign in to view payouts.");
+        const { data: sessionData, error: sessionError } = await supabaseBrowser.auth.getSession();
+        if (sessionError) throw sessionError;
 
-        const ownerStoresRes = await supabaseBrowser
-          .from("stores")
-          .select("id,name")
-          .eq("owner_user_id", userId)
-          .order("name", { ascending: true });
+        const currentUserId = sessionData?.session?.user?.id;
+        if (!currentUserId) throw new Error("Please sign in to view payouts.");
+        if (!cancelled) setUserId(currentUserId);
 
-        if (ownerStoresRes.error) throw ownerStoresRes.error;
-
-        const memberStoresRes = await supabaseBrowser
-          .from("store_members")
-          .select("store_id, stores:store_id(id,name)")
-          .eq("user_id", userId);
-
-        if (memberStoresRes.error) throw memberStoresRes.error;
-
-        const ownerStores = ownerStoresRes.data || [];
-        const memberStores = (memberStoresRes.data || [])
-          .map((r) => r.stores)
-          .filter(Boolean);
-
-        const merged = new Map();
-        [...ownerStores, ...memberStores].forEach((s) => merged.set(String(s.id), s));
-        const myStores = Array.from(merged.values()).sort((a, b) =>
-          String(a.name || "").localeCompare(String(b.name || ""))
-        );
-        const storeIds = myStores.map((s) => s.id);
-
-        if (!cancelled) setStores(myStores);
-        if (!storeIds.length) {
-          if (!cancelled) {
-            setOrders([]);
-            setPaymentDetailsByStore({});
-            setPayoutRequests([]);
-          }
-          return;
-        }
-
-        const [ordersRes, paymentRes, payoutReqRes] = await Promise.all([
-          supabaseBrowser
-            .from("store_orders")
-            .select(
-              "id,store_id,order_no,total_amount,payment_method,payment_status,status,created_at,updated_at"
-            )
-            .in("store_id", storeIds)
-            .order("created_at", { ascending: false })
-            .limit(1000),
+        const [paymentDetailsRes, sessionsRes, payoutReqs] = await Promise.all([
           supabaseBrowser
             .from("store_payment_details")
-            .select("store_id,payout_method,settlement_cycle,commission_percent,currency,kyc_status")
-            .in("store_id", storeIds),
-          loadPayoutRequests(userId, storeIds),
+            .select(
+              "store_id,payout_method,settlement_cycle,commission_percent,currency,kyc_status,beneficiary_name,bank_name,account_number,iban,swift,billing_email,billing_phone"
+            )
+            .eq("store_id", selectedStoreId)
+            .maybeSingle(),
+          supabaseBrowser
+            .from("payment_sessions")
+            .select(
+              "id,tracking_id,payment_provider,amount_major,original_amount,discount_amount,currency_code,status,gateway_status,created_at,verified_at,discount_source"
+            )
+            .eq("payment_context", "BILL_PAYMENT")
+            .eq("store_id", selectedStoreId)
+            .order("created_at", { ascending: false })
+            .limit(500),
+          loadPayoutRequests(currentUserId, selectedStoreId),
         ]);
 
-        if (ordersRes.error) throw ordersRes.error;
-        if (paymentRes.error) throw paymentRes.error;
+        if (paymentDetailsRes.error && !isSchemaError(paymentDetailsRes.error)) throw paymentDetailsRes.error;
+        if (sessionsRes.error) throw sessionsRes.error;
 
         if (!cancelled) {
-          setOrders(ordersRes.data || []);
-          const map = {};
-          (paymentRes.data || []).forEach((r) => {
-            map[String(r.store_id)] = r;
-          });
-          setPaymentDetailsByStore(map);
-          setPayoutRequests(payoutReqRes || []);
+          setPaymentDetails(paymentDetailsRes.data || null);
+          setPaymentSessions(sessionsRes.data || []);
+          setPayoutRequests(payoutReqs || []);
         }
       } catch (e) {
         if (!cancelled) {
-          setError(e?.message || "Failed to load payouts.");
-          setStores([]);
-          setOrders([]);
-          setPaymentDetailsByStore({});
+          setError(e?.message || "Failed to load payout data.");
+          setPaymentDetails(null);
+          setPaymentSessions([]);
           setPayoutRequests([]);
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
-    })();
+    }
 
+    loadPage();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedStoreId]);
 
-  const settlementByStore = useMemo(() => {
-    const map = {};
-    orders.filter(isValidOrderForSettlement).forEach((o) => {
-      const storeId = String(o.store_id);
-      const total = Number(o.total_amount || 0);
-      const commissionPct = Number(paymentDetailsByStore[storeId]?.commission_percent || 0);
-      const commission = (total * commissionPct) / 100;
+  const summary = useMemo(() => {
+    const successful = paymentSessions.filter(isSuccessfulSession);
+    const cancelled = paymentSessions.filter(isCancelledSession);
 
-      if (!map[storeId]) {
-        map[storeId] = {
-          businessMade: 0,
-          cashReceived: 0,
-          onlineCollected: 0,
-          commissionDue: 0,
-          partnerPayable: 0,
-          toPassPrive: 0,
-          validOrderCount: 0,
-        };
-      }
+    const grossCollected = successful.reduce(
+      (sum, row) => sum + asNumber(row.original_amount || row.amount_major),
+      0
+    );
+    const netCollected = successful.reduce((sum, row) => sum + asNumber(row.amount_major), 0);
+    const discountsGiven = successful.reduce((sum, row) => sum + asNumber(row.discount_amount), 0);
+    const cancelledValue = cancelled.reduce((sum, row) => sum + asNumber(row.amount_major), 0);
 
-      map[storeId].businessMade += total;
-      map[storeId].commissionDue += commission;
-      map[storeId].validOrderCount += 1;
-      if (isCashMethod(o.payment_method)) map[storeId].cashReceived += total;
-      else map[storeId].onlineCollected += total;
-    });
+    const inTransit = payoutRequests
+      .filter((row) => IN_TRANSIT_PAYOUT_STATUSES.has(String(row.status || "").toUpperCase()))
+      .reduce((sum, row) => sum + asNumber(row.amount), 0);
+    const paidOut = payoutRequests
+      .filter((row) => PAID_PAYOUT_STATUSES.has(String(row.status || "").toUpperCase()))
+      .reduce((sum, row) => sum + asNumber(row.amount), 0);
 
-    Object.keys(map).forEach((storeId) => {
-      const row = map[storeId];
-      row.partnerPayable = Math.max(row.onlineCollected - row.commissionDue, 0);
-      row.toPassPrive = Math.max(row.commissionDue - row.onlineCollected, 0);
-    });
+    const availableBalance = Math.max(netCollected - inTransit - paidOut, 0);
+    const latestPaid = payoutRequests.find((row) => PAID_PAYOUT_STATUSES.has(String(row.status || "").toUpperCase())) || null;
 
-    return map;
-  }, [orders, paymentDetailsByStore]);
-
-  const settlement = useMemo(() => {
-    const base = {
-      businessMade: 0,
-      cashReceived: 0,
-      onlineCollected: 0,
-      commissionDue: 0,
-      partnerPayable: 0,
-      toPassPrive: 0,
-      validOrderCount: 0,
+    return {
+      successful,
+      cancelled,
+      grossCollected,
+      netCollected,
+      discountsGiven,
+      cancelledValue,
+      inTransit,
+      paidOut,
+      availableBalance,
+      latestPaid,
     };
-
-    Object.values(settlementByStore).forEach((s) => {
-      base.businessMade += Number(s.businessMade || 0);
-      base.cashReceived += Number(s.cashReceived || 0);
-      base.onlineCollected += Number(s.onlineCollected || 0);
-      base.commissionDue += Number(s.commissionDue || 0);
-      base.partnerPayable += Number(s.partnerPayable || 0);
-      base.toPassPrive += Number(s.toPassPrive || 0);
-      base.validOrderCount += Number(s.validOrderCount || 0);
-    });
-
-    return base;
-  }, [settlementByStore]);
-
-  const eligibleStores = useMemo(() => {
-    return stores
-      .map((s) => {
-        const sid = String(s.id);
-        const pay = settlementByStore[sid] || {
-          partnerPayable: 0,
-          businessMade: 0,
-          commissionDue: 0,
-          toPassPrive: 0,
-          cashReceived: 0,
-          onlineCollected: 0,
-          validOrderCount: 0,
-        };
-        return {
-          ...s,
-          ...pay,
-          payment: paymentDetailsByStore[sid] || null,
-        };
-      })
-      .sort((a, b) => Number(b.partnerPayable || 0) - Number(a.partnerPayable || 0));
-  }, [stores, settlementByStore, paymentDetailsByStore]);
-
-  useEffect(() => {
-    if (!eligibleStores.length) {
-      setSelectedStoreId("ALL");
-      return;
-    }
-
-    const exists = eligibleStores.some((s) => String(s.id) === String(selectedStoreId));
-    if (!exists || selectedStoreId === "ALL") {
-      const preferred = eligibleStores.find((s) => s.partnerPayable > 0) || eligibleStores[0];
-      setSelectedStoreId(String(preferred.id));
-    }
-  }, [eligibleStores, selectedStoreId]);
-
-  const selectedStore = useMemo(() => {
-    return eligibleStores.find((s) => String(s.id) === String(selectedStoreId)) || null;
-  }, [eligibleStores, selectedStoreId]);
-
-  const selectedPayoutAmount = Number(selectedStore?.partnerPayable || 0);
-  const selectedKyc = selectedStore?.payment?.kyc_status || "NOT_STARTED";
-  const selectedMethod = selectedStore?.payment?.payout_method || "BANK_TRANSFER";
-  const selectedCycle = selectedStore?.payment?.settlement_cycle || "-";
-
-  const recentPayouts = useMemo(() => {
-    const storeNameById = {};
-    stores.forEach((s) => {
-      storeNameById[String(s.id)] = s.name;
-    });
-
-    return payoutRequests
-      .map((r) => ({
-        id: r.id,
-        storeId: r.store_id ? String(r.store_id) : "",
-        storeName: r.store_id ? storeNameById[String(r.store_id)] || "Store" : "All Stores",
-        method: r.method || "BANK_TRANSFER",
-        amount: Number(r.amount || 0),
-        status: r.status || "REQUESTED",
-        requestedAt: r.requested_at || "",
-        processedAt: r.processed_at || "",
-        reference: r.reference_no || "",
-        notes: r.notes || "",
-      }))
-      .sort((a, b) => new Date(b.requestedAt || 0) - new Date(a.requestedAt || 0));
-  }, [payoutRequests, stores]);
-
-  useEffect(() => {
-    try {
-      const activeStoreId = localStorage.getItem(ACTIVE_STORE_KEY) || "";
-      if (activeStoreId) setSelectedStoreId(String(activeStoreId));
-    } catch {}
-  }, []);
-
-  const filteredRecentPayouts = useMemo(() => {
-    const visibleStoreId = selectedStoreId && selectedStoreId !== "ALL" ? String(selectedStoreId) : "";
-    const q = search.trim().toLowerCase();
-    return recentPayouts.filter((p) => {
-      if (visibleStoreId && String(p.storeId || "") !== visibleStoreId) return false;
-      if (status !== "all" && String(p.status || "").toLowerCase() !== status) return false;
-      if (!q) return true;
-      const hay = `${p.id} ${p.storeName} ${p.method} ${p.status} ${p.reference}`.toLowerCase();
-      return hay.includes(q);
-    });
-  }, [recentPayouts, search, status, selectedStoreId]);
-
-  const latestPaid = useMemo(() => {
-    return recentPayouts.find((r) => String(r.status || "").toUpperCase() === "PAID") || null;
-  }, [recentPayouts]);
-
-  const recentTransactions = useMemo(() => {
-    const visibleStoreId = selectedStoreId && selectedStoreId !== "ALL" ? String(selectedStoreId) : "";
-    const storeNameById = {};
-    stores.forEach((s) => {
-      storeNameById[String(s.id)] = s.name;
-    });
-
-    return orders
-      .filter(isValidOrderForSettlement)
-      .filter((o) => (visibleStoreId ? String(o.store_id || "") === visibleStoreId : true))
-      .map((o) => ({
-        id: String(o.id),
-        storeId: String(o.store_id || ""),
-        storeName: storeNameById[String(o.store_id)] || "Store",
-        amount: Number(o.total_amount || 0),
-        paymentMethod: o.payment_method || "ONLINE",
-        paymentStatus: o.payment_status || "PENDING",
-        status: o.status || "NEW",
-        createdAt: o.created_at || o.updated_at || "",
-      }))
-      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
-      .slice(0, 12);
-  }, [orders, stores, selectedStoreId]);
-
-  const canRequestPayout =
-    !!selectedStore &&
-    selectedPayoutAmount > 0 &&
-    !!selectedStore.payment &&
-    String(selectedKyc).toUpperCase() === "VERIFIED";
+  }, [paymentSessions, payoutRequests]);
 
   const requestDisabledReason = useMemo(() => {
-    if (!selectedStore) return "Select a store";
-    if (!selectedStore.payment) return "Store payment details missing";
-    if (String(selectedKyc).toUpperCase() !== "VERIFIED") return "KYC must be VERIFIED";
-    if (selectedPayoutAmount <= 0) return "No payable amount";
+    if (!selectedStoreId) return "Select a store";
+    if (!paymentDetails) return "Payout details are not configured yet";
+    if (summary.availableBalance <= 0) return "No available balance to request";
     return "";
-  }, [selectedStore, selectedKyc, selectedPayoutAmount]);
+  }, [selectedStoreId, paymentDetails, summary.availableBalance]);
 
-  const handleOpenRequestModal = () => {
-    if (requesting || !canRequestPayout) return;
-    setRequestError("");
-    setRequestSuccess("");
-    setShowRequestModal(true);
+  const canRequestPayout = !requestDisabledReason;
+
+  useEffect(() => {
+    if (!showRequestModal) return;
+    setCustomRequestAmount(summary.availableBalance > 0 ? String(summary.availableBalance.toFixed(2)) : "");
+  }, [showRequestModal, summary.availableBalance]);
+
+  const filteredPayoutRequests = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return payoutRequests.filter((row) => {
+      if (requestStatusFilter !== "all" && String(row.status || "").toLowerCase() !== requestStatusFilter) return false;
+      if (!q) return true;
+      return `${row.id} ${row.method} ${row.status} ${row.reference_no}`.toLowerCase().includes(q);
+    });
+  }, [payoutRequests, query, requestStatusFilter]);
+
+  const transactionRows = useMemo(() => {
+    return paymentSessions
+      .filter((row) => {
+        const normalized = isSuccessfulSession(row) ? "paid" : isCancelledSession(row) ? "cancelled" : "other";
+        if (paymentStatusFilter === "paid") return normalized === "paid";
+        if (paymentStatusFilter === "cancelled") return normalized === "cancelled";
+        return normalized === "paid" || normalized === "cancelled";
+      })
+      .filter((row) => {
+        const q = query.trim().toLowerCase();
+        if (!q) return true;
+        return `${row.tracking_id} ${row.payment_provider} ${getSessionStatus(row)}`.toLowerCase().includes(q);
+      });
+  }, [paymentSessions, paymentStatusFilter, query]);
+
+  const handleRefresh = async () => {
+    if (!selectedStoreId) return;
+    setRefreshing(true);
+    try {
+      const [paymentDetailsRes, sessionsRes, payoutReqs] = await Promise.all([
+        supabaseBrowser
+          .from("store_payment_details")
+          .select(
+            "store_id,payout_method,settlement_cycle,commission_percent,currency,kyc_status,beneficiary_name,bank_name,account_number,iban,swift,billing_email,billing_phone"
+          )
+          .eq("store_id", selectedStoreId)
+          .maybeSingle(),
+        supabaseBrowser
+          .from("payment_sessions")
+          .select(
+            "id,tracking_id,payment_provider,amount_major,original_amount,discount_amount,currency_code,status,gateway_status,created_at,verified_at,discount_source"
+          )
+          .eq("payment_context", "BILL_PAYMENT")
+          .eq("store_id", selectedStoreId)
+          .order("created_at", { ascending: false })
+          .limit(500),
+        loadPayoutRequests(userId, selectedStoreId),
+      ]);
+
+      if (paymentDetailsRes.error && !isSchemaError(paymentDetailsRes.error)) throw paymentDetailsRes.error;
+      if (sessionsRes.error) throw sessionsRes.error;
+
+      setPaymentDetails(paymentDetailsRes.data || null);
+      setPaymentSessions(sessionsRes.data || []);
+      setPayoutRequests(payoutReqs || []);
+      setError("");
+    } catch (e) {
+      setError(e?.message || "Failed to refresh payout data.");
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleRequestPayout = async () => {
-    if (requesting || !canRequestPayout) return;
-    setRequestError("");
-    setRequestSuccess("");
-    setRequesting(true);
-
+    if (!canRequestPayout || requesting || !selectedStoreId || !userId) return;
+    const requestedAmount = Math.min(asNumber(customRequestAmount), summary.availableBalance);
+    if (requestedAmount <= 0) return;
     try {
-      const { data: sess, error: sessErr } = await supabaseBrowser.auth.getSession();
-      if (sessErr) throw sessErr;
-      const userId = sess?.session?.user?.id;
-      if (!userId) throw new Error("Please sign in again to request payout.");
+      setRequesting(true);
+      setError("");
+      setSuccessMessage("");
 
       const created = await createPayoutRequest(
         userId,
-        selectedStore.id,
-        selectedPayoutAmount,
-        selectedMethod,
-        selectedStore.payment
+        selectedStoreId,
+        requestedAmount,
+        paymentDetails?.payout_method || "BANK_TRANSFER",
+        {
+          store_name: selectedStore?.name || "",
+          beneficiary_name: paymentDetails?.beneficiary_name || "",
+          billing_email: paymentDetails?.billing_email || "",
+        }
       );
 
       setPayoutRequests((prev) => [created, ...prev]);
       setShowRequestModal(false);
-      setRequestSuccess(
-        `Payout request created for ${selectedStore.name}: MUR ${formatMoney(selectedPayoutAmount)} via ${selectedMethod}.`
+      setSuccessMessage(
+        `Payout request created for ${selectedStore?.name || "store"}: MUR ${formatMoney(requestedAmount)}.`
       );
     } catch (e) {
-      setRequestError(e?.message || "Failed to send payout request.");
+      setError(e?.message || "Failed to create payout request.");
     } finally {
       setRequesting(false);
     }
   };
 
   const handleExport = () => {
-    const rows = [];
-    rows.push(["Payout Settlement Export"]);
-    rows.push(["Generated At", new Date().toLocaleString()]);
-    rows.push(["Business Made", settlement.businessMade]);
-    rows.push(["Cash Received", settlement.cashReceived]);
-    rows.push(["Commission Due", settlement.commissionDue]);
-    rows.push(["Payable To Partner", settlement.partnerPayable]);
-    rows.push(["To PassPrive", settlement.toPassPrive]);
-    rows.push([]);
-    rows.push([
-      "Request ID",
-      "Store",
-      "Requested Amount",
-      "Method",
-      "Status",
-      "Requested At",
-      "Processed At",
-      "Reference",
-    ]);
+    const rows = [
+      ["Store Payout Export"],
+      ["Generated At", new Date().toLocaleString()],
+      ["Store", selectedStore?.name || ""],
+      ["Available Balance", summary.availableBalance],
+      ["In Transit", summary.inTransit],
+      ["Paid Out", summary.paidOut],
+      ["Gross Collected", summary.grossCollected],
+      ["Net Collected", summary.netCollected],
+      ["Discounts Given", summary.discountsGiven],
+      [],
+      ["Payout Requests"],
+      ["Request ID", "Amount", "Method", "Status", "Requested At", "Processed At", "Reference"],
+      ...filteredPayoutRequests.map((row) => [
+        row.id,
+        row.amount,
+        row.method,
+        row.status,
+        row.requested_at,
+        row.processed_at,
+        row.reference_no,
+      ]),
+      [],
+      ["Transactions"],
+      ["Tracking ID", "Date", "Provider", "Gross Amount", "Discount", "Net Amount", "Status"],
+      ...transactionRows.map((row) => [
+        row.tracking_id || row.id,
+        getSessionTimestamp(row),
+        row.payment_provider || "",
+        asNumber(row.original_amount || row.amount_major),
+        asNumber(row.discount_amount),
+        asNumber(row.amount_major),
+        isCancelledSession(row) ? "Cancelled" : "Paid",
+      ]),
+    ];
 
-    filteredRecentPayouts.forEach((p) => {
-      rows.push([
-        p.id,
-        p.storeName,
-        p.amount,
-        p.method,
-        p.status,
-        p.requestedAt,
-        p.processedAt,
-        p.reference,
-      ]);
-    });
-
-    rows.push([]);
-    rows.push(["Transaction ID", "Store", "Amount", "Payment Method", "Payment Status", "Order Status", "Created At"]);
-    recentTransactions.forEach((t) => {
-      rows.push([t.id, t.storeName, t.amount, t.paymentMethod, t.paymentStatus, t.status, t.createdAt]);
-    });
-
-    const csv = rows.map((r) => r.map(toCsvCell).join(",")).join("\n");
+    const csv = rows.map((row) => row.map(toCsvCell).join(",")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-
-    const now = new Date();
-    const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
-      now.getDate()
-    ).padStart(2, "0")}`;
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `payout-settlement-${date}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `store-payouts-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
   return (
-    <div
-      className="min-h-screen"
-      style={{
-        fontFamily: '"Space Grotesk", "Sora", sans-serif',
-      }}
-    >
-      <div className="mx-auto max-w-6xl px-6 py-4 space-y-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div />
-          <div className="flex items-center gap-2">
-            <button
-              className="h-10 rounded-full border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 inline-flex items-center gap-2 shadow-sm disabled:opacity-60"
-              type="button"
-              onClick={handleExport}
-              disabled={loading}
-            >
-              <Download className="h-4 w-4" />
-              Export
-            </button>
-            <button
-              className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 shadow-lg shadow-orange-200 disabled:opacity-60"
-              style={{
-                background:
-                  "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)",
-              }}
-              type="button"
-              onClick={handleOpenRequestModal}
-              disabled={loading || requesting || !canRequestPayout}
-              title={requestDisabledReason || "Request payout"}
-            >
-              <CircleDollarSign className="h-4 w-4" />
-              {requesting
-                ? "Sending..."
-                : `Request ${selectedPayoutAmount > 0 ? `MUR ${formatMoney(selectedPayoutAmount)}` : "Payout"}`}
-            </button>
+    <div className="min-h-screen px-4 py-5 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <section
+          className="rounded-[34px] border px-6 py-6 shadow-sm"
+          style={{
+            borderColor: THEME_BORDER,
+            background:
+              "linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.82) 54%, rgba(119,31,168,0.08) 100%)",
+          }}
+        >
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-3xl">
+              <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em]" style={{ background: THEME_ACCENT_SOFT, color: THEME_ACCENT }}>
+                <Wallet className="h-3.5 w-3.5" />
+                Store Partner
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <select
+                value={selectedStoreId || ""}
+                onChange={(e) => changeStore(e.target.value)}
+                className="h-11 min-w-[220px] rounded-full border bg-white px-4 text-sm font-medium text-slate-700 outline-none"
+                style={{ borderColor: THEME_BORDER }}
+              >
+                {(stores || []).map((store) => (
+                  <option key={store.id} value={store.id}>
+                    {store.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={loading || refreshing || storesLoading || !selectedStoreId}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-full border bg-white px-5 text-sm font-semibold text-slate-700 disabled:opacity-60"
+                style={{ borderColor: THEME_BORDER }}
+              >
+                {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Refresh
+              </button>
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={loading || storesLoading || !selectedStoreId}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-full border bg-white px-5 text-sm font-semibold text-slate-700 disabled:opacity-60"
+                style={{ borderColor: THEME_BORDER }}
+              >
+                <Download className="h-4 w-4" />
+                Export
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowRequestModal(true)}
+                disabled={loading || requesting || !canRequestPayout}
+                title={requestDisabledReason || "Request payout"}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold text-white disabled:opacity-60"
+                style={{ background: THEME_ACCENT, boxShadow: "0 12px 24px rgba(119, 31, 168, 0.24)" }}
+              >
+                <CircleDollarSign className="h-4 w-4" />
+                Request payout
+              </button>
+            </div>
           </div>
+        </section>
+
+        {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+        {successMessage ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{successMessage}</div> : null}
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label="Available Balance"
+            value={amountNode(summary.availableBalance, true)}
+            icon={Wallet}
+          />
+          <StatCard
+            label="Pending Payment"
+            value={amountNode(summary.inTransit, true)}
+            icon={RefreshCw}
+            accent="amber"
+          />
+          <StatCard
+            label="Paid Out"
+            value={amountNode(summary.paidOut, true)}
+            icon={CheckCircle2}
+            accent="green"
+          />
+          <StatCard
+            label="Transactions Paid"
+            value={<div className="text-3xl font-semibold text-slate-900">{summary.successful.length}</div>}
+            icon={ReceiptText}
+          />
         </div>
 
-        {error ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
-        ) : null}
+        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <Card
+            title="Settlement Summary"
+            subtitle="Breakdown of customer bill payments that contribute to the store payout balance."
+          >
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-2xl border bg-slate-50 p-4" style={{ borderColor: THEME_BORDER }}>
+                <div className="text-xs text-slate-500">Gross collected</div>
+                <div className="mt-2">{amountNode(summary.grossCollected)}</div>
+              </div>
+              <div className="rounded-2xl border bg-slate-50 p-4" style={{ borderColor: THEME_BORDER }}>
+                <div className="text-xs text-slate-500">Net collected</div>
+                <div className="mt-2">{amountNode(summary.netCollected)}</div>
+              </div>
+              <div className="rounded-2xl border bg-slate-50 p-4" style={{ borderColor: THEME_BORDER }}>
+                <div className="text-xs text-slate-500">Discounts given</div>
+                <div className="mt-2">{amountNode(summary.discountsGiven)}</div>
+              </div>
+              <div className="rounded-2xl border bg-slate-50 p-4" style={{ borderColor: THEME_BORDER }}>
+                <div className="text-xs text-slate-500">Cancelled value</div>
+                <div className="mt-2">{amountNode(summary.cancelledValue)}</div>
+              </div>
+              <div className="rounded-2xl border bg-slate-50 p-4" style={{ borderColor: THEME_BORDER }}>
+                <div className="text-xs text-slate-500">Payout requests</div>
+                <div className="mt-2 text-lg font-semibold text-slate-900">{payoutRequests.length}</div>
+              </div>
+              <div className="rounded-2xl border bg-slate-50 p-4" style={{ borderColor: THEME_BORDER }}>
+                <div className="text-xs text-slate-500">Selected store</div>
+                <div className="mt-2 text-lg font-semibold text-slate-900">{selectedStore?.name || "No store selected"}</div>
+              </div>
+            </div>
+          </Card>
 
-        {requestError ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{requestError}</div>
-        ) : null}
-
-        {requestSuccess ? (
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
-            {requestSuccess}
-          </div>
-        ) : null}
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          {loading ? (
-            <>
-              <SkeletonBlock className="h-24" />
-              <SkeletonBlock className="h-24" />
-              <SkeletonBlock className="h-24" />
-              <SkeletonBlock className="h-24" />
-            </>
-          ) : (
-            <>
-              <StatMini
-                title="Business Made"
-                value={formatMoney(settlement.businessMade)}
-                helper="Total valid order value"
-                icon={Wallet}
-                tone="indigo"
-              />
-              <StatMini
-                title="Cash Received"
-                value={formatMoney(settlement.cashReceived)}
-                helper="Collected directly by partner"
-                icon={CheckCircle2}
-                tone="emerald"
-              />
-              <StatMini
-                title="Payable To Partner"
-                value={formatMoney(settlement.partnerPayable)}
-                helper="Online collections minus commission"
-                icon={Loader2}
-                tone="orange"
-              />
-              <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-xs text-gray-500">To PassPrive</div>
-                    <div className="mt-1">
-                      <Amount
-                        value={settlement.toPassPrive}
-                        className="inline-flex items-baseline gap-1"
-                        currencyClassName="text-[10px] font-semibold uppercase tracking-wide text-gray-500"
-                        valueClassName="text-2xl font-bold text-gray-900"
-                      />
-                    </div>
-                    <div className="text-[11px] text-gray-500 mt-1">Pending platform recovery from partner</div>
+          <Card
+            title="Payout Account"
+            subtitle="Current payout destination for the selected store."
+          >
+            {paymentDetails ? (
+              <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border bg-slate-50 p-4" style={{ borderColor: THEME_BORDER }}>
+                    <div className="flex items-center gap-2 text-xs text-slate-500"><CreditCard className="h-3.5 w-3.5" />Method</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-900">{paymentDetails.payout_method || "-"}</div>
                   </div>
-                  <div className="h-11 w-11 rounded-2xl border flex items-center justify-center bg-slate-50 text-slate-700 border-slate-200">
-                    <CircleDollarSign className="h-5 w-5" />
+                  <div className="rounded-2xl border bg-slate-50 p-4" style={{ borderColor: THEME_BORDER }}>
+                    <div className="flex items-center gap-2 text-xs text-slate-500"><Landmark className="h-3.5 w-3.5" />Beneficiary</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-900">{paymentDetails.beneficiary_name || "Not added"}</div>
+                  </div>
+                  <div className="rounded-2xl border bg-slate-50 p-4" style={{ borderColor: THEME_BORDER }}>
+                    <div className="flex items-center gap-2 text-xs text-slate-500"><Building2 className="h-3.5 w-3.5" />Bank</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-900">{paymentDetails.bank_name || "Not added"}</div>
+                  </div>
+                  <div className="rounded-2xl border bg-slate-50 p-4" style={{ borderColor: THEME_BORDER }}>
+                    <div className="flex items-center gap-2 text-xs text-slate-500"><Wallet className="h-3.5 w-3.5" />Account</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-900">{maskAccount(paymentDetails.account_number || paymentDetails.iban)}</div>
                   </div>
                 </div>
+                {!canRequestPayout ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Payout requests are currently blocked: {requestDisabledReason}</div> : null}
               </div>
-            </>
-          )}
+            ) : (
+              <EmptyState
+                icon={Landmark}
+                title="Payout details not configured"
+                body="Add bank or payout details in store partner settings before requesting a payout."
+              />
+            )}
+          </Card>
         </div>
 
-        <CardShell
-          title="Payout Request Preview"
+        <Card
+          title="Payout Requests"
+          subtitle="Track request lifecycle from requested to paid."
           right={
-            <div className="text-xs text-gray-500 inline-flex items-center gap-2">
-              <Store className="h-3.5 w-3.5" />
-              Clear payout breakdown
-            </div>
-          }
-        >
-          {loading ? (
-            <SkeletonBlock className="h-24" />
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-              <div className="md:col-span-4">
-                <label className="text-xs text-gray-500">Store</label>
-                <select
-                  className="mt-1 h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-orange-100"
-                  value={selectedStoreId}
-                  onChange={(e) => setSelectedStoreId(e.target.value)}
-                >
-                  {eligibleStores.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="md:col-span-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                  <div className="text-xs text-gray-500">Amount To Be Paid</div>
-                  <div className="mt-1">
-                    <Amount value={selectedPayoutAmount} valueClassName="text-lg font-bold text-gray-900" />
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                  <div className="text-xs text-gray-500">Payout Method</div>
-                  <div className="mt-1 text-sm font-semibold text-gray-900">{selectedMethod}</div>
-                </div>
-                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                  <div className="text-xs text-gray-500">KYC</div>
-                  <div className="mt-1">
-                    <StatusPill status={selectedKyc} />
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                  <div className="text-xs text-gray-500">Settlement Cycle</div>
-                  <div className="mt-1 text-sm font-semibold text-gray-900">{selectedCycle}</div>
-                </div>
-              </div>
-
-              {!canRequestPayout ? (
-                <div className="md:col-span-12 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  Request blocked: {requestDisabledReason}
-                </div>
-              ) : null}
-            </div>
-          )}
-        </CardShell>
-
-        <CardShell
-          title="Settlement Snapshot"
-          right={
-            <div className="text-xs text-gray-500 inline-flex items-center gap-2">
-              <Store className="h-3.5 w-3.5" />
-              {stores.length} store(s)
-            </div>
-          }
-        >
-          {loading ? (
-            <SkeletonBlock className="h-20" />
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                <div className="text-xs text-gray-500">Online Collected</div>
-                <div className="mt-1">
-                  <Amount value={settlement.onlineCollected} />
-                </div>
-              </div>
-              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                <div className="text-xs text-gray-500">Commission Due</div>
-                <div className="mt-1">
-                  <Amount value={settlement.commissionDue} />
-                </div>
-              </div>
-              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                <div className="text-xs text-gray-500">Valid Orders</div>
-                <div className="mt-1 text-lg font-semibold text-gray-900">{settlement.validOrderCount}</div>
-              </div>
-              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                <div className="text-xs text-gray-500">Last Paid Out</div>
-                <div className="mt-1 text-sm font-semibold text-gray-900">
-                  {latestPaid ? `MUR ${formatMoney(latestPaid.amount)}` : "No paid payouts yet"}
-                </div>
-              </div>
-            </div>
-          )}
-        </CardShell>
-
-        <CardShell
-          title="Recent Transactions"
-          right={
-            <div className="text-xs text-gray-500 inline-flex items-center gap-2">
-              <ReceiptText className="h-3.5 w-3.5" />
-              Payment activity
-            </div>
-          }
-        >
-          {loading ? (
-            <div className="space-y-2 animate-pulse">
-              <SkeletonRow />
-              <SkeletonRow />
-              <SkeletonRow />
-            </div>
-          ) : recentTransactions.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center">
-              <div className="mx-auto h-12 w-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
-                <ReceiptText className="h-6 w-6 text-gray-800" />
-              </div>
-              <div className="mt-3 text-lg font-semibold text-gray-900">No transactions found</div>
-              <div className="mt-1 text-sm text-gray-600">Recent paid/cash transactions will appear here.</div>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-gray-500">
-                    <th className="py-2 pr-4 font-medium">Transaction</th>
-                    <th className="py-2 pr-4 font-medium">Store</th>
-                    <th className="py-2 pr-4 font-medium">Amount</th>
-                    <th className="py-2 pr-4 font-medium">Payment</th>
-                    <th className="py-2 pr-4 font-medium">Order</th>
-                    <th className="py-2 pr-0 font-medium">Time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentTransactions.map((t) => (
-                    <tr key={t.id} className="border-t border-gray-100 hover:bg-gray-50/60 transition-colors">
-                      <td className="py-3 pr-4 font-semibold text-gray-900">{t.id}</td>
-                      <td className="py-3 pr-4 text-gray-700">{t.storeName}</td>
-                      <td className="py-3 pr-4">
-                        <Amount
-                          value={t.amount}
-                          className="inline-flex items-baseline gap-1"
-                          currencyClassName="text-[10px] font-semibold uppercase tracking-wide text-gray-500"
-                          valueClassName="font-semibold text-gray-900"
-                        />
-                      </td>
-                      <td className="py-3 pr-4">
-                        <div className="text-gray-700">{t.paymentMethod}</div>
-                        <div className="mt-1">
-                          <StatusPill status={t.paymentStatus} />
-                        </div>
-                      </td>
-                      <td className="py-3 pr-4">
-                        <StatusPill status={t.status} />
-                      </td>
-                      <td className="py-3 pr-0 text-gray-600 text-xs">{formatDateTime(t.createdAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardShell>
-
-        <CardShell
-          title="Recent Payout Details"
-          right={
-            <div className="text-xs text-gray-500 inline-flex items-center gap-2">
-              <SlidersHorizontal className="h-3.5 w-3.5" />
-              Live requests
-            </div>
-          }
-        >
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4">
-            <div className="md:col-span-8">
+            <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
               <div className="relative">
-                <Search className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
-                  className="h-11 w-full rounded-2xl border border-gray-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-orange-100"
-                  placeholder="Search request id, method, store..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search request id or method"
+                  className="h-11 w-full rounded-full border bg-white pl-9 pr-4 text-sm outline-none"
+                  style={{ borderColor: THEME_BORDER }}
                 />
               </div>
-            </div>
-
-            <div className="md:col-span-4">
               <select
-                className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-orange-100"
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
+                value={requestStatusFilter}
+                onChange={(e) => setRequestStatusFilter(e.target.value)}
+                className="h-11 rounded-full border bg-white px-4 text-sm outline-none"
+                style={{ borderColor: THEME_BORDER }}
               >
-                <option value="all">All Status</option>
+                <option value="all">All statuses</option>
                 <option value="requested">Requested</option>
                 <option value="pending">Pending</option>
                 <option value="processing">Processing</option>
@@ -1028,78 +839,118 @@ export default function StorePartnerPayoutsPage() {
                 <option value="failed">Failed</option>
               </select>
             </div>
-          </div>
-
+          }
+        >
           {loading ? (
-            <div className="space-y-2 animate-pulse">
-              <SkeletonRow />
-              <SkeletonRow />
-              <SkeletonRow />
+            <div className="flex items-center gap-3 py-8 text-sm text-slate-600">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading payout requests...
             </div>
-          ) : filteredRecentPayouts.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center">
-              <div className="mx-auto h-12 w-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
-                <Wallet className="h-6 w-6 text-gray-800" />
-              </div>
-              <div className="mt-3 text-lg font-semibold text-gray-900">No payout records found</div>
-              <div className="mt-1 text-sm text-gray-600">Your recent payout requests will appear here.</div>
-            </div>
-          ) : (
+          ) : filteredPayoutRequests.length ? (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="min-w-full text-sm">
                 <thead>
-                  <tr className="text-left text-gray-500">
-                    <th className="py-2 pr-4 font-medium">Request</th>
-                    <th className="py-2 pr-4 font-medium">Store</th>
-                    <th className="py-2 pr-4 font-medium">Amount</th>
-                    <th className="py-2 pr-4 font-medium">Method</th>
-                    <th className="py-2 pr-4 font-medium">Status</th>
-                    <th className="py-2 pr-4 font-medium">Requested</th>
-                    <th className="py-2 pr-0 font-medium">Processed</th>
+                  <tr className="border-b text-left text-slate-500" style={{ borderColor: THEME_BORDER }}>
+                    <th className="py-3 pr-4 font-medium">Request</th>
+                    <th className="py-3 pr-4 font-medium">Amount</th>
+                    <th className="py-3 pr-4 font-medium">Method</th>
+                    <th className="py-3 pr-4 font-medium">Status</th>
+                    <th className="py-3 pr-4 font-medium">Requested</th>
+                    <th className="py-3 pr-0 font-medium">Processed</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRecentPayouts.map((p) => (
-                    <tr key={p.id} className="border-t border-gray-100 hover:bg-gray-50/60 transition-colors">
-                      <td className="py-3 pr-4">
-                        <p className="font-semibold text-gray-900">{p.id}</p>
-                        <p className="text-xs text-gray-500">
-                          <Clock3 className="h-3 w-3 inline-block mr-1" />
-                          {p.reference ? `Ref: ${p.reference}` : "No reference"}
-                        </p>
+                  {filteredPayoutRequests.map((row) => (
+                    <tr key={row.id} className="border-b last:border-b-0" style={{ borderColor: "rgba(226,232,240,0.8)" }}>
+                      <td className="py-4 pr-4">
+                        <div className="font-semibold text-slate-900">{row.id}</div>
+                        <div className="mt-1 text-xs text-slate-500">{row.reference_no ? `Ref: ${row.reference_no}` : "No reference yet"}</div>
                       </td>
-                      <td className="py-3 pr-4 text-gray-700">{p.storeName}</td>
-                      <td className="py-3 pr-4">
-                        <Amount
-                          value={p.amount}
-                          className="inline-flex items-baseline gap-1"
-                          currencyClassName="text-[10px] font-semibold uppercase tracking-wide text-gray-500"
-                          valueClassName="font-semibold text-gray-900"
-                        />
-                      </td>
-                      <td className="py-3 pr-4 text-gray-700">{p.method}</td>
-                      <td className="py-3 pr-4">
-                        <StatusPill status={p.status} />
-                      </td>
-                      <td className="py-3 pr-4 text-gray-600">
-                        <div className="text-xs inline-flex items-center gap-1">
-                          <CalendarClock className="h-3.5 w-3.5" />
-                          {formatDateTime(p.requestedAt)}
-                        </div>
-                      </td>
-                      <td className="py-3 pr-0 text-gray-600">
-                        <div className="text-xs inline-flex items-center gap-1">
-                          <CalendarClock className="h-3.5 w-3.5" />
-                          {formatDateTime(p.processedAt)}
-                        </div>
-                      </td>
+                      <td className="py-4 pr-4">{amountNode(row.amount)}</td>
+                      <td className="py-4 pr-4 text-slate-700">{row.method}</td>
+                      <td className="py-4 pr-4"><StatusPill status={row.status} /></td>
+                      <td className="py-4 pr-4 text-slate-600">{formatDateTime(row.requested_at)}</td>
+                      <td className="py-4 pr-0 text-slate-600">{formatDateTime(row.processed_at)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+          ) : (
+            <EmptyState
+              icon={Wallet}
+              title="No payout requests yet"
+              body="Once you submit a payout request, it will appear here with its processing status."
+            />
           )}
-        </CardShell>
+        </Card>
+
+        <Card
+          title="Payment Ledger"
+          subtitle="Transaction-level bill payments that drive settlement and payout balance."
+          right={
+            <select
+              value={paymentStatusFilter}
+              onChange={(e) => setPaymentStatusFilter(e.target.value)}
+              className="h-11 rounded-full border bg-white px-4 text-sm outline-none"
+              style={{ borderColor: THEME_BORDER }}
+            >
+              <option value="all">Paid + cancelled</option>
+              <option value="paid">Paid only</option>
+              <option value="cancelled">Cancelled only</option>
+            </select>
+          }
+        >
+          {loading || storesLoading ? (
+            <div className="flex items-center gap-3 py-8 text-sm text-slate-600">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading settlement ledger...
+            </div>
+          ) : transactionRows.length ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-slate-500" style={{ borderColor: THEME_BORDER }}>
+                    <th className="py-3 pr-4 font-medium">Tracking ID</th>
+                    <th className="py-3 pr-4 font-medium">Date</th>
+                    <th className="py-3 pr-4 font-medium">Provider</th>
+                    <th className="py-3 pr-4 font-medium">Gross</th>
+                    <th className="py-3 pr-4 font-medium">Discount</th>
+                    <th className="py-3 pr-4 font-medium">Net</th>
+                    <th className="py-3 pr-0 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactionRows.map((row) => {
+                    const isCancelled = isCancelledSession(row);
+                    return (
+                      <tr key={row.id} className="border-b last:border-b-0" style={{ borderColor: "rgba(226,232,240,0.8)" }}>
+                        <td className="py-4 pr-4">
+                          <div className="font-semibold text-slate-900">{row.tracking_id || String(row.id).slice(0, 8).toUpperCase()}</div>
+                          <div className="mt-1 text-xs text-slate-500">{row.currency_code || "MUR"}</div>
+                        </td>
+                        <td className="py-4 pr-4 text-slate-600">{formatDateTime(getSessionTimestamp(row))}</td>
+                        <td className="py-4 pr-4 text-slate-700">{row.payment_provider || "-"}</td>
+                        <td className="py-4 pr-4">{amountNode(asNumber(row.original_amount || row.amount_major))}</td>
+                        <td className="py-4 pr-4">{amountNode(asNumber(row.discount_amount))}</td>
+                        <td className="py-4 pr-4">{amountNode(asNumber(row.amount_major))}</td>
+                        <td className="py-4 pr-0">
+                          <StatusPill status={isCancelled ? "Cancelled" : "Paid"} tone="payment" />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState
+              icon={ReceiptText}
+              title="No payment ledger entries"
+              body="Paid and cancelled bill payments for the selected store will appear here."
+            />
+          )}
+        </Card>
       </div>
 
       <RequestPayoutModal
@@ -1108,13 +959,13 @@ export default function StorePartnerPayoutsPage() {
         onConfirm={handleRequestPayout}
         requesting={requesting}
         storeName={selectedStore?.name || ""}
-        amount={selectedPayoutAmount}
-        method={selectedMethod}
-        kyc={selectedKyc}
-        cycle={selectedCycle}
-        onlineCollected={selectedStore?.onlineCollected || 0}
-        commissionDue={selectedStore?.commissionDue || 0}
-        toPassPrive={selectedStore?.toPassPrive || 0}
+        maxAmount={summary.availableBalance}
+        customAmount={customRequestAmount}
+        onCustomAmountChange={setCustomRequestAmount}
+        method={paymentDetails?.payout_method || "BANK_TRANSFER"}
+        gross={summary.grossCollected}
+        paidOut={summary.paidOut}
+        inTransit={summary.inTransit}
       />
     </div>
   );

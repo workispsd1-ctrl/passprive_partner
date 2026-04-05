@@ -236,10 +236,10 @@ export default function AddStoreBranchPage() {
             type="button"
             disabled={!canSubmit || loading}
             onClick={handleSubmit}
-            className="h-11 rounded-full px-5 text-sm font-semibold text-white inline-flex items-center gap-2 disabled:opacity-60 shadow-lg shadow-orange-200"
+            className="h-11 rounded-full px-5 text-sm font-semibold text-white inline-flex items-center gap-2 disabled:opacity-60 shadow-lg shadow-[rgba(119,31,168,0.28)]"
             style={{
               background:
-                "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)",
+                "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
             }}
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
@@ -248,9 +248,9 @@ export default function AddStoreBranchPage() {
         </div>
 
         {/* Hero */}
-        <div className="rounded-3xl border border-orange-100 bg-white/70 backdrop-blur p-6 md:p-8 shadow-sm">
+        <div className="rounded-3xl border border-[rgba(119,31,168,0.14)] bg-white/70 backdrop-blur p-6 md:p-8 shadow-sm">
           <div className="flex items-start gap-4">
-            <div className="h-12 w-12 rounded-2xl bg-orange-100 text-orange-700 flex items-center justify-center">
+            <div className="h-12 w-12 rounded-2xl bg-[#F4E7D1] text-[#771FA8] flex items-center justify-center">
               <Store className="h-6 w-6" />
             </div>
             <div>
@@ -327,7 +327,7 @@ export default function AddStoreBranchPage() {
               <div className="mt-5">
                 <label className="text-xs font-semibold text-gray-600">Description</label>
                 <textarea
-                  className="mt-2 min-h-[120px] w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-orange-100"
+                  className="mt-2 min-h-[120px] w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-[rgba(119,31,168,0.14)]"
                   value={form.description}
                   onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
                   placeholder="Short description of this branch..."
@@ -345,7 +345,7 @@ export default function AddStoreBranchPage() {
           {/* Side Summary */}
           <aside className="lg:sticky lg:top-6 h-fit rounded-3xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
             <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center">
+              <div className="h-9 w-9 rounded-xl bg-[#F4E7D1] text-[#771FA8] flex items-center justify-center">
                 <Phone className="h-4 w-4" />
               </div>
               <div>
@@ -369,10 +369,10 @@ export default function AddStoreBranchPage() {
               type="button"
               disabled={!canSubmit || loading}
               onClick={handleSubmit}
-              className="w-full h-11 rounded-full px-5 text-sm font-semibold text-white inline-flex items-center justify-center gap-2 disabled:opacity-60 shadow-lg shadow-orange-200"
+              className="w-full h-11 rounded-full px-5 text-sm font-semibold text-white inline-flex items-center justify-center gap-2 disabled:opacity-60 shadow-lg shadow-[rgba(119,31,168,0.28)]"
               style={{
                 background:
-                  "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)",
+                  "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
               }}
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4" />}
@@ -391,7 +391,7 @@ function Field({ label, value, onChange, disabled, type = "text", placeholder })
       <label className="text-xs font-semibold text-gray-600">{label}</label>
       <input
         type={type}
-        className="mt-2 h-11 w-full rounded-2xl border border-gray-200 bg-white px-4 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-orange-100"
+        className="mt-2 h-11 w-full rounded-2xl border border-gray-200 bg-white px-4 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-[rgba(119,31,168,0.14)]"
         value={value}
         onChange={onChange}
         disabled={disabled}
@@ -412,7 +412,7 @@ function Toggle({ checked, onChange, label, disabled }) {
           disabled={disabled}
           className="peer sr-only"
         />
-        <span className="h-6 w-11 rounded-full bg-gray-200 peer-checked:bg-orange-500 transition-colors" />
+        <span className="h-6 w-11 rounded-full bg-gray-200 peer-checked:bg-[#771FA8] transition-colors" />
         <span className="absolute left-1 h-4 w-4 rounded-full bg-white shadow-sm peer-checked:translate-x-5 transition-transform" />
       </span>
       {label}

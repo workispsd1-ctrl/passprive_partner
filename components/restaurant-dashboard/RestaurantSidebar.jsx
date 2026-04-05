@@ -21,6 +21,10 @@ import {
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
+const THEME_BG = "#F4E7D1";
+const THEME_ACCENT = "#771FA899";
+const THEME_ACCENT_SOLID = "#771FA8";
+
 const nav = [
   { label: "Dashboard", href: "/restaurant/dashboard", icon: LayoutDashboard },
   { label: "Bookings", href: "/restaurant/bookings", icon: CalendarCheck },
@@ -43,8 +47,9 @@ function StatusSwitch({ checked, onChange, disabled }) {
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-7 w-12 items-center rounded-full border transition ${
-        checked ? "bg-emerald-500 border-emerald-500" : "bg-gray-200 border-gray-300"
+        checked ? "" : "bg-gray-200 border-gray-300"
       } ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
+      style={checked ? { backgroundColor: THEME_ACCENT_SOLID, borderColor: THEME_ACCENT_SOLID } : undefined}
       aria-pressed={checked}
       aria-label="Toggle restaurant status"
     >
@@ -98,7 +103,8 @@ function ConfirmModal({
             type="button"
             onClick={onConfirm}
             disabled={loading}
-            className="h-9 rounded-xl bg-[#DA3224] text-white px-4 text-sm font-medium hover:opacity-95 disabled:opacity-60"
+            className="h-9 rounded-xl text-white px-4 text-sm font-medium hover:opacity-95 disabled:opacity-60"
+            style={{ background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)" }}
           >
             {loading ? "Saving..." : confirmText}
           </button>
@@ -367,12 +373,21 @@ export default function RestaurantSidebar() {
                 className={[
                   "relative flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition",
                   active
-                    ? "bg-gray-100 text-gray-900"
+                    ? "text-gray-900 border"
                     : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
                 ].join(" ")}
+                style={
+                  active
+                    ? {
+                        background: THEME_BG,
+                        borderColor: THEME_ACCENT,
+                        boxShadow: "0 14px 34px -24px rgba(119,31,168,0.45)",
+                      }
+                    : undefined
+                }
               >
                 <span className="flex items-center gap-3">
-                  <Icon className="h-4 w-4" style={{ color: active ? "var(--accent)" : undefined }} />
+                  <Icon className="h-4 w-4" style={{ color: active ? THEME_ACCENT_SOLID : undefined }} />
                   {item.label}
                   {item.premium ? (
                     <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-1.5 py-0.5 text-[9px] font-semibold text-green-700">
@@ -383,7 +398,10 @@ export default function RestaurantSidebar() {
                 </span>
 
                 {badgeCount > 0 ? (
-                  <span className="inline-flex min-w-[22px] h-[22px] items-center justify-center rounded-full bg-[#DA3224] px-1.5 text-[11px] font-semibold text-white">
+                  <span
+                    className="inline-flex min-w-[22px] h-[22px] items-center justify-center rounded-full px-1.5 text-[11px] font-semibold text-white"
+                    style={{ backgroundColor: THEME_ACCENT_SOLID }}
+                  >
                     {badgeCount > 99 ? "99+" : badgeCount}
                   </span>
                 ) : null}
@@ -415,13 +433,17 @@ export default function RestaurantSidebar() {
           </div>
 
           <Link href="/restaurant/offers" className="block">
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+            <div
+              className="rounded-2xl border p-4"
+              style={{ background: THEME_BG, borderColor: THEME_ACCENT }}
+            >
               <div className="text-sm font-semibold">Quick Actions</div>
               <div className="text-xs text-gray-600 mt-1">
                 Create offers, update hours, manage menu.
               </div>
               <button
-                className="mt-3 w-full rounded-xl border border-gray-200 bg-white py-2 text-sm font-medium hover:bg-gray-50 cursor-pointer"
+                className="mt-3 w-full rounded-xl border bg-white py-2 text-sm font-medium cursor-pointer"
+                style={{ borderColor: THEME_ACCENT, color: THEME_ACCENT_SOLID }}
                 type="button"
               >
                 Create Offer

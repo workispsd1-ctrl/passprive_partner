@@ -18,16 +18,16 @@ import {
   AlertTriangle,
   Check,
   Crown,
-  CreditCard,
-  ReceiptText,
   Package,
   ArrowUpRight,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
-const BRAND_ACCENT = "#ff5a1f";
-const ACTIVE_ICON = "#ff5a1f";
+const BRAND_ACCENT = "#771FA8";
+const ACTIVE_ICON = "#771FA8";
 const INACTIVE_ICON = "#6b7280";
+const ACTIVE_BG = "#F4E7D1";
+const ACTIVE_BORDER = "rgba(119,31,168,0.18)";
 
 const CACHE_KEY = "store_sidebar_cache_v1";
 const ACTIVE_STORE_KEY = "store_partner_selected_store_id";
@@ -35,13 +35,11 @@ const ACTIVE_STORE_KEY = "store_partner_selected_store_id";
 const baseNav = [
   { label: "Dashboard", href: "/store-partner/dashboard", icon: LayoutDashboard },
   { label: "Pickup Orders", href: "/store-partner/pickup-orders", icon: ShoppingCart, key: "pickup-orders", premium: true },
-  { label: "Payment Orders", href: "/store-partner/payment-orders", icon: CreditCard, key: "payment-orders" },
-  { label: "Transactions", href: "/store-partner/transactions", icon: ReceiptText },
   { label: "Catalogue", href: "/store-partner/catalogue", icon: Boxes, key: "pickup-catalogue", dynamicLabel: true },
   { label: "Inventory", href: "/store-partner/inventory", icon: Package, key: "inventory", premium: true },
   { label: "My Stores", href: "/store-partner/all-stores", icon: Store },
   { label: "Offers", href: "/store-partner/offers", icon: Tag },
-  { label: "Reviews", href: "/store-partner/reviews", icon: MessageSquareText },
+  // { label: "Reviews", href: "/store-partner/reviews", icon: MessageSquareText },
   { label: "Payouts", href: "/store-partner/payouts", icon: Wallet },
   { label: "Ads & Boost", href: "/store-partner/add-request", icon: Megaphone },
   { label: "Settings", href: "/store-partner/settings", icon: Settings },
@@ -61,6 +59,16 @@ function normalizeMemberStore(storesField) {
 
 function normalizeStoreType(value) {
   return String(value || "PRODUCT").toUpperCase() === "SERVICE" ? "SERVICE" : "PRODUCT";
+}
+
+function buildInFilter(column, values) {
+  const cleaned = (values || [])
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .map((value) => `"${value.replaceAll('"', '\\"')}"`);
+
+  if (!cleaned.length) return "";
+  return `${column}=in.(${cleaned.join(",")})`;
 }
 
 function StatusSwitch({ checked, onChange, disabled = false }) {
@@ -191,7 +199,6 @@ export default function StoreSidebar() {
   const [pendingStatus, setPendingStatus] = useState(null);
 
   const [pickupOrderCount, setPickupOrderCount] = useState(0);
-  const [paymentOnlyCount, setPaymentOnlyCount] = useState(0);
 
   const selectedStore = useMemo(
     () => stores.find((s) => String(s.id) === String(selectedStoreId)) || null,
@@ -237,7 +244,6 @@ export default function StoreSidebar() {
       if (Array.isArray(raw.stores) && raw.stores.length) setStores(raw.stores);
       if (raw.selectedStoreId) setSelectedStoreId(String(raw.selectedStoreId));
       if (typeof raw.pickupOrderCount === "number") setPickupOrderCount(raw.pickupOrderCount);
-      if (typeof raw.paymentOnlyCount === "number") setPaymentOnlyCount(raw.paymentOnlyCount);
       if (raw.userRole) setUserRole(raw.userRole);
     } catch {}
   };
@@ -279,8 +285,7 @@ export default function StoreSidebar() {
   const fetchOrderBadges = async (ids) => {
     if (!ids?.length) {
       setPickupOrderCount(0);
-      setPaymentOnlyCount(0);
-      writeCache({ pickupOrderCount: 0, paymentOnlyCount: 0 });
+      writeCache({ pickupOrderCount: 0 });
       return;
     }
 
@@ -298,17 +303,8 @@ export default function StoreSidebar() {
       () => commonBase().filter("metadata->>order_flow", "eq", "PREMIUM"),
     ]);
 
-    const basic = await queryCountFallback([
-      () => commonBase().eq("order_flow", "BASIC").is("partner_seen_at", null),
-      () => commonBase().filter("metadata->>order_flow", "eq", "BASIC").is("partner_seen_at", null),
-      () => commonBase().eq("order_flow", "BASIC"),
-      () => commonBase().filter("metadata->>order_flow", "eq", "BASIC"),
-      () => commonBase(),
-    ]);
-
     setPickupOrderCount(premium);
-    setPaymentOnlyCount(basic);
-    writeCache({ pickupOrderCount: premium, paymentOnlyCount: basic });
+    writeCache({ pickupOrderCount: premium });
   };
 
   useEffect(() => {
@@ -331,7 +327,7 @@ export default function StoreSidebar() {
 
         const ownerRes = await supabaseBrowser
           .from("stores")
-          .select("id,name,city,is_active,store_type,pickup_premium_enabled,pickup_premium_expires_at")
+          .select("id,name,city,is_active,logo_url,store_type,pickup_premium_enabled,pickup_premium_expires_at")
           .eq("owner_user_id", userId)
           .order("name", { ascending: true });
 
@@ -339,7 +335,7 @@ export default function StoreSidebar() {
 
         const memberRes = await supabaseBrowser
           .from("store_members")
-          .select("store_id,role,stores:store_id(id,name,city,is_active,store_type,pickup_premium_enabled,pickup_premium_expires_at)")
+          .select("store_id,role,stores:store_id(id,name,city,is_active,logo_url,store_type,pickup_premium_enabled,pickup_premium_expires_at)")
           .eq("user_id", userId);
 
         if (memberRes.error) throw memberRes.error;
@@ -415,13 +411,13 @@ export default function StoreSidebar() {
   useEffect(() => {
     if (!storeIds.length) {
       setPickupOrderCount(0);
-      setPaymentOnlyCount(0);
       return;
     }
 
     fetchOrderBadges(storeIds);
 
-    const filter = `store_id=in.(${storeIds.join(",")})`;
+    const filter = buildInFilter("store_id", storeIds);
+    if (!filter) return;
     const channel = supabaseBrowser
       .channel(`store-orders-realtime-${storeIds.join("-")}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "store_orders", filter }, () => {
@@ -501,10 +497,25 @@ export default function StoreSidebar() {
       <aside className="hidden lg:flex lg:flex-col lg:w-[280px] h-screen sticky top-0 border-r border-gray-200 bg-white overflow-hidden">
         <div className="h-16 flex items-center px-6 border-b border-gray-200 shrink-0">
           <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-xl" style={{ backgroundColor: BRAND_ACCENT }} />
+            <div
+              className="h-9 w-9 rounded-xl overflow-hidden border flex items-center justify-center"
+              style={{ backgroundColor: "#F4E7D1", borderColor: "rgba(119,31,168,0.18)" }}
+            >
+              {selectedStore?.logo_url ? (
+                <img
+                  src={selectedStore.logo_url}
+                  alt={selectedStore?.name || "Store logo"}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <Store className="h-4 w-4" style={{ color: BRAND_ACCENT }} />
+              )}
+            </div>
             <div>
               <div className="font-bold leading-tight">Store Partner</div>
-              <div className="text-xs text-gray-500">Dashboard</div>
+              <div className="text-xs text-gray-500">
+                {selectedStore?.name || "Dashboard"}
+              </div>
             </div>
           </div>
         </div>
@@ -514,7 +525,6 @@ export default function StoreSidebar() {
             const active = isActiveRoute(item.href);
             const Icon = item.icon;
             const isPickup = item.key === "pickup-orders";
-            const isPaymentOnly = item.key === "payment-orders";
 
             return (
               <Link
@@ -523,9 +533,18 @@ export default function StoreSidebar() {
                 className={[
                   "flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition",
                   active
-                    ? "bg-orange-50 text-gray-900 border border-orange-100"
+                    ? "text-gray-900 border"
                     : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
                 ].join(" ")}
+                style={
+                  active
+                    ? {
+                        background: ACTIVE_BG,
+                        borderColor: ACTIVE_BORDER,
+                        boxShadow: "0 14px 34px -24px rgba(119,31,168,0.45)",
+                      }
+                    : undefined
+                }
               >
                 <span className="flex items-center gap-3">
                   <Icon className="h-4 w-4" style={{ color: active ? ACTIVE_ICON : INACTIVE_ICON }} />
@@ -544,11 +563,6 @@ export default function StoreSidebar() {
                   </span>
                 ) : null}
 
-                {isPaymentOnly && paymentOnlyCount > 0 ? (
-                  <span className="inline-flex min-w-[22px] h-[22px] items-center justify-center rounded-full bg-indigo-600 px-1.5 text-[11px] font-semibold text-white">
-                    {paymentOnlyCount > 99 ? "99+" : paymentOnlyCount}
-                  </span>
-                ) : null}
               </Link>
             );
           })}
@@ -614,6 +628,7 @@ export default function StoreSidebar() {
             {statusError ? <div className="mt-2 text-xs text-red-600">{statusError}</div> : null}
           </div>
 
+          {/*
           <div className="rounded-2xl border border-gray-200 bg-white p-4">
             <div className="text-sm font-semibold text-gray-900">Quick Actions</div>
             <div className="mt-3 space-y-2">
@@ -625,13 +640,6 @@ export default function StoreSidebar() {
                 <ArrowUpRight className="h-4 w-4 text-gray-500" />
               </Link>
               <Link
-                href="/store-partner/payment-orders"
-                className="h-9 px-3 rounded-xl border border-gray-200 bg-white text-sm inline-flex items-center justify-between w-full hover:bg-gray-50"
-              >
-                <span>Payment Orders</span>
-                <ArrowUpRight className="h-4 w-4 text-gray-500" />
-              </Link>
-              <Link
                 href="/store-partner/catalogue"
                 className="h-9 px-3 rounded-xl border border-gray-200 bg-white text-sm inline-flex items-center justify-between w-full hover:bg-gray-50"
               >
@@ -640,6 +648,7 @@ export default function StoreSidebar() {
               </Link>
             </div>
           </div>
+          */}
         </div>
       </aside>
 

@@ -32,7 +32,7 @@ function CardShell({ title, right, children }) {
 function StatMini({ title, value, icon: Icon, tone = "slate", helper = "" }) {
   const toneMap = {
     slate: "bg-slate-50 text-slate-700 border-slate-200",
-    orange: "bg-orange-50 text-orange-700 border-orange-200",
+    orange: "bg-[#F4E7D1] text-[#771FA8] border-[rgba(119,31,168,0.18)]",
     emerald: "bg-emerald-50 text-emerald-700 border-emerald-200",
     indigo: "bg-indigo-50 text-indigo-700 border-indigo-200",
   };
@@ -136,14 +136,14 @@ function RequestPayoutModal({
         </div>
 
         <div className="p-6 space-y-4">
-          <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
-            <div className="text-xs text-orange-700">Amount You Are Requesting</div>
+          <div className="rounded-2xl border border-[rgba(119,31,168,0.18)] bg-[#F4E7D1] p-4">
+            <div className="text-xs text-[#771FA8]">Amount You Are Requesting</div>
             <div className="mt-1">
               <Amount
                 value={amount}
                 className="inline-flex items-baseline gap-1"
-                currencyClassName="text-xs font-semibold uppercase tracking-wide text-orange-700"
-                valueClassName="text-2xl font-bold text-orange-900"
+                currencyClassName="text-xs font-semibold uppercase tracking-wide text-[#771FA8]"
+                valueClassName="text-2xl font-bold text-[#5B1685]"
               />
             </div>
           </div>
@@ -201,8 +201,8 @@ function RequestPayoutModal({
             type="button"
             onClick={onConfirm}
             disabled={requesting}
-            className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 shadow-lg shadow-orange-200 disabled:opacity-60"
-            style={{ background: "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)" }}
+            className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 shadow-lg shadow-[rgba(119,31,168,0.28)] disabled:opacity-60"
+            style={{ background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)" }}
           >
             {requesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CircleDollarSign className="h-4 w-4" />}
             {requesting ? "Sending..." : "Confirm Request"}
@@ -761,8 +761,8 @@ export default function RestaurantPartnerPayoutsPage() {
               Export
             </button>
             <button
-              className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 shadow-lg shadow-orange-200 disabled:opacity-60"
-              style={{ background: "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)" }}
+              className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 shadow-lg shadow-[rgba(119,31,168,0.28)] disabled:opacity-60"
+              style={{ background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)" }}
               type="button"
               onClick={handleOpenRequestModal}
               disabled={loading || requesting || !canRequestPayout}
@@ -838,7 +838,7 @@ export default function RestaurantPartnerPayoutsPage() {
               <div className="md:col-span-4">
                 <label className="text-xs text-gray-500">Restaurant</label>
                 <select
-                  className="mt-1 h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-orange-100"
+                  className="mt-1 h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-[rgba(119,31,168,0.14)]"
                   value={selectedRestaurantId}
                   onChange={(e) => setSelectedRestaurantId(e.target.value)}
                 >
@@ -1004,7 +1004,7 @@ export default function RestaurantPartnerPayoutsPage() {
               <div className="relative">
                 <Search className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
-                  className="h-11 w-full rounded-2xl border border-gray-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-orange-100"
+                  className="h-11 w-full rounded-2xl border border-gray-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-[rgba(119,31,168,0.14)]"
                   placeholder="Search request id, method, restaurant..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -1014,7 +1014,7 @@ export default function RestaurantPartnerPayoutsPage() {
 
             <div className="md:col-span-4">
               <select
-                className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-orange-100"
+                className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-[rgba(119,31,168,0.14)]"
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
               >

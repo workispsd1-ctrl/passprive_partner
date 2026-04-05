@@ -1,1 +1,26 @@
 @import "tailwindcss";
+
+:root {
+  --theme-surface: #F4E7D1;
+  --theme-accent: #771FA899;
+  --theme-accent-solid: #771FA8;
+  --theme-accent-deep: #5B1685;
+  --theme-gradient: linear-gradient(
+    90deg,
+    #771FA8 0%,
+    rgba(119, 31, 168, 0.78) 50%,
+    #5B1685 100%
+  );
+}
+
+::selection {
+  background: rgba(119, 31, 168, 0.18);
+  color: #2b1940;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible {
+  outline-color: var(--theme-accent-solid);
+}

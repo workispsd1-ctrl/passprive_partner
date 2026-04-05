@@ -21,7 +21,7 @@ function Field({ label, value, onChange, placeholder = "", disabled = false }) {
     <div>
       <label className="text-xs font-semibold text-gray-600">{label}</label>
       <input
-        className="mt-2 h-11 w-full rounded-2xl border border-gray-200 bg-white px-4 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-orange-100"
+        className="mt-2 h-11 w-full rounded-2xl border border-gray-200 bg-white px-4 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-[rgba(119,31,168,0.14)]"
         value={value || ""}
         onChange={onChange}
         placeholder={placeholder}
@@ -36,7 +36,7 @@ function TextArea({ label, value, onChange, placeholder = "", disabled = false }
     <div>
       <label className="text-xs font-semibold text-gray-600">{label}</label>
       <textarea
-        className="mt-2 min-h-[120px] w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-orange-100"
+        className="mt-2 min-h-[120px] w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-[rgba(119,31,168,0.14)]"
         value={value || ""}
         onChange={onChange}
         placeholder={placeholder}
@@ -211,10 +211,10 @@ export default function EditStorePage() {
             type="button"
             onClick={onSave}
             disabled={!canSave || saving || loading}
-            className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 disabled:opacity-60 shadow-lg shadow-orange-200"
+            className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 disabled:opacity-60 shadow-lg shadow-[rgba(119,31,168,0.28)]"
             style={{
               background:
-                "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)",
+                "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
             }}
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}

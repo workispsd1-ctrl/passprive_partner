@@ -1,220 +1,364 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Gift,
+  Loader2,
+  MapPin,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Store,
+  Tag,
+  TicketPercent,
+  X,
+} from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
-import { Loader2, Tag, Gift } from "lucide-react";
+import { useStores } from "@/lib/store-partner/useStores";
 
-function uid() {
-  // @ts-ignore
-  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
-  return `id_${Date.now().toString(16)}_${Math.random().toString(16).slice(2)}`;
-}
+const THEME_ACCENT = "#771FA8";
+const THEME_ACCENT_SOFT = "rgba(119, 31, 168, 0.12)";
+const THEME_BORDER = "rgba(119, 31, 168, 0.18)";
 
-const TERMS = [
-  { id: "validity", label: "I confirm this offer has clear validity dates and terms." },
-  { id: "compliance", label: "I confirm this offer complies with pricing and advertising policies." },
-  { id: "honor", label: "I agree to honor this offer for all selected stores." },
-];
-
-const VISIT_STEPS = [2, 3, 4, 5, 6, 7, 8, 9, 10];
-const REWARD_MODES = {
-  NONE: "NONE",
-  FLAT: "FLAT",
-  PERCENT: "PERCENT",
-  GIFT: "GIFT",
-};
-
-function createDefaultVisitRewards() {
-  return VISIT_STEPS.reduce((acc, v) => {
-    acc[String(v)] = { mode: REWARD_MODES.NONE, amount: "", gift: "" };
-    return acc;
-  }, {});
-}
-
-function Card({ title, subtitle, children }) {
-  return (
-    <div className="rounded-3xl border border-gray-200 bg-white shadow-sm">
-      <div className="px-6 py-4 border-b border-gray-200">
-        <div className="font-semibold text-gray-900">{title}</div>
-        {subtitle ? <div className="text-xs text-gray-500 mt-1">{subtitle}</div> : null}
-      </div>
-      <div className="p-6">{children}</div>
-    </div>
-  );
-}
-
-function Field({ label, children, required = false }) {
-  return (
-    <div>
-      <div className="text-xs font-semibold text-gray-600 mb-2">
-        {label} {required ? <span className="text-red-500">*</span> : null}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function StoreSelector({
-  stores,
-  applyAll,
-  setApplyAll,
-  selectedIds,
-  setSelectedIds,
-  disabled = false,
-}) {
-  const onToggleStore = (id, checked) => {
-    setSelectedIds((prev) => {
-      const set = new Set(prev);
-      if (checked) set.add(String(id));
-      else set.delete(String(id));
-      return Array.from(set);
-    });
+function emptyOfferForm() {
+  return {
+    title: "",
+    description: "",
+    badgeText: "",
+    discountType: "PERCENT",
+    discountValue: "",
+    minBillAmount: "",
+    status: "ACTIVE",
+    startsAt: "",
+    endsAt: "",
   };
+}
 
+function toTitleCase(value) {
+  return String(value || "")
+    .toLowerCase()
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatCurrency(value) {
+  const amount = Number(value || 0);
+  return `MUR ${amount.toFixed(2)}`;
+}
+
+function formatAmountCompact(value) {
+  const amount = Number(value || 0);
+  if (Number.isNaN(amount)) return "0";
+  return Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
+}
+
+function formatDate(value) {
+  if (!value) return "No date";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "No date";
+  return parsed.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatDateInput(value) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
+}
+
+function hasOfferContent(raw) {
+  if (!raw || typeof raw !== "object") return false;
+  return Boolean(
+    raw.title ||
+      raw.name ||
+      raw.offer_name ||
+      raw.label ||
+    raw.description ||
+      raw.subtitle ||
+      raw.details ||
+      raw.badge_text ||
+      raw.badge ||
+      raw.discount_value ||
+      raw.value ||
+      raw.amount ||
+      raw.discountAmount
+  );
+}
+
+function isTruthyFlag(value) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  const normalized = String(value || "").trim().toLowerCase();
+  return ["true", "1", "yes", "active", "enabled", "live", "published"].includes(normalized);
+}
+
+function statusTone(status) {
+  const normalized = String(status || "").toUpperCase();
+  if (["ACTIVE", "LIVE", "PUBLISHED"].includes(normalized)) {
+    return { bg: "rgba(22, 163, 74, 0.12)", color: "#166534", label: "Active" };
+  }
+  if (["PAUSED", "INACTIVE", "DRAFT"].includes(normalized)) {
+    return { bg: THEME_ACCENT_SOFT, color: THEME_ACCENT, label: toTitleCase(normalized) };
+  }
+  if (["EXPIRED", "ENDED", "CANCELLED", "ARCHIVED"].includes(normalized)) {
+    return { bg: "rgba(220, 38, 38, 0.12)", color: "#B91C1C", label: toTitleCase(normalized) };
+  }
+  return { bg: "rgba(71, 85, 105, 0.12)", color: "#475569", label: normalized ? toTitleCase(normalized) : "Unknown" };
+}
+
+function normalizeOffer(raw, index) {
+  if (!hasOfferContent(raw)) return null;
+
+  const title = raw?.title || raw?.name || raw?.offer_name || raw?.label || `Offer ${index + 1}`;
+  const discountValue = raw?.discount_value ?? raw?.value ?? raw?.amount ?? raw?.discountAmount ?? null;
+  const discountType = raw?.discount_type || raw?.type || raw?.offer_type || raw?.value_type || "PERCENT";
+  const startsAt = raw?.starts_at || raw?.start_date || raw?.startDate || null;
+  const endsAt = raw?.ends_at || raw?.end_date || raw?.endDate || raw?.expires_at || null;
+  const explicitStatus = String(raw?.status || "").trim().toUpperCase();
+  const activeFlag =
+    isTruthyFlag(raw?.is_active) ||
+    isTruthyFlag(raw?.active) ||
+    isTruthyFlag(raw?.enabled) ||
+    isTruthyFlag(raw?.isEnabled);
+  const isActive =
+    activeFlag ||
+    ["ACTIVE", "LIVE", "PUBLISHED"].includes(explicitStatus);
+  const status = isActive ? "ACTIVE" : explicitStatus || "PAUSED";
+
+  return {
+    id: raw?.id || raw?.offer_id || `${title}-${index}`,
+    title,
+    description: raw?.description || raw?.subtitle || raw?.details || "",
+    badgeText: raw?.badge_text || raw?.badge || "",
+    minBillAmount: raw?.min_bill_amount ?? raw?.minimum_bill ?? raw?.minAmount ?? null,
+    discountValue,
+    discountType,
+    startsAt,
+    endsAt,
+    status,
+    isActive,
+  };
+}
+
+function serializeOffer(form, existingId) {
+  return {
+    id: existingId || crypto.randomUUID(),
+    title: String(form.title || "").trim(),
+    description: String(form.description || "").trim(),
+    badge_text: String(form.badgeText || "").trim(),
+    discount_type: String(form.discountType || "PERCENT").toUpperCase(),
+    discount_value: form.discountValue === "" ? null : Number(form.discountValue),
+    min_bill_amount: form.minBillAmount === "" ? null : Number(form.minBillAmount),
+    status: String(form.status || "ACTIVE").toUpperCase(),
+    starts_at: form.startsAt || null,
+    ends_at: form.endsAt || null,
+    is_active: ["ACTIVE", "LIVE", "PUBLISHED"].includes(String(form.status || "ACTIVE").toUpperCase()),
+  };
+}
+
+function formFromOffer(offer) {
+  return {
+    title: offer?.title || "",
+    description: offer?.description || "",
+    badgeText: offer?.badgeText || "",
+    discountType: String(offer?.discountType || "PERCENT").toUpperCase(),
+    discountValue: offer?.discountValue ?? "",
+    minBillAmount: offer?.minBillAmount ?? "",
+    status: String(offer?.status || "ACTIVE").toUpperCase(),
+    startsAt: formatDateInput(offer?.startsAt),
+    endsAt: formatDateInput(offer?.endsAt),
+  };
+}
+
+function StatCard({ icon: Icon, label, value, hint }) {
   return (
-    <div className="space-y-3">
-      <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-        <input
-          type="checkbox"
-          disabled={disabled}
-          checked={applyAll}
-          onChange={(e) => setApplyAll(e.target.checked)}
-        />
-        Apply to all stores ({stores.length})
-      </label>
-
-      <div className="max-h-44 overflow-auto rounded-2xl border border-gray-200 bg-white p-3 space-y-2">
-        {stores.map((s) => {
-          const checked = applyAll || selectedIds.includes(String(s.id));
-          return (
-            <label key={s.id} className="flex items-center gap-2 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                disabled={disabled || applyAll}
-                checked={checked}
-                onChange={(e) => onToggleStore(s.id, e.target.checked)}
-              />
-              <span>
-                {s.name} {s.city ? `• ${s.city}` : ""} {s.is_active === false ? "(Inactive)" : ""}
-              </span>
-            </label>
-          );
-        })}
+    <div
+      className="rounded-[28px] border p-5 shadow-sm"
+      style={{
+        background: "rgba(255,255,255,0.72)",
+        borderColor: THEME_BORDER,
+        boxShadow: "0 18px 40px rgba(119, 31, 168, 0.08)",
+      }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</div>
+          <div className="mt-3 text-3xl font-semibold text-slate-900">{value}</div>
+          {hint ? <div className="mt-2 text-sm text-slate-600">{hint}</div> : null}
+        </div>
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl" style={{ background: THEME_ACCENT_SOFT, color: THEME_ACCENT }}>
+          <Icon className="h-5 w-5" />
+        </div>
       </div>
     </div>
   );
 }
 
-function normalizeMemberStores(rows) {
-  const out = [];
-  (rows || []).forEach((row) => {
-    const linked = row?.stores;
-    if (!linked) return;
-    if (Array.isArray(linked)) {
-      linked.forEach((s) => {
-        if (s?.id) out.push(s);
-      });
-      return;
-    }
-    if (linked?.id) out.push(linked);
-  });
-  return out;
-}
-
-function OfferCard({ offer, onDelete, onEdit }) {
-  const isVisit = String(offer?.type || "").toUpperCase() === "VISIT";
-  const isExpired = new Date(offer.end_at) < new Date();
+function OfferCard({ offer, onEdit }) {
+  const tone = statusTone(offer.status);
+  const valueLabel =
+    offer.discountValue === null || offer.discountValue === ""
+      ? "Offer details available"
+      : String(offer.discountType || "").toUpperCase().includes("PERCENT")
+      ? `MUR ${formatAmountCompact(offer.discountValue)}% OFF`
+      : `MUR ${formatAmountCompact(offer.discountValue)} FLAT OFF`;
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
-            <h3 className="font-semibold text-gray-900">
-              {offer.title || "Visit Reward"}
-            </h3>
-            {isVisit && (
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                Loyalty
+    <div
+      className="rounded-[30px] border p-5 shadow-sm"
+      style={{
+        background: "rgba(255,255,255,0.88)",
+        borderColor: THEME_BORDER,
+        boxShadow: "0 20px 40px rgba(15, 23, 42, 0.06)",
+      }}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-lg font-semibold text-slate-900">{offer.title}</h3>
+            <span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold" style={{ background: tone.bg, color: tone.color }}>
+              {tone.label}
+            </span>
+            {offer.badgeText ? (
+              <span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold" style={{ background: THEME_ACCENT_SOFT, color: THEME_ACCENT }}>
+                {offer.badgeText}
               </span>
-            )}
-            {isExpired && (
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                Expired
-              </span>
-            )}
-            {!isExpired && offer.enabled && (
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                Active
-              </span>
-            )}
+            ) : null}
           </div>
-
-          {!isVisit && (
-            <>
-              {(offer.description || offer.subtitle) && (
-                <div className="text-sm text-gray-600 mb-2">{offer.description || offer.subtitle}</div>
-              )}
-
-              <div className="text-2xl font-bold text-orange-600 mb-2">
-                {offer.badge_text}
-              </div>
-
-              {offer.min_bill && (
-                <div className="text-xs text-gray-600 mb-1">
-                  Min bill: <span className="font-semibold">MUR {offer.min_bill}</span>
-                </div>
-              )}
-
-              {offer.coupon_code && (
-                <div className="text-xs text-gray-600 mb-1">
-                  Code: <span className="font-mono font-semibold">{offer.coupon_code}</span>
-                </div>
-              )}
-
-              <div className="text-xs text-gray-500 mb-1">
-                Valid from {new Date(offer.start_at).toLocaleDateString()} to{" "}
-                {new Date(offer.end_at).toLocaleDateString()}
-              </div>
-            </>
-          )}
-
-          {isVisit && offer.visit_rewards && (
-            <div className="text-xs text-gray-700 mt-2">
-              <div className="font-semibold mb-1">Rewards:</div>
-              {offer.visit_rewards.map((reward, idx) => (
-                <div key={idx} className="text-gray-600">
-                  {reward.visit_number}th visit:{" "}
-                  {reward.reward_type === "GIFT"
-                    ? reward.description
-                    : `${reward.amount}${reward.reward_type === "PERCENT" ? "%" : " MUR"}`}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {offer.store_name && (
-            <div className="text-xs text-gray-500 mt-2">
-              Store: <span className="font-semibold">{offer.store_name}</span>
-            </div>
-          )}
+          {offer.description ? <p className="mt-2 text-sm leading-6 text-slate-600">{offer.description}</p> : null}
         </div>
 
-        <div className="flex gap-2">
-          {!isVisit && onEdit ? (
-            <button
-              onClick={() => onEdit(offer)}
-              className="h-9 px-3 rounded-xl text-xs font-medium text-gray-700 hover:bg-gray-50 border border-gray-200 transition-colors"
-            >
-              Edit
-            </button>
-          ) : null}
+        <div className="inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold" style={{ background: THEME_ACCENT_SOFT, color: THEME_ACCENT }}>
+          <TicketPercent className="h-4 w-4" />
+          {valueLabel}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <div className="rounded-2xl bg-slate-50 px-4 py-3">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Minimum bill</div>
+          <div className="mt-1 text-sm font-semibold text-slate-900">
+            {offer.minBillAmount !== null && offer.minBillAmount !== "" ? formatCurrency(offer.minBillAmount) : "No minimum"}
+          </div>
+        </div>
+        <div className="rounded-2xl bg-slate-50 px-4 py-3">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Validity</div>
+          <div className="mt-1 text-sm font-semibold text-slate-900">
+            {formatDate(offer.startsAt)} to {formatDate(offer.endsAt)}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 flex justify-end">
+        <button
+          type="button"
+          onClick={() => onEdit(offer)}
+          className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
+          style={{ background: THEME_ACCENT_SOFT, color: THEME_ACCENT }}
+        >
+          <Pencil className="h-4 w-4" />
+          Edit offer
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function EmptyOffers({ storeName }) {
+  return (
+    <div className="rounded-[32px] border px-6 py-12 text-center shadow-sm" style={{ background: "rgba(255,255,255,0.82)", borderColor: THEME_BORDER }}>
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[20px]" style={{ background: THEME_ACCENT_SOFT, color: THEME_ACCENT }}>
+        <Gift className="h-6 w-6" />
+      </div>
+      <h3 className="mt-4 text-lg font-semibold text-slate-900">No offers added yet</h3>
+      <p className="mt-2 text-sm text-slate-600">
+        {storeName ? `${storeName} does not have any offers in the store record yet.` : "No offers found for this store."}
+      </p>
+    </div>
+  );
+}
+
+function OfferEditor({ open, mode, form, saving, onChange, onClose, onSave }) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+      <div className="w-full max-w-3xl rounded-[32px] border bg-white shadow-2xl" style={{ borderColor: THEME_BORDER }}>
+        <div className="flex items-center justify-between border-b px-6 py-5" style={{ borderColor: THEME_BORDER }}>
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">{mode === "edit" ? "Edit offer" : "Add offer"}</h2>
+            <p className="mt-1 text-sm text-slate-500">This saves directly into the selected store&apos;s offers data.</p>
+          </div>
+          <button type="button" onClick={onClose} className="inline-flex h-10 w-10 items-center justify-center rounded-full border text-slate-600" style={{ borderColor: THEME_BORDER }}>
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="grid gap-4 px-6 py-5 md:grid-cols-2">
+          <label className="block">
+            <div className="mb-2 text-sm font-medium text-slate-700">Offer title</div>
+            <input value={form.title} onChange={(e) => onChange("title", e.target.value)} className="h-11 w-full rounded-2xl border px-4 outline-none" style={{ borderColor: THEME_BORDER }} />
+          </label>
+          <label className="block md:col-span-2">
+            <div className="mb-2 text-sm font-medium text-slate-700">Description</div>
+            <textarea value={form.description} onChange={(e) => onChange("description", e.target.value)} rows={3} className="w-full rounded-2xl border px-4 py-3 outline-none" style={{ borderColor: THEME_BORDER }} />
+          </label>
+          <label className="block">
+            <div className="mb-2 text-sm font-medium text-slate-700">Badge text</div>
+            <input value={form.badgeText} onChange={(e) => onChange("badgeText", e.target.value)} className="h-11 w-full rounded-2xl border px-4 outline-none" style={{ borderColor: THEME_BORDER }} />
+          </label>
+          <label className="block">
+            <div className="mb-2 text-sm font-medium text-slate-700">Status</div>
+            <select value={form.status} onChange={(e) => onChange("status", e.target.value)} className="h-11 w-full rounded-2xl border px-4 outline-none" style={{ borderColor: THEME_BORDER }}>
+              <option value="ACTIVE">Active</option>
+              <option value="PAUSED">Paused</option>
+              <option value="EXPIRED">Expired</option>
+            </select>
+          </label>
+          <label className="block">
+            <div className="mb-2 text-sm font-medium text-slate-700">Discount type</div>
+            <select value={form.discountType} onChange={(e) => onChange("discountType", e.target.value)} className="h-11 w-full rounded-2xl border px-4 outline-none" style={{ borderColor: THEME_BORDER }}>
+              <option value="PERCENT">Percent</option>
+              <option value="FLAT">Flat amount</option>
+            </select>
+          </label>
+          <label className="block">
+            <div className="mb-2 text-sm font-medium text-slate-700">Maximum discount</div>
+            <input value={form.discountValue} onChange={(e) => onChange("discountValue", e.target.value)} type="number" min="0" className="h-11 w-full rounded-2xl border px-4 outline-none" style={{ borderColor: THEME_BORDER }} />
+          </label>
+          <label className="block">
+            <div className="mb-2 text-sm font-medium text-slate-700">Minimum bill amount</div>
+            <input value={form.minBillAmount} onChange={(e) => onChange("minBillAmount", e.target.value)} type="number" min="0" className="h-11 w-full rounded-2xl border px-4 outline-none" style={{ borderColor: THEME_BORDER }} />
+          </label>
+          <label className="block">
+            <div className="mb-2 text-sm font-medium text-slate-700">Start date</div>
+            <input value={form.startsAt} onChange={(e) => onChange("startsAt", e.target.value)} type="date" className="h-11 w-full rounded-2xl border px-4 outline-none" style={{ borderColor: THEME_BORDER }} />
+          </label>
+          <label className="block">
+            <div className="mb-2 text-sm font-medium text-slate-700">End date</div>
+            <input value={form.endsAt} onChange={(e) => onChange("endsAt", e.target.value)} type="date" className="h-11 w-full rounded-2xl border px-4 outline-none" style={{ borderColor: THEME_BORDER }} />
+          </label>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 border-t px-6 py-5" style={{ borderColor: THEME_BORDER }}>
+          <button type="button" onClick={onClose} className="rounded-full border px-5 py-2.5 text-sm font-semibold text-slate-700" style={{ borderColor: THEME_BORDER }}>
+            Cancel
+          </button>
           <button
-            onClick={() => onDelete(offer.id, offer.store_id)}
-            className="h-9 px-3 rounded-xl text-xs font-medium text-red-600 hover:bg-red-50 border border-red-200 transition-colors"
+            type="button"
+            onClick={onSave}
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            style={{ background: THEME_ACCENT }}
           >
-            Delete
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {mode === "edit" ? "Save changes" : "Add offer"}
           </button>
         </div>
       </div>
@@ -222,884 +366,245 @@ function OfferCard({ offer, onDelete, onEdit }) {
   );
 }
 
-function OfferDisplay({ offers, onDelete, onEdit }) {
-  const standardOffers = offers.filter((o) => String(o?.type || "").toUpperCase() !== "VISIT");
-  const visitOffers = offers.filter((o) => String(o?.type || "").toUpperCase() === "VISIT");
-
-  return (
-    <>
-      {standardOffers.length > 0 && (
-        <Card title="Your Offers" subtitle="Manage your created standard offers">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {standardOffers.map((offer) => (
-              <OfferCard key={`${offer.id}-${offer.store_id}`} offer={offer} onDelete={onDelete} onEdit={onEdit} />
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {visitOffers.length > 0 && (
-        <Card title="Digital Loyalty Stamps" subtitle="Your visit reward programs">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {visitOffers.map((offer) => (
-              <OfferCard key={`${offer.id}-${offer.store_id}`} offer={offer} onDelete={onDelete} onEdit={onEdit} />
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {offers.length === 0 && (
-        <Card title="Your Offers">
-          <div className="text-center py-8">
-            <div className="text-gray-500 mb-2">No offers created yet</div>
-            <div className="text-xs text-gray-400">
-              Create your first offer or Digital Loyalty Stamp above
-            </div>
-          </div>
-        </Card>
-      )}
-    </>
-  );
-}
-
-function toLocalDateTimeInput(d) {
-  const pad = (n) => String(n).padStart(2, "0");
-  const date = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
-    date.getHours()
-  )}:${pad(date.getMinutes())}`;
-}
-
-function isPastDateTime(dt) {
-  if (!dt) return false;
-  const t = new Date(dt).getTime();
-  if (!Number.isFinite(t)) return true;
-  return t < Date.now();
-}
-
-function isPositiveNumberString(v) {
-  const n = Number(v);
-  return Number.isFinite(n) && n > 0;
-}
-
-function preventInvalidNumberKeys(e) {
-  if (["-", "+", "e", "E"].includes(e.key)) e.preventDefault();
-}
-
-function sanitizeNonNegative(v) {
-  if (v === "") return "";
-  const n = Number(v);
-  if (!Number.isFinite(n) || n < 0) return "";
-  return String(n);
-}
-
-function toDateTimeLocalInput(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const pad = (n) => String(n).padStart(2, "0");
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}T${pad(
-    local.getHours()
-  )}:${pad(local.getMinutes())}`;
-}
-
-export default function CreateOfferPage() {
-  const router = useRouter();
-
-  const [loadingStores, setLoadingStores] = useState(true);
-  const [savingStandard, setSavingStandard] = useState(false);
-  const [savingVisit, setSavingVisit] = useState(false);
-  const [err, setErr] = useState("");
-  const [ok, setOk] = useState("");
-
-  const [stores, setStores] = useState([]);
-
-  const [applyAllStores, setApplyAllStores] = useState(false);
-  const [selectedStoreIds, setSelectedStoreIds] = useState([]);
-
-  const [visitApplyAllStores, setVisitApplyAllStores] = useState(false);
-  const [visitSelectedStoreIds, setVisitSelectedStoreIds] = useState([]);
-
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [discountType, setDiscountType] = useState("PERCENT");
-  const [value, setValue] = useState("");
-  const [minBill, setMinBill] = useState("");
-  const [couponCode, setCouponCode] = useState("");
-  const [startAt, setStartAt] = useState("");
-  const [endAt, setEndAt] = useState("");
-  const [stackable, setStackable] = useState(false);
-  const [editingOfferId, setEditingOfferId] = useState(null);
-  const [acceptedTerms, setAcceptedTerms] = useState(
-    TERMS.reduce((acc, t) => ({ ...acc, [t.id]: false }), {})
-  );
-
-  const [visitRewards, setVisitRewards] = useState(createDefaultVisitRewards);
-  const [offers, setOffers] = useState([]);
-
-  const minDateTime = useMemo(() => toLocalDateTimeInput(new Date()), []);
-  const endMinDateTime = useMemo(() => {
-    if (!startAt) return minDateTime;
-    return startAt > minDateTime ? startAt : minDateTime;
-  }, [startAt, minDateTime]);
-
-  const allTermsAccepted = useMemo(
-    () => TERMS.every((t) => acceptedTerms[t.id]),
-    [acceptedTerms]
-  );
-
-  const effectiveStoreIds = useMemo(() => {
-    if (applyAllStores) return stores.map((s) => String(s.id));
-    return selectedStoreIds;
-  }, [applyAllStores, stores, selectedStoreIds]);
-
-  const effectiveVisitStoreIds = useMemo(() => {
-    if (visitApplyAllStores) return stores.map((s) => String(s.id));
-    return visitSelectedStoreIds;
-  }, [visitApplyAllStores, stores, visitSelectedStoreIds]);
-
-  const visitRewardRows = useMemo(() => {
-    return VISIT_STEPS.map((visit) => {
-      const row = visitRewards[String(visit)] || { mode: REWARD_MODES.NONE, amount: "", gift: "" };
-      const mode = row.mode;
-
-      if (mode === REWARD_MODES.NONE) return null;
-      if (mode === REWARD_MODES.GIFT) {
-        if (!row.gift.trim()) return { invalid: true };
-        return {
-          invalid: false,
-          value: {
-            visit_number: visit,
-            reward_type: "GIFT",
-            description: row.gift.trim(),
-          },
-        };
-      }
-
-      const amount = Number(row.amount || 0);
-      const invalidPercent = mode === REWARD_MODES.PERCENT && (amount <= 0 || amount > 100);
-      const invalidFlat = mode === REWARD_MODES.FLAT && amount <= 0;
-      if (!Number.isFinite(amount) || invalidPercent || invalidFlat) return { invalid: true };
-
-      return {
-        invalid: false,
-        value: {
-          visit_number: visit,
-          reward_type: mode === REWARD_MODES.PERCENT ? "PERCENT" : "FLAT",
-          amount,
-          currency: "MUR",
-        },
-      };
-    }).filter(Boolean);
-  }, [visitRewards]);
-
-  const hasVisitConfig = useMemo(
-    () => visitRewardRows.some((r) => r && !r.invalid),
-    [visitRewardRows]
-  );
-
-  const visitHasInvalidRows = useMemo(
-    () => visitRewardRows.some((r) => r?.invalid),
-    [visitRewardRows]
-  );
-
-  const standardValidationError = useMemo(() => {
-    if (!title.trim()) return "Offer title is required.";
-    if (!isPositiveNumberString(value)) return "Discount amount must be greater than 0.";
-
-    if (discountType === "PERCENT" && Number(value) > 100) {
-      return "Discount percent cannot exceed 100.";
-    }
-
-    if (minBill !== "" && Number(minBill) < 0) {
-      return "Minimum bill cannot be negative.";
-    }
-
-    if (!startAt || !endAt) return "Start and end date/time are required.";
-    if (isPastDateTime(startAt)) return "Start date/time cannot be in the past.";
-    if (isPastDateTime(endAt)) return "End date/time cannot be in the past.";
-    if (new Date(endAt).getTime() <= new Date(startAt).getTime()) {
-      return "End date/time must be after start date/time.";
-    }
-
-    if (!effectiveStoreIds.length) return "Select at least one store.";
-    if (!allTermsAccepted) return "Accept all terms and conditions.";
-
-    return "";
-  }, [title, value, discountType, minBill, startAt, endAt, effectiveStoreIds, allTermsAccepted]);
-
-  const canSubmitStandard = useMemo(() => !standardValidationError, [standardValidationError]);
-
-  const canSubmitVisit = useMemo(() => {
-    if (!effectiveVisitStoreIds.length) return false;
-    if (!hasVisitConfig) return false;
-    if (visitHasInvalidRows) return false;
-    return true;
-  }, [effectiveVisitStoreIds, hasVisitConfig, visitHasInvalidRows]);
+export default function StorePartnerOffersRoute() {
+  const { loading: storesLoading, selectedStoreId, selectedStore } = useStores();
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [storeRecord, setStoreRecord] = useState(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorMode, setEditorMode] = useState("create");
+  const [editorOfferId, setEditorOfferId] = useState("");
+  const [editorForm, setEditorForm] = useState(emptyOfferForm());
 
   useEffect(() => {
     let cancelled = false;
 
-    (async () => {
-      try {
-        setLoadingStores(true);
-        setErr("");
-
-        const { data: sess, error: sessErr } = await supabaseBrowser.auth.getSession();
-        if (sessErr) throw sessErr;
-        const userId = sess?.session?.user?.id;
-
-        if (!userId) {
-          router.replace("/sign-in");
-          return;
-        }
-
-        const ownerRes = await supabaseBrowser
-          .from("stores")
-          .select("id,name,city,is_active,offers")
-          .eq("owner_user_id", userId);
-
-        if (ownerRes.error) throw ownerRes.error;
-
-        const memberRes = await supabaseBrowser
-          .from("store_members")
-          .select("store_id, stores:store_id (id,name,city,is_active,offers)")
-          .eq("user_id", userId);
-
-        if (memberRes.error) throw memberRes.error;
-
-        const ownerStores = ownerRes.data || [];
-        const memberStores = normalizeMemberStores(memberRes.data || []);
-
-        const mergedMap = new Map();
-        [...ownerStores, ...memberStores].forEach((s) => {
-          mergedMap.set(String(s.id), s);
-        });
-
-        const list = Array.from(mergedMap.values()).sort((a, b) =>
-          String(a.name || "").localeCompare(String(b.name || ""))
-        );
-
+    async function loadStoreOffers(silent = false) {
+      if (!selectedStoreId) {
         if (!cancelled) {
-          setStores(list);
-          if (list.length) {
-            const first = String(list[0].id);
-            setSelectedStoreIds([first]);
-            setVisitSelectedStoreIds([first]);
-          }
-          // Load and merge all offers from all stores
-          const allOffers = [];
-          list.forEach((store) => {
-            if (Array.isArray(store.offers)) {
-              store.offers.forEach((offer) => {
-                if (!allOffers.find((o) => o.id === offer.id)) {
-                  allOffers.push({ ...offer, store_id: store.id, store_name: store.name });
-                }
-              });
-            }
-          });
-          setOffers(allOffers);
+          setStoreRecord(null);
+          setLoading(false);
+          setRefreshing(false);
         }
-      } catch (e) {
-        if (!cancelled) setErr(e?.message || "Failed to load stores.");
-      } finally {
-        if (!cancelled) setLoadingStores(false);
+        return;
       }
-    })();
 
+      try {
+        if (silent) setRefreshing(true);
+        else setLoading(true);
+        setError("");
+
+        const { data, error: queryError } = await supabaseBrowser
+          .from("stores")
+          .select("id,name,city,logo_url,offers,updated_at,is_active")
+          .eq("id", selectedStoreId)
+          .maybeSingle();
+
+        if (queryError) throw queryError;
+        if (!cancelled) setStoreRecord(data || null);
+      } catch (e) {
+        if (!cancelled) {
+          setError(e?.message || "Failed to load offers.");
+          setStoreRecord(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      }
+    }
+
+    loadStoreOffers();
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [selectedStoreId]);
 
-  const buildStandardOfferPayload = () => {
-    const nValue = Number(value || 0);
-    const nMinBill = minBill ? Number(minBill) : null;
-    const trimmedDescription = description.trim();
-    const offerId = editingOfferId || uid();
+  const offers = useMemo(() => {
+    const raw = storeRecord?.offers;
+    if (!Array.isArray(raw)) return [];
+    return raw.map((row, index) => normalizeOffer(row, index)).filter(Boolean);
+  }, [storeRecord]);
 
-    return {
-      id: offerId,
-      type: "CUSTOM",
-      title: title.trim(),
-      subtitle: trimmedDescription || null,
-      description: trimmedDescription || null,
-      badge_text: discountType === "PERCENT" ? `${nValue}% OFF` : `MUR ${nValue} OFF`,
-      value_type: discountType,
-      percent: discountType === "PERCENT" ? nValue : null,
-      flat_amount: discountType === "FLAT" ? nValue : null,
-      currency: "MUR",
-      min_bill: Number.isFinite(nMinBill) ? nMinBill : null,
-      max_discount: null,
-      start_at: new Date(startAt).toISOString(),
-      end_at: new Date(endAt).toISOString(),
-      requires_pass: false,
-      pass_tiers: [],
-      coupon_code: couponCode.trim() || null,
-      stackable: !!stackable,
-      terms: "Accepted: " + TERMS.map((t) => t.label).join(" "),
-      enabled: true,
-      created_at: new Date().toISOString(),
-    };
+  const activeOffers = useMemo(() => offers.filter((offer) => offer.isActive).length, [offers]);
+  const inactiveOffers = Math.max(offers.length - activeOffers, 0);
+  const displayStore = storeRecord || selectedStore;
+
+  const handleRefresh = async () => {
+    if (!selectedStoreId) return;
+    try {
+      setRefreshing(true);
+      setError("");
+      const { data, error: queryError } = await supabaseBrowser
+        .from("stores")
+        .select("id,name,city,logo_url,offers,updated_at,is_active")
+        .eq("id", selectedStoreId)
+        .maybeSingle();
+      if (queryError) throw queryError;
+      setStoreRecord(data || null);
+    } catch (e) {
+      setError(e?.message || "Failed to refresh offers.");
+    } finally {
+      setRefreshing(false);
+    }
   };
 
-  const buildVisitOfferPayload = () => {
-    const visit_rewards = visitRewardRows
-      .filter((r) => r && !r.invalid && r.value)
-      .map((r) => r.value);
-
-    return {
-      id: uid(),
-      type: "VISIT",
-      visit_rewards,
-      enabled: true,
-      created_at: new Date().toISOString(),
-    };
+  const openCreate = () => {
+    setEditorMode("create");
+    setEditorOfferId("");
+    setEditorForm(emptyOfferForm());
+    setEditorOpen(true);
   };
 
-  const fetchStoreOffersById = async (storeId) => {
-    const { data, error } = await supabaseBrowser
-      .from("stores")
-      .select("offers")
-      .eq("id", storeId)
-      .single();
-
-    if (error) throw error;
-    return Array.isArray(data?.offers) ? data.offers : [];
+  const openEdit = (offer) => {
+    setEditorMode("edit");
+    setEditorOfferId(String(offer.id));
+    setEditorForm(formFromOffer(offer));
+    setEditorOpen(true);
   };
 
-  const appendOfferAndUpdateStore = async (storeId, offer) => {
-    const existing = await fetchStoreOffersById(storeId);
-    const nextOffers = existing.some((o) => String(o.id) === String(offer.id))
-      ? existing.map((o) => (String(o.id) === String(offer.id) ? offer : o))
-      : [...existing, offer];
-
-    const { error } = await supabaseBrowser
-      .from("stores")
-      .update({ offers: nextOffers })
-      .eq("id", storeId);
-
-    if (error) throw error;
-    return nextOffers;
+  const handleEditorChange = (key, value) => {
+    setEditorForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const upsertVisitOfferAndUpdateStore = async (storeId, visitOffer) => {
-    const existing = await fetchStoreOffersById(storeId);
-    const nonVisit = existing.filter((o) => String(o?.type || "").toUpperCase() !== "VISIT");
-    const nextOffers = [...nonVisit, visitOffer];
-
-    const { error } = await supabaseBrowser
-      .from("stores")
-      .update({ offers: nextOffers })
-      .eq("id", storeId);
-
-    if (error) throw error;
-    return nextOffers;
-  };
-
-  const handleSubmitStandard = async () => {
-    if (!canSubmitStandard || savingStandard) {
-      if (standardValidationError) setErr(standardValidationError);
+  const handleSaveOffer = async () => {
+    if (!selectedStoreId) return;
+    if (!String(editorForm.title || "").trim()) {
+      setError("Offer title is required.");
       return;
     }
 
     try {
-      setSavingStandard(true);
-      setErr("");
-      setOk("");
+      setSaving(true);
+      setError("");
 
-      const offer = buildStandardOfferPayload();
-      const targets = editingOfferId
-        ? stores.filter(
-            (s) =>
-              Array.isArray(s.offers) &&
-              s.offers.some((existingOffer) => String(existingOffer.id) === String(editingOfferId))
-          )
-        : stores.filter((s) => effectiveStoreIds.includes(String(s.id)));
+      const currentOffers = Array.isArray(storeRecord?.offers) ? storeRecord.offers.filter(hasOfferContent) : [];
+      const nextOffer = serializeOffer(editorForm, editorMode === "edit" ? editorOfferId : "");
+      const nextOffers =
+        editorMode === "edit"
+          ? currentOffers.map((row, index) => {
+              const normalized = normalizeOffer(row, index);
+              return String(normalized?.id || "") === String(editorOfferId) ? nextOffer : row;
+            })
+          : [...currentOffers, nextOffer];
 
-      if (!targets.length) throw new Error("No stores selected.");
-
-      const updatedStores = await Promise.all(
-        targets.map(async (s) => ({
-          id: s.id,
-          offers: await appendOfferAndUpdateStore(s.id, offer),
-        }))
-      );
-
-      setStores((prev) => {
-        const updates = new Map(updatedStores.map((u) => [String(u.id), u.offers]));
-        return prev.map((s) =>
-          updates.has(String(s.id)) ? { ...s, offers: updates.get(String(s.id)) } : s
-        );
-      });
-
-      // Refresh offers list
-      setOffers((prev) => {
-        const updated = [...prev];
-        targets.forEach((store) => {
-          const nextEntry = { ...offer, store_id: store.id, store_name: store.name };
-          const index = updated.findIndex(
-            (o) => String(o.id) === String(offer.id) && String(o.store_id) === String(store.id)
-          );
-
-          if (index >= 0) updated[index] = nextEntry;
-          else updated.push(nextEntry);
-        });
-        return updated;
-      });
-
-      setOk(
-        editingOfferId
-          ? `Standard offer updated for ${targets.length} store(s).`
-          : `Standard offer created for ${targets.length} store(s).`
-      );
-      // Clear form after successful save
-      setTimeout(() => {
-        setTitle("");
-        setDescription("");
-        setValue("");
-        setMinBill("");
-        setCouponCode("");
-        setStartAt("");
-        setEndAt("");
-        setStackable(false);
-        setEditingOfferId(null);
-        setAcceptedTerms(TERMS.reduce((acc, t) => ({ ...acc, [t.id]: false }), {}));
-      }, 500);
-    } catch (e) {
-      setErr(e?.message || "Failed to create offer.");
-    } finally {
-      setSavingStandard(false);
-    }
-  };
-
-  const handleSubmitVisit = async () => {
-    if (!canSubmitVisit || savingVisit) return;
-
-    try {
-      setSavingVisit(true);
-      setErr("");
-      setOk("");
-
-      const visitOffer = buildVisitOfferPayload();
-      const targets = stores.filter((s) => effectiveVisitStoreIds.includes(String(s.id)));
-
-      if (!targets.length) throw new Error("No stores selected.");
-
-      const updatedStores = await Promise.all(
-        targets.map(async (s) => ({
-          id: s.id,
-          offers: await upsertVisitOfferAndUpdateStore(s.id, visitOffer),
-        }))
-      );
-
-      setStores((prev) => {
-        const updates = new Map(updatedStores.map((u) => [String(u.id), u.offers]));
-        return prev.map((s) =>
-          updates.has(String(s.id)) ? { ...s, offers: updates.get(String(s.id)) } : s
-        );
-      });
-
-      // Refresh offers list - remove old visit offers and add new one
-      setOffers((prev) => {
-        const nonVisit = prev.filter((o) => String(o?.type || "").toUpperCase() !== "VISIT");
-        const updated = [...nonVisit];
-        targets.forEach((store) => {
-          if (!updated.find((o) => o.id === visitOffer.id && o.store_id === store.id)) {
-            updated.push({ ...visitOffer, store_id: store.id, store_name: store.name });
-          }
-        });
-        return updated;
-      });
-
-      setOk(`Digital Loyalty Stamp saved for ${targets.length} store(s).`);
-      // Reset visit rewards
-      setTimeout(() => {
-        setVisitRewards(createDefaultVisitRewards());
-      }, 500);
-    } catch (e) {
-      setErr(e?.message || "Failed to save Digital Loyalty Stamp.");
-    } finally {
-      setSavingVisit(false);
-    }
-  };
-
-  const handleDeleteOffer = async (offerId, storeId) => {
-    if (!confirm("Are you sure you want to delete this offer?")) return;
-
-    try {
-      const existing = await fetchStoreOffersById(storeId);
-      const nextOffers = existing.filter((o) => String(o.id) !== String(offerId));
-
-      const { error } = await supabaseBrowser
+      const { data, error: updateError } = await supabaseBrowser
         .from("stores")
         .update({ offers: nextOffers })
-        .eq("id", storeId);
+        .eq("id", selectedStoreId)
+        .select("id,name,city,logo_url,offers,updated_at,is_active")
+        .maybeSingle();
 
-      if (error) throw error;
+      if (updateError) throw updateError;
 
-      setStores((prev) =>
-        prev.map((s) =>
-          String(s.id) === String(storeId)
-            ? { ...s, offers: nextOffers }
-            : s
-        )
-      );
-      setOffers((prev) => prev.filter((o) => !(o.id === offerId && String(o.store_id) === String(storeId))));
-      setOk("Offer deleted successfully.");
+      setStoreRecord(data || null);
+      setEditorOpen(false);
     } catch (e) {
-      setErr(e?.message || "Failed to delete offer.");
+      setError(e?.message || "Failed to save offer.");
+    } finally {
+      setSaving(false);
     }
-  };
-
-  const handleEditOffer = (offer) => {
-    if (!offer || String(offer.type || "").toUpperCase() === "VISIT") return;
-
-    const targetStoreIds = stores
-      .filter(
-        (s) =>
-          Array.isArray(s.offers) &&
-          s.offers.some((existingOffer) => String(existingOffer.id) === String(offer.id))
-      )
-      .map((s) => String(s.id));
-
-    setEditingOfferId(offer.id);
-    setTitle(offer.title || "");
-    setDescription(offer.description || offer.subtitle || "");
-    setDiscountType(offer.value_type || "PERCENT");
-    setValue(
-      offer.value_type === "FLAT"
-        ? String(offer.flat_amount ?? "")
-        : String(offer.percent ?? "")
-    );
-    setMinBill(offer.min_bill == null ? "" : String(offer.min_bill));
-    setCouponCode(offer.coupon_code || "");
-    setStartAt(toDateTimeLocalInput(offer.start_at));
-    setEndAt(toDateTimeLocalInput(offer.end_at));
-    setStackable(Boolean(offer.stackable));
-    setAcceptedTerms(TERMS.reduce((acc, t) => ({ ...acc, [t.id]: true }), {}));
-    setApplyAllStores(targetStoreIds.length > 1 && targetStoreIds.length === stores.length);
-    setSelectedStoreIds(targetStoreIds.length ? targetStoreIds : offer.store_id ? [String(offer.store_id)] : []);
-    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (
-    <div
-      className="min-h-screen"
-      style={{
-        fontFamily: '"Space Grotesk", "Sora", sans-serif',
-      }}
-    >
-      <div className="mx-auto max-w-5xl px-6 py-4 space-y-6">
-        {err ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{err}</div>
-        ) : null}
-        {ok ? (
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{ok}</div>
-        ) : null}
-
-        {loadingStores ? (
-          <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm animate-pulse space-y-3">
-            <div className="h-5 w-52 rounded-xl bg-gray-100 border border-gray-200" />
-            <div className="h-11 rounded-2xl bg-gray-100 border border-gray-200" />
-            <div className="h-11 rounded-2xl bg-gray-100 border border-gray-200" />
-            <div className="h-28 rounded-2xl bg-gray-100 border border-gray-200" />
-          </div>
-        ) : (
-          <>
-            <Card
-              title={editingOfferId ? "Edit Standard Offer" : "Create Standard Offer"}
-              subtitle="This is your regular offer with title, validity, and conditions."
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field label="Stores" required>
-                  <StoreSelector
-                    stores={stores}
-                    applyAll={applyAllStores}
-                    setApplyAll={setApplyAllStores}
-                    selectedIds={selectedStoreIds}
-                    setSelectedIds={setSelectedStoreIds}
-                    disabled={savingStandard}
-                  />
-                </Field>
-
-                <Field label="Offer Title" required>
-                  <input
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                    placeholder="Weekend Special"
-                  />
-                </Field>
-
-                <Field label="Description (optional)">
-                  <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-gray-300"
-                    placeholder="Short offer description"
-                    rows={3}
-                  />
-                </Field>
-
-                <Field label="Discount Type">
-                  <select
-                    value={discountType}
-                    onChange={(e) => setDiscountType(e.target.value)}
-                    className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                  >
-                    <option value="PERCENT">Percent (%)</option>
-                    <option value="FLAT">Flat Amount (MUR)</option>
-                  </select>
-                </Field>
-
-                <Field label={discountType === "PERCENT" ? "Discount (%)" : "Discount (MUR)"} required>
-                  <input
-                    type="number"
-                    min="0"
-                    value={value}
-                    onChange={(e) => setValue(sanitizeNonNegative(e.target.value))}
-                    onKeyDown={preventInvalidNumberKeys}
-                    className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                    placeholder={discountType === "PERCENT" ? "10" : "50"}
-                  />
-                </Field>
-
-                <Field label="Minimum Bill (optional)">
-                  <input
-                    type="number"
-                    min="0"
-                    value={minBill}
-                    onChange={(e) => setMinBill(sanitizeNonNegative(e.target.value))}
-                    onKeyDown={preventInvalidNumberKeys}
-                    className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                    placeholder="500"
-                  />
-                </Field>
-
-                <Field label="Coupon Code (optional)">
-                  <input
-                    value={couponCode}
-                    onChange={(e) => setCouponCode(e.target.value)}
-                    className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                    placeholder="SAVE10"
-                  />
-                </Field>
-
-                <Field label="Start Date & Time" required>
-                  <input
-                    type="datetime-local"
-                    value={startAt}
-                    min={minDateTime}
-                    onChange={(e) => setStartAt(e.target.value)}
-                    className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                  />
-                </Field>
-
-                <Field label="End Date & Time" required>
-                  <input
-                    type="datetime-local"
-                    value={endAt}
-                    min={endMinDateTime}
-                    onChange={(e) => setEndAt(e.target.value)}
-                    className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                  />
-                </Field>
+    <div className="min-h-screen px-4 py-5 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <section
+          className="overflow-hidden rounded-[36px] border px-6 py-6 shadow-sm"
+          style={{
+            background:
+              "linear-gradient(135deg, rgba(255,255,255,0.94) 0%, rgba(255,255,255,0.75) 48%, rgba(119,31,168,0.08) 100%)",
+            borderColor: THEME_BORDER,
+            boxShadow: "0 24px 60px rgba(119, 31, 168, 0.10)",
+          }}
+        >
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em]" style={{ background: THEME_ACCENT_SOFT, color: THEME_ACCENT }}>
+                <Tag className="h-3.5 w-3.5" />
+                Store Offers
               </div>
-
-             
-
-              <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                <div className="text-sm font-semibold text-gray-900">Terms & Conditions</div>
-                <div className="mt-3 space-y-2">
-                  {TERMS.map((t) => (
-                    <label key={t.id} className="flex items-start gap-2 text-sm text-gray-700">
-                      <input
-                        type="checkbox"
-                        checked={acceptedTerms[t.id]}
-                        onChange={(e) =>
-                          setAcceptedTerms((prev) => ({ ...prev, [t.id]: e.target.checked }))
-                        }
-                      />
-                      <span>{t.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-6 pt-4 border-t border-gray-200 flex justify-end">
-                {editingOfferId ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingOfferId(null);
-                      setTitle("");
-                      setDescription("");
-                      setValue("");
-                      setMinBill("");
-                      setCouponCode("");
-                      setStartAt("");
-                      setEndAt("");
-                      setStackable(false);
-                      setAcceptedTerms(TERMS.reduce((acc, t) => ({ ...acc, [t.id]: false }), {}));
-                    }}
-                    className="h-10 rounded-full px-4 text-sm font-semibold text-gray-700 inline-flex items-center gap-2 border border-gray-200 bg-white mr-3"
-                  >
-                    Cancel edit
-                  </button>
+              <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900">Offers for the selected store</h1>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">
+                This page reads directly from the selected store record, filters out empty placeholder entries, and lets you manage the real offers list.
+              </p>
+              <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                <span className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-sm">
+                  <Store className="h-4 w-4" style={{ color: THEME_ACCENT }} />
+                  {displayStore?.name || "No store selected"}
+                </span>
+                {displayStore?.city ? (
+                  <span className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-sm">
+                    <MapPin className="h-4 w-4" style={{ color: THEME_ACCENT }} />
+                    {displayStore.city}
+                  </span>
                 ) : null}
-                <button
-                  type="button"
-                  onClick={handleSubmitStandard}
-                  disabled={!canSubmitStandard || savingStandard || loadingStores}
-                  className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 disabled:opacity-60 shadow-lg shadow-orange-200"
-                  style={{ background: "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)" }}
-                >
-                  {savingStandard ? <Loader2 className="h-4 w-4 animate-spin" /> : <Tag className="h-4 w-4" />}
-                  {editingOfferId ? "Update Standard Offer" : "Create Standard Offer"}
-                </button>
               </div>
-            </Card>
+            </div>
 
-            <Card
-              title="Digital Loyalty Stamp (rewards for repeat visits)"
-              subtitle="Configure reward for repeat visits: flat discount, percent discount, or custom free gift/service."
-            >
-              <div className="grid grid-cols-1 gap-5">
-                <Field label="Stores" required>
-                  <StoreSelector
-                    stores={stores}
-                    applyAll={visitApplyAllStores}
-                    setApplyAll={setVisitApplyAllStores}
-                    selectedIds={visitSelectedStoreIds}
-                    setSelectedIds={setVisitSelectedStoreIds}
-                    disabled={savingVisit}
-                  />
-                </Field>
+            <div className="flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={openCreate}
+                disabled={loading || storesLoading || !selectedStoreId}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-full border px-5 text-sm font-semibold disabled:opacity-60"
+                style={{ borderColor: THEME_BORDER, color: THEME_ACCENT, background: "#fff" }}
+              >
+                <Plus className="h-4 w-4" />
+                Add offer
+              </button>
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={refreshing || loading || storesLoading || !selectedStoreId}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold text-white disabled:opacity-60"
+                style={{ background: THEME_ACCENT, boxShadow: "0 12px 24px rgba(119, 31, 168, 0.22)" }}
+              >
+                {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Refresh
+              </button>
+            </div>
+          </div>
+        </section>
 
-                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                  <div className="text-sm font-semibold text-gray-900">Visit Reward Builder</div>
-                  <div className="text-xs text-gray-600 mt-1">
-                    Example: 10th visit → “Free shirt” or “100 MUR off” or “20% off bill”.
-                  </div>
+        <section className="grid gap-4 md:grid-cols-3">
+          <StatCard icon={Gift} label="Total Offers" value={loading ? "..." : String(offers.length)} hint="Live count from the selected store record" />
+          <StatCard icon={TicketPercent} label="Active Offers" value={loading ? "..." : String(activeOffers)} hint="Offers currently marked active/live" />
+          <StatCard icon={Tag} label="Inactive Offers" value={loading ? "..." : String(inactiveOffers)} hint={storeRecord?.updated_at ? `Updated ${formatDate(storeRecord.updated_at)}` : "Waiting for store data"} />
+        </section>
 
-                  <div className="mt-4 space-y-3">
-                    {VISIT_STEPS.map((visit) => {
-                      const row = visitRewards[String(visit)];
-                      const mode = row?.mode || REWARD_MODES.NONE;
-                      const invalid =
-                        (mode === REWARD_MODES.FLAT && Number(row.amount || 0) <= 0) ||
-                        (mode === REWARD_MODES.PERCENT &&
-                          (Number(row.amount || 0) <= 0 || Number(row.amount || 0) > 100)) ||
-                        (mode === REWARD_MODES.GIFT && !String(row.gift || "").trim());
+        <section className="rounded-[32px] border p-5 shadow-sm" style={{ background: "rgba(255,255,255,0.8)", borderColor: THEME_BORDER }}>
+          {error ? <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
-                      return (
-                        <div
-                          key={visit}
-                          className="rounded-2xl border border-gray-200 bg-white p-3 grid grid-cols-1 md:grid-cols-12 gap-3"
-                        >
-                          <div className="md:col-span-2 flex items-center text-sm font-semibold text-gray-800">
-                            {visit}th visit
-                          </div>
-
-                          <div className="md:col-span-3">
-                            <select
-                              value={mode}
-                              onChange={(e) =>
-                                setVisitRewards((prev) => ({
-                                  ...prev,
-                                  [String(visit)]: {
-                                    ...prev[String(visit)],
-                                    mode: e.target.value,
-                                  },
-                                }))
-                              }
-                              className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                            >
-                              <option value={REWARD_MODES.NONE}>No reward</option>
-                              <option value={REWARD_MODES.FLAT}>Flat amount off (MUR)</option>
-                              <option value={REWARD_MODES.PERCENT}>Percent off bill (%)</option>
-                              <option value={REWARD_MODES.GIFT}>Free gift / service</option>
-                            </select>
-                          </div>
-
-                          {(mode === REWARD_MODES.FLAT || mode === REWARD_MODES.PERCENT) && (
-                            <div className="md:col-span-3">
-                              <input
-                                type="number"
-                                min="0"
-                                max={mode === REWARD_MODES.PERCENT ? "100" : undefined}
-                                value={row.amount}
-                                onKeyDown={preventInvalidNumberKeys}
-                                onChange={(e) =>
-                                  setVisitRewards((prev) => ({
-                                    ...prev,
-                                    [String(visit)]: {
-                                      ...prev[String(visit)],
-                                      amount: sanitizeNonNegative(e.target.value),
-                                    },
-                                  }))
-                                }
-                                placeholder={mode === REWARD_MODES.FLAT ? "e.g. 100" : "e.g. 20"}
-                                className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                              />
-                            </div>
-                          )}
-
-                          {mode === REWARD_MODES.GIFT && (
-                            <div className="md:col-span-5">
-                              <input
-                                value={row.gift}
-                                onChange={(e) =>
-                                  setVisitRewards((prev) => ({
-                                    ...prev,
-                                    [String(visit)]: {
-                                      ...prev[String(visit)],
-                                      gift: e.target.value,
-                                    },
-                                  }))
-                                }
-                                placeholder="e.g. Free shirt / Free haircut / Free dessert"
-                                className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                              />
-                            </div>
-                          )}
-
-                          {mode !== REWARD_MODES.NONE && invalid ? (
-                            <div className="md:col-span-12 text-xs text-red-600">
-                              {mode === REWARD_MODES.GIFT
-                                ? "Enter reward text."
-                                : mode === REWARD_MODES.PERCENT
-                                ? "Enter a valid percent between 1 and 100."
-                                : "Enter a valid flat discount amount."}
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 pt-4 border-t border-gray-200 flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleSubmitVisit}
-                  disabled={!canSubmitVisit || savingVisit || loadingStores}
-                  className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 disabled:opacity-60 shadow-lg shadow-orange-200"
-                  style={{ background: "linear-gradient(90deg, #2563eb 0%, #0ea5e9 100%)" }}
-                >
-                  {savingVisit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Gift className="h-4 w-4" />}
-                  Save Digital Loyalty Stamp
-                </button>
-              </div>
-            </Card>
-
-            <OfferDisplay offers={offers} onDelete={handleDeleteOffer} onEdit={handleEditOffer} />
-          </>
-        )}
+          {storesLoading || loading ? (
+            <div className="flex items-center gap-3 py-10 text-sm text-slate-600">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading store offers...
+            </div>
+          ) : offers.length ? (
+            <div className="space-y-4">
+              {offers.map((offer) => (
+                <OfferCard key={offer.id} offer={offer} onEdit={openEdit} />
+              ))}
+            </div>
+          ) : (
+            <EmptyOffers storeName={displayStore?.name} />
+          )}
+        </section>
       </div>
+
+      <OfferEditor
+        open={editorOpen}
+        mode={editorMode}
+        form={editorForm}
+        saving={saving}
+        onChange={handleEditorChange}
+        onClose={() => setEditorOpen(false)}
+        onSave={handleSaveOffer}
+      />
     </div>
   );
 }

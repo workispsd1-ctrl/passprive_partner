@@ -449,10 +449,10 @@ export default function StoreDetailsPage() {
 
               <button
                 type="button"
-                className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 disabled:opacity-60 shadow-lg shadow-orange-200"
+                className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 disabled:opacity-60 shadow-lg shadow-[rgba(119,31,168,0.28)]"
                 style={{
                   background:
-                    "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)",
+                    "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
                 }}
                 onClick={goCreateOffer}
                 disabled={!storeId}
@@ -655,7 +655,7 @@ export default function StoreDetailsPage() {
                             className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2"
                             style={{
                               background:
-                                "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)",
+                                "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
                             }}
                             onClick={() => setTab("products")}
                           >
@@ -731,7 +731,7 @@ export default function StoreDetailsPage() {
                     className="h-9 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2"
                     style={{
                       background:
-                        "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)",
+                        "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
                     }}
                     onClick={() => router.push(`/store-partner/products?store_id=${storeId}`)}
                   >
@@ -785,7 +785,7 @@ export default function StoreDetailsPage() {
                     className="h-9 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2"
                     style={{
                       background:
-                        "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)",
+                        "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
                     }}
                     onClick={goCreateOffer}
                   >
@@ -885,7 +885,7 @@ export default function StoreDetailsPage() {
                         className="h-10 rounded-full px-4 text-sm font-semibold text-white"
                         style={{
                           background:
-                            "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)",
+                            "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
                         }}
                         onClick={() => alert("Demo: save settings")}
                       >

@@ -985,7 +985,7 @@ export default function PartnerCataloguePage() {
         <Card
           title={
             <div className="flex items-center gap-2">
-              {isServiceStore ? <BriefcaseBusiness className="h-5 w-5 text-sky-600" /> : <Boxes className="h-5 w-5 text-orange-600" />}
+              {isServiceStore ? <BriefcaseBusiness className="h-5 w-5 text-sky-600" /> : <Boxes className="h-5 w-5 text-[#771FA8]" />}
               <span>{selectedSectionLabel}</span>
             </div>
           }
@@ -1128,8 +1128,8 @@ export default function PartnerCataloguePage() {
                   type="button"
                   onClick={handleSaveCategory}
                   disabled={savingCategory}
-                  className="inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white shadow-lg shadow-orange-200 disabled:opacity-60"
-                  style={{ background: "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)" }}
+                  className="inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white shadow-lg shadow-[rgba(119,31,168,0.28)] disabled:opacity-60"
+                  style={{ background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)" }}
                 >
                   {savingCategory ? <Loader2 className="h-4 w-4 animate-spin" /> : editingCategoryId ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                   {editingCategoryId ? "Save Category" : "Create Category"}
@@ -1415,8 +1415,8 @@ export default function PartnerCataloguePage() {
                   type="button"
                   onClick={handleSaveItem}
                   disabled={savingItem || !sortedCategories.length}
-                  className="inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white shadow-lg shadow-orange-200 disabled:opacity-60"
-                  style={{ background: "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)" }}
+                  className="inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white shadow-lg shadow-[rgba(119,31,168,0.28)] disabled:opacity-60"
+                  style={{ background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)" }}
                 >
                   {savingItem ? <Loader2 className="h-4 w-4 animate-spin" /> : editingItemId ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                   {editingItemId

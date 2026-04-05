@@ -491,7 +491,7 @@ export default function InventoryPage() {
                           return (
                             <tr
                               key={row.id}
-                              className={`border-b border-gray-100 cursor-pointer ${active ? "bg-orange-50/40" : ""}`}
+                              className={`border-b border-gray-100 cursor-pointer ${active ? "bg-[rgba(119,31,168,0.08)]" : ""}`}
                               onClick={() => setSelectedItemId(String(row.id))}
                             >
                               <td className="px-4 py-2">

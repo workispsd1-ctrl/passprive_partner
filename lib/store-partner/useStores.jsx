@@ -29,7 +29,7 @@ export function useStores() {
 
         const firstId = list?.[0]?.id || null;
         const validSaved =
-          saved && list.some((s) => s.id === saved) ? saved : null;
+          saved && list.some((s) => String(s.id) === String(saved)) ? saved : null;
 
         const nextId = validSaved || firstId;
 
@@ -51,8 +51,36 @@ export function useStores() {
     };
   }, []);
 
+  useEffect(() => {
+    const syncSelectedStore = () => {
+      if (typeof window === "undefined") return;
+
+      const saved = localStorage.getItem(LS_KEY);
+      if (!saved) return;
+
+      setSelectedStoreId((current) => {
+        if (!stores.some((store) => String(store.id) === String(saved))) {
+          return current;
+        }
+        return String(current) === String(saved) ? current : saved;
+      });
+    };
+
+    if (typeof window === "undefined") return;
+
+    window.addEventListener("storage", syncSelectedStore);
+    window.addEventListener("store-selection-changed", syncSelectedStore);
+    window.addEventListener("focus", syncSelectedStore);
+
+    return () => {
+      window.removeEventListener("storage", syncSelectedStore);
+      window.removeEventListener("store-selection-changed", syncSelectedStore);
+      window.removeEventListener("focus", syncSelectedStore);
+    };
+  }, [stores]);
+
   const selectedStore = useMemo(() => {
-    return stores.find((s) => s.id === selectedStoreId) || null;
+    return stores.find((s) => String(s.id) === String(selectedStoreId)) || null;
   }, [stores, selectedStoreId]);
 
   function changeStore(id) {

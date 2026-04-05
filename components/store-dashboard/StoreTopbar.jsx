@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, LogOut, ShoppingCart, CreditCard, Store, Clock3 } from "lucide-react";
+import { Bell, LogOut, ShoppingCart, Store, Clock3 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
@@ -9,8 +9,6 @@ const TITLE_BY_ROUTE = [
   { prefix: "/store-partner/all-stores/add", title: "Add Store" },
   { prefix: "/store-partner/all-stores", title: "My Stores" },
   { prefix: "/store-partner/pickup-orders", title: "Pickup Orders" },
-  { prefix: "/store-partner/payment-orders", title: "Payment Orders" },
-  { prefix: "/store-partner/transactions", title: "Transactions" },
   { prefix: "/store-partner/offers", title: "Offers" },
   { prefix: "/store-partner/catalogue", title: "Catalogue" },
   { prefix: "/store-partner/inventory", title: "Inventory" },
@@ -40,6 +38,16 @@ function normalizeMemberStore(storesField) {
 
 function normalizeStoreType(value) {
   return String(value || "PRODUCT").toUpperCase() === "SERVICE" ? "SERVICE" : "PRODUCT";
+}
+
+function buildInFilter(column, values) {
+  const cleaned = (values || [])
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .map((value) => `"${value.replaceAll('"', '\\"')}"`);
+
+  if (!cleaned.length) return "";
+  return `${column}=in.(${cleaned.join(",")})`;
 }
 
 function flowTypeFromOrder(order) {
@@ -92,12 +100,7 @@ export default function StoreTopbar() {
     [unseenNotifications]
   );
 
-  const paymentCount = useMemo(
-    () => unseenNotifications.filter((n) => n.type === "payment").length,
-    [unseenNotifications]
-  );
-
-  const totalCount = pickupCount + paymentCount;
+  const totalCount = pickupCount;
   const totalBadge = totalCount > 10 ? "10+" : String(totalCount);
 
   useEffect(() => {
@@ -202,7 +205,7 @@ export default function StoreTopbar() {
         const { data, error } = await supabaseBrowser
           .from("store_orders")
           .select(
-            "id,order_no,order_number,store_id,customer_name,total_amount,status,order_flow,metadata,partner_seen_at,created_at"
+            "id,order_no,store_id,customer_name,total_amount,status,order_flow,metadata,partner_seen_at,created_at"
           )
           .in("store_id", storeIds)
           .in("status", ["NEW", "PLACED"])
@@ -213,7 +216,7 @@ export default function StoreTopbar() {
 
         const rows = (data || []).map((o) => ({
           id: String(o.id),
-          order_no: o.order_no || o.order_number || o.id,
+          order_no: o.order_no || o.id,
           store_id: String(o.store_id || ""),
           store_name: storeNameById[String(o.store_id)] || "Store",
           customer_name: o.customer_name || "Customer",
@@ -235,7 +238,8 @@ export default function StoreTopbar() {
     fetchNotifications();
     const t = setInterval(fetchNotifications, 20000);
 
-    const filter = `store_id=in.(${storeIds.join(",")})`;
+    const filter = buildInFilter("store_id", storeIds);
+    if (!filter) return () => clearInterval(t);
     const channel = supabaseBrowser
       .channel(`topbar-orders-${storeIds.join("-")}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "store_orders", filter }, () => {
@@ -249,9 +253,9 @@ export default function StoreTopbar() {
     };
   }, [storeIds.join(","), JSON.stringify(storeNameById)]);
 
-  const onNotificationClick = (n) => {
+  const onNotificationClick = () => {
     setNotifOpen(false);
-    router.push(n.type === "pickup" ? "/store-partner/pickup-orders" : "/store-partner/payment-orders");
+    router.push("/store-partner/pickup-orders");
   };
 
   const onLogout = async () => {
@@ -287,16 +291,17 @@ export default function StoreTopbar() {
               <div className="absolute right-0 mt-2 w-[360px] rounded-2xl border border-gray-200 bg-white shadow-xl p-2 z-50">
                 <div className="px-3 py-2 border-b border-gray-100">
                   <div className="text-sm font-semibold text-gray-900">New Orders</div>
-                  <div className="text-xs text-gray-500">
-                    Pickup: {pickupCount} • Payment: {paymentCount}
-                  </div>
+                  <div className="text-xs text-gray-500">Pickup: {pickupCount}</div>
                 </div>
 
                 <div className="max-h-[360px] overflow-auto">
                   {notifLoading ? (
                     <div className="p-4 text-sm text-gray-500">Loading...</div>
                   ) : unseenNotifications.length ? (
-                    unseenNotifications.slice(0, 10).map((n) => (
+                    unseenNotifications
+                      .filter((n) => n.type === "pickup")
+                      .slice(0, 10)
+                      .map((n) => (
                       <button
                         key={n.id}
                         type="button"
@@ -316,17 +321,8 @@ export default function StoreTopbar() {
                           {n.store_name}
                         </div>
                         <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold">
-                          {n.type === "pickup" ? (
-                            <>
-                              <ShoppingCart className="h-3 w-3 text-emerald-600" />
-                              <span className="text-emerald-700">Pickup Order</span>
-                            </>
-                          ) : (
-                            <>
-                              <CreditCard className="h-3 w-3 text-indigo-600" />
-                              <span className="text-indigo-700">Payment Order</span>
-                            </>
-                          )}
+                          <ShoppingCart className="h-3 w-3 text-emerald-600" />
+                          <span className="text-emerald-700">Pickup Order</span>
                         </div>
                       </button>
                     ))

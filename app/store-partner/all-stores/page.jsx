@@ -54,7 +54,7 @@ function Pill({ children, tone = "gray" }) {
 function StatMini({ title, value, icon: Icon, tone = "slate" }) {
   const toneMap = {
     slate: "bg-slate-50 text-slate-700 border-slate-200",
-    orange: "bg-orange-50 text-orange-700 border-orange-200",
+    orange: "bg-[#F4E7D1] text-[#771FA8] border-[rgba(119,31,168,0.18)]",
     emerald: "bg-emerald-50 text-emerald-700 border-emerald-200",
     indigo: "bg-indigo-50 text-indigo-700 border-indigo-200",
   };
@@ -320,10 +320,10 @@ export default function StorePartnerAllStoresPage() {
             </button>
 
             <button
-              className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 shadow-lg shadow-orange-200"
+              className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 shadow-lg shadow-[rgba(119,31,168,0.28)]"
               style={{
                 background:
-                  "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)",
+                  "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
               }}
               type="button"
               onClick={onAddStore}
@@ -373,7 +373,7 @@ export default function StorePartnerAllStoresPage() {
               <div className="relative">
                 <Search className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
-                  className="h-11 w-full rounded-2xl border border-gray-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-orange-100"
+                  className="h-11 w-full rounded-2xl border border-gray-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-[rgba(119,31,168,0.14)]"
                   placeholder="Search by name, city, category..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -383,7 +383,7 @@ export default function StorePartnerAllStoresPage() {
 
             <div className="md:col-span-2">
               <select
-                className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-orange-100"
+                className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-[rgba(119,31,168,0.14)]"
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
               >
@@ -397,7 +397,7 @@ export default function StorePartnerAllStoresPage() {
 
             <div className="md:col-span-3">
               <select
-                className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-orange-100"
+                className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-[rgba(119,31,168,0.14)]"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
               >
@@ -411,7 +411,7 @@ export default function StorePartnerAllStoresPage() {
 
             <div className="md:col-span-2">
               <select
-                className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-orange-100"
+                className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-[rgba(119,31,168,0.14)]"
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
               >
@@ -468,10 +468,10 @@ export default function StorePartnerAllStoresPage() {
                 Try changing filters, or add your first store.
               </div>
               <button
-                className="mt-4 h-10 rounded-full px-4 text-sm font-semibold text-white shadow-lg shadow-orange-200"
+                className="mt-4 h-10 rounded-full px-4 text-sm font-semibold text-white shadow-lg shadow-[rgba(119,31,168,0.28)]"
                 style={{
                   background:
-                    "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)",
+                    "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
                 }}
                 type="button"
                 onClick={onAddStore}

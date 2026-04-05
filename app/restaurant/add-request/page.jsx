@@ -269,7 +269,7 @@ export default function RestaurantAdsRequestPage() {
               onClick={handleSubmit}
               disabled={!canSubmit || saving || loading || !restaurants.length}
               className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 disabled:opacity-60"
-              style={{ background: "linear-gradient(90deg, #ff6a00 0%, #ff3d5a 50%, #ff0066 100%)" }}
+              style={{ background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)" }}
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Megaphone className="h-4 w-4" />}
               Submit Ad Request
