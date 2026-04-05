@@ -1856,7 +1856,7 @@ export default function PartnerCataloguePage() {
                                   <div className="flex h-full items-center justify-center text-xs text-gray-400">No image</div>
                                 )}
                               </div>
-                              {(item.title || item.price !== null) && premiumUnlocked ? (
+                              {(item.title || item.price !== null) ? (
                                 <div className="mt-3 flex items-center justify-between gap-3">
                                   <div className="text-sm font-medium text-gray-900">{item.title || "Image-only entry"}</div>
                                   {item.price !== null && item.price !== undefined ? <div className="text-sm text-gray-500">{money(item.price)}</div> : null}
