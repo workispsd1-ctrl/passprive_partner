@@ -4,12 +4,14 @@ import { Bell, LogOut, ShoppingCart, Store, Clock3 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { fetchMyStores } from "@/lib/store-partner/stores";
 
 const TITLE_BY_ROUTE = [
   { prefix: "/store-partner/all-stores/add", title: "Add Store" },
   { prefix: "/store-partner/all-stores", title: "My Stores" },
   { prefix: "/store-partner/pickup-orders", title: "Pickup Orders" },
   { prefix: "/store-partner/offers", title: "Offers" },
+  { prefix: "/store-partner/timings", title: "Timings" },
   { prefix: "/store-partner/catalogue", title: "Catalogue" },
   { prefix: "/store-partner/inventory", title: "Inventory" },
   { prefix: "/store-partner/reviews", title: "Reviews" },
@@ -122,28 +124,22 @@ export default function StoreTopbar() {
         const userId = sess?.session?.user?.id;
         if (!userId) return;
 
-        const ownerRes = await supabaseBrowser
+        const ownerCountRes = await supabaseBrowser
           .from("stores")
-          .select("id,name,store_type")
+          .select("id", { count: "exact", head: true })
           .eq("owner_user_id", userId);
+        if (ownerCountRes.error) throw ownerCountRes.error;
 
-        if (ownerRes.error) throw ownerRes.error;
+        const allStores = await fetchMyStores();
 
         const memberRes = await supabaseBrowser
           .from("store_members")
-          .select("store_id, stores:store_id(id,name,store_type)")
+          .select("store_id")
           .eq("user_id", userId);
 
         if (memberRes.error) throw memberRes.error;
 
-        const ownerStores = ownerRes.data || [];
-        const memberStores = (memberRes.data || [])
-          .map((r) => normalizeMemberStore(r.stores))
-          .filter(Boolean);
-
-        const merged = new Map();
-        [...ownerStores, ...memberStores].forEach((s) => merged.set(String(s.id), s));
-        const allStores = Array.from(merged.values());
+        const ownerStores = (ownerCountRes.count || 0) > 0 ? allStores : [];
 
         if (cancelled) return;
 

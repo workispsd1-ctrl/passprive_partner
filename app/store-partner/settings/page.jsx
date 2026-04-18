@@ -115,6 +115,28 @@ function normalizeMemberStores(rows) {
   return out;
 }
 
+function buildSocialLinksMap(rows) {
+  const map = {};
+  (rows || []).forEach((row) => {
+    const sid = String(row.store_id || "");
+    if (!sid) return;
+    if (!map[sid]) map[sid] = {};
+    map[sid][String(row.platform || "").toLowerCase()] = row.url || "";
+  });
+  return map;
+}
+
+function buildTagMap(rows) {
+  const map = {};
+  (rows || []).forEach((row) => {
+    const sid = String(row.store_id || "");
+    if (!sid) return;
+    if (!map[sid]) map[sid] = [];
+    if (row.tag_type === "tag" && row.tag_value) map[sid].push(row.tag_value);
+  });
+  return map;
+}
+
 export default function StorePartnerSettingsPage() {
   const router = useRouter();
 
@@ -213,26 +235,45 @@ export default function StorePartnerSettingsPage() {
 
         const storeIds = Array.from(new Set(allStores.map((s) => String(s.id)).filter(Boolean)));
 
-        let paymentMap = {};
+        const paymentMap = {};
+        let socialMap = {};
+        let tagMap = {};
         if (storeIds.length) {
-          const paymentRes = await supabaseBrowser
-            .from("store_payment_details")
-            .select("*")
-            .in("store_id", storeIds);
+          const [paymentRes, tagsRes, socialRes] = await Promise.all([
+            supabaseBrowser.from("store_payment_details").select("*").in("store_id", storeIds),
+            supabaseBrowser
+              .from("store_tags")
+              .select("store_id, tag_type, tag_value, sort_order")
+              .in("store_id", storeIds),
+            supabaseBrowser
+              .from("store_social_links")
+              .select("store_id, platform, url, sort_order")
+              .in("store_id", storeIds),
+          ]);
 
           if (paymentRes.error) throw paymentRes.error;
+          if (tagsRes.error) throw tagsRes.error;
+          if (socialRes.error) throw socialRes.error;
 
           (paymentRes.data || []).forEach((p) => {
             paymentMap[String(p.store_id)] = p;
           });
+          tagMap = buildTagMap(tagsRes.data || []);
+          socialMap = buildSocialLinksMap(socialRes.data || []);
         }
 
+        const hydratedStores = allStores.map((store) => ({
+          ...store,
+          tags: tagMap[String(store.id)] || [],
+          social_links: socialMap[String(store.id)] || {},
+        }));
+
         if (cancelled) return;
-        setStores(allStores);
+        setStores(hydratedStores);
         setPaymentByStore(paymentMap);
 
-        if (allStores.length) {
-          const first = allStores[0];
+        if (hydratedStores.length) {
+          const first = hydratedStores[0];
           const firstId = String(first.id);
           setSelectedStoreId(firstId);
           hydrateForm(first, setForm);
@@ -346,24 +387,21 @@ export default function StorePartnerSettingsPage() {
       }
 
       const social_links = {
-        instagram: form.instagram || undefined,
-        facebook: form.facebook || undefined,
-        tiktok: form.tiktok || undefined,
-        maps: form.maps || undefined,
-        website: form.website || undefined,
+        instagram: form.instagram || "",
+        facebook: form.facebook || "",
+        tiktok: form.tiktok || "",
+        maps: form.maps || "",
       };
 
       const payload = {
         name: normalizeInput(form.name),
         category: normalizeInput(form.category) || null,
         subcategory: normalizeInput(form.subcategory) || null,
-        tags: tagsArray,
         description: normalizeInput(form.description) || null,
         phone: normalizeInput(form.phone) || null,
         whatsapp: normalizeInput(form.whatsapp) || null,
         email: normalizeInput(form.email) || null,
         website: normalizeInput(form.website) || null,
-        social_links,
         location_name: normalizeInput(form.location_name) || null,
         address_line1: normalizeInput(form.address_line1) || null,
         address_line2: normalizeInput(form.address_line2) || null,
@@ -381,7 +419,54 @@ export default function StorePartnerSettingsPage() {
       const { error } = await supabaseBrowser.from("stores").update(payload).eq("id", selectedStoreId);
       if (error) throw error;
 
-      setStores((prev) => prev.map((s) => (String(s.id) === String(selectedStoreId) ? { ...s, ...payload } : s)));
+      const deleteTagsRes = await supabaseBrowser
+        .from("store_tags")
+        .delete()
+        .eq("store_id", selectedStoreId)
+        .eq("tag_type", "tag");
+      if (deleteTagsRes.error) throw deleteTagsRes.error;
+
+      if (tagsArray.length) {
+        const insertTagsRes = await supabaseBrowser.from("store_tags").insert(
+          tagsArray.map((tag, index) => ({
+            store_id: selectedStoreId,
+            tag_type: "tag",
+            tag_value: tag,
+            sort_order: index,
+          }))
+        );
+        if (insertTagsRes.error) throw insertTagsRes.error;
+      }
+
+      const socialPlatforms = ["instagram", "facebook", "tiktok", "maps"];
+      const deleteSocialsRes = await supabaseBrowser
+        .from("store_social_links")
+        .delete()
+        .eq("store_id", selectedStoreId)
+        .in("platform", socialPlatforms);
+      if (deleteSocialsRes.error) throw deleteSocialsRes.error;
+
+      const socialPayload = socialPlatforms
+        .map((platform, index) => ({
+          store_id: selectedStoreId,
+          platform,
+          url: social_links[platform],
+          sort_order: index,
+        }))
+        .filter((item) => item.url);
+
+      if (socialPayload.length) {
+        const insertSocialsRes = await supabaseBrowser.from("store_social_links").insert(socialPayload);
+        if (insertSocialsRes.error) throw insertSocialsRes.error;
+      }
+
+      setStores((prev) =>
+        prev.map((s) =>
+          String(s.id) === String(selectedStoreId)
+            ? { ...s, ...payload, tags: tagsArray, social_links }
+            : s
+        )
+      );
       setOk("Store settings updated.");
     } catch (e) {
       setErr(e?.message || "Failed to update store.");
@@ -768,7 +853,7 @@ export default function StorePartnerSettingsPage() {
                   </div>
                   {!canEditPayment ? (
                     <div className="mt-1 text-xs text-amber-700">
-                      Payment details are locked until PassPrive verifies this store's KYC.
+                      Payment details are locked until PassPrive verifies this store&apos;s KYC.
                     </div>
                   ) : null}
                 </div>

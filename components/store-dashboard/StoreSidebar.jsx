@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Tag,
   Boxes,
+  Clock3,
   MessageSquareText,
   Wallet,
   Settings,
@@ -22,6 +23,7 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { fetchMyStores } from "@/lib/store-partner/stores";
 
 const BRAND_ACCENT = "#771FA8";
 const ACTIVE_ICON = "#771FA8";
@@ -39,6 +41,7 @@ const baseNav = [
   { label: "Inventory", href: "/store-partner/inventory", icon: Package, key: "inventory", premium: true },
   { label: "My Stores", href: "/store-partner/all-stores", icon: Store },
   { label: "Offers", href: "/store-partner/offers", icon: Tag },
+  { label: "Timings", href: "/store-partner/timings", icon: Clock3 },
   // { label: "Reviews", href: "/store-partner/reviews", icon: MessageSquareText },
   { label: "Payouts", href: "/store-partner/payouts", icon: Wallet },
   { label: "Ads & Boost", href: "/store-partner/add-request", icon: Megaphone },
@@ -325,28 +328,23 @@ export default function StoreSidebar() {
           return;
         }
 
-        const ownerRes = await supabaseBrowser
+        const ownerCountRes = await supabaseBrowser
           .from("stores")
-          .select("id,name,city,is_active,logo_url,store_type,pickup_premium_enabled,pickup_premium_expires_at")
-          .eq("owner_user_id", userId)
-          .order("name", { ascending: true });
+          .select("id", { count: "exact", head: true })
+          .eq("owner_user_id", userId);
+        if (ownerCountRes.error) throw ownerCountRes.error;
 
-        if (ownerRes.error) throw ownerRes.error;
+        const ownerStores = await fetchMyStores();
 
         const memberRes = await supabaseBrowser
           .from("store_members")
-          .select("store_id,role,stores:store_id(id,name,city,is_active,logo_url,store_type,pickup_premium_enabled,pickup_premium_expires_at)")
+          .select("store_id,role")
           .eq("user_id", userId);
 
         if (memberRes.error) throw memberRes.error;
 
-        const ownerStores = ownerRes.data || [];
         const memberRows = memberRes.data || [];
-        const memberStores = memberRows.map((r) => normalizeMemberStore(r.stores)).filter(Boolean);
-
-        const merged = new Map();
-        [...ownerStores, ...memberStores].forEach((s) => merged.set(String(s.id), s));
-        const allStores = Array.from(merged.values()).sort((a, b) =>
+        const allStores = [...ownerStores].sort((a, b) =>
           String(a.name || "").localeCompare(String(b.name || ""))
         );
 
@@ -355,7 +353,7 @@ export default function StoreSidebar() {
         const isOwnerMeta = roleFromMeta === "storeowner" || roleFromMeta === "owner";
 
         const derivedRole =
-          isOwnerMeta || ownerStores.length > 0
+          isOwnerMeta || (ownerCountRes.count || 0) > 0
             ? "owner"
             : isManagerMeta || memberRows.some((r) => String(r.role || "").toLowerCase() === "manager")
             ? "manager"

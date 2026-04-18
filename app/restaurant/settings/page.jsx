@@ -2,6 +2,12 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { fetchRestaurantSettings, saveRestaurantSettings } from "@/lib/restaurantData";
+
+function isMissingRestaurantPaymentDetailsTable(error) {
+  const msg = String(error?.message || "").toLowerCase();
+  return msg.includes("restaurant_payment_details") && (msg.includes("does not exist") || msg.includes("schema cache"));
+}
 
 /* =========================================================
    Clean Pro UI helpers (NO gradients, NO slate-50 background)
@@ -406,15 +412,10 @@ export default function Page() {
       return;
     }
 
-    const { data, error } = await supabaseBrowser
-      .from("restaurants")
-      .select(
-        "id, name, phone, area, city, full_address, cuisines, cost_for_two, slug, cover_image, latitude, longitude, booking_enabled, avg_duration_minutes, max_bookings_per_slot, advance_booking_days, is_active, food_images, ambience_images"
-      )
-      .eq("owner_user_id", user.id)
-      .single();
-
-    if (error) {
+    let data = null;
+    try {
+      data = await fetchRestaurantSettings(supabaseBrowser, user.id);
+    } catch (error) {
       showToast("rose", "Load failed", error.message || "Failed to load restaurant settings.");
       setLoading(false);
       return;
@@ -451,7 +452,7 @@ export default function Page() {
       .eq("restaurant_id", data.id)
       .maybeSingle();
 
-    if (paymentRes.error) {
+    if (paymentRes.error && !isMissingRestaurantPaymentDetailsTable(paymentRes.error)) {
       showToast("rose", "Payment load failed", paymentRes.error.message || "Failed to load payment details.");
       setPaymentDetails(null);
       hydratePaymentForm(null, setPaymentForm, data.name, data.phone);
@@ -547,16 +548,7 @@ export default function Page() {
 
   async function saveRestaurantUpdates(partialUpdates) {
     if (!restaurantId) return;
-    const { data, error } = await supabaseBrowser
-      .from("restaurants")
-      .update(partialUpdates)
-      .eq("id", restaurantId)
-      .select(
-        "id, name, phone, area, city, full_address, cuisines, cost_for_two, slug, cover_image, latitude, longitude, booking_enabled, avg_duration_minutes, max_bookings_per_slot, advance_booking_days, is_active, food_images, ambience_images"
-      )
-      .single();
-
-    if (error) throw error;
+    const data = await saveRestaurantSettings(supabaseBrowser, restaurantId, partialUpdates);
 
     setRestaurant(data);
     // refresh local snapshots (important)
@@ -611,7 +603,11 @@ export default function Page() {
       hydratePaymentForm(data, setPaymentForm, name, phone);
       showToast("emerald", "Payment saved", "Restaurant payment details updated.");
     } catch (e) {
-      showToast("rose", "Payment save failed", e?.message || "Could not update payment details.");
+      if (isMissingRestaurantPaymentDetailsTable(e)) {
+        showToast("amber", "Payment unavailable", "restaurant_payment_details table is not present in this schema.");
+      } else {
+        showToast("rose", "Payment save failed", e?.message || "Could not update payment details.");
+      }
     } finally {
       setSavingPayment(false);
     }

@@ -3,11 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
-
-function isMissingRestaurantReviewsColumn(error) {
-  const msg = String(error?.message || "").toLowerCase();
-  return msg.includes("restaurants.reviews") && msg.includes("does not exist");
-}
+import { fetchOwnedRestaurantDashboard } from "@/lib/restaurantData";
 
 export default function RestaurantDashboardPage() {
   const router = useRouter();
@@ -19,8 +15,6 @@ export default function RestaurantDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [restaurantId, setRestaurantId] = useState(null);
-  const [rating, setRating] = useState(0);
   const [reviews, setReviews] = useState([]);
 
   const [orders, setOrders] = useState([]);
@@ -65,6 +59,8 @@ export default function RestaurantDashboardPage() {
     return null;
   };
 
+  const rangeDates = getRangeDates();
+
   const loadDashboard = async () => {
     setLoading(true);
     setError("");
@@ -79,47 +75,23 @@ export default function RestaurantDashboardPage() {
         return;
       }
 
-      let restaurant = null;
-      const { data: restaurantWithReviews, error: restErr } = await supabaseBrowser
-        .from("restaurants")
-        .select("id, rating, reviews")
-        .eq("owner_user_id", user.id)
-        .maybeSingle();
+      const restaurant = await fetchOwnedRestaurantDashboard(supabaseBrowser, user.id);
 
-      if (restErr && isMissingRestaurantReviewsColumn(restErr)) {
-        const { data: restaurantFallback, error: fallbackErr } = await supabaseBrowser
-          .from("restaurants")
-          .select("id, rating")
-          .eq("owner_user_id", user.id)
-          .maybeSingle();
-
-        if (fallbackErr) throw fallbackErr;
-        restaurant = restaurantFallback
-          ? { ...restaurantFallback, reviews: [] }
-          : restaurantFallback;
-      } else {
-        if (restErr) throw restErr;
-        restaurant = restaurantWithReviews;
-      }
-
-      if (!restaurant?.id) {
+      if (!restaurant?.restaurantId) {
         setError("No restaurant found for this account.");
         setLoading(false);
         return;
       }
 
-      setRestaurantId(restaurant.id);
-      setRating(Number(restaurant.rating || 0));
       setReviews(Array.isArray(restaurant.reviews) ? restaurant.reviews : []);
-
-      const dates = getRangeDates();
+      const dates = rangeDates;
 
       let ordersQuery = supabaseBrowser
         .from("restaurant_orders")
         .select(
           "id,order_number,customer_name,customer_phone,total_amount,payment_status,order_status,pickup_code,pickup_eta,created_at,items"
         )
-        .eq("restaurant_id", restaurant.id)
+        .eq("restaurant_id", restaurant.restaurantId)
         .order("created_at", { ascending: false })
         .limit(200);
 
@@ -128,7 +100,7 @@ export default function RestaurantDashboardPage() {
         .select(
           "id,customer_name,customer_phone,booking_date,booking_time,party_size,status,read,created_at,booking_code"
         )
-        .eq("restaurant_id", restaurant.id)
+        .eq("restaurant_id", restaurant.restaurantId)
         .order("created_at", { ascending: false })
         .limit(200);
 
@@ -179,6 +151,7 @@ export default function RestaurantDashboardPage() {
     const cancellations =
       orders.filter((o) => o.order_status === "CANCELLED").length +
       bookings.filter((b) => b.status === "cancelled").length;
+    const currentRating = averageRatingForRange(reviews, rangeDates);
 
     const newOrders = orders.filter((o) => o.order_status === "NEW").length;
     const readyPickups = orders.filter((o) => o.order_status === "READY_FOR_PICKUP").length;
@@ -188,11 +161,11 @@ export default function RestaurantDashboardPage() {
       totalBookings,
       totalOrders,
       cancellations,
-      rating: Number(rating || 0),
+      rating: currentRating,
       newOrders,
       readyPickups,
     };
-  }, [orders, bookings, rating]);
+  }, [orders, bookings, reviews, rangeDates]);
 
   const upcomingBookings = useMemo(() => {
     const now = new Date();
@@ -522,10 +495,6 @@ export default function RestaurantDashboardPage() {
   );
 }
 
-/* -----------------------------
-   SMALL INTERNAL COMPONENTS
------------------------------- */
-
 function KpiCard({ title, value, meta }) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5">
@@ -634,10 +603,6 @@ function OrderCard({ orderNo, customer, total, status, pickupCode }) {
   );
 }
 
-/* -----------------------------
-   HELPERS
------------------------------- */
-
 function buildMiniBars(orders) {
   const days = new Array(7).fill(0);
   const now = new Date();
@@ -654,6 +619,16 @@ function buildMiniBars(orders) {
 
   const max = Math.max(...days, 1);
   return days.map((v) => Math.max(8, Math.round((v / max) * 100)));
+}
+
+function averageRatingForRange(reviews, dates) {
+  if (!dates) return 0;
+  const filtered = (reviews || []).filter((review) => {
+    const created = new Date(review.createdAt || review.created_at || 0).getTime();
+    return created >= dates.from.getTime() && created <= dates.to.getTime();
+  });
+  if (!filtered.length) return 0;
+  return filtered.reduce((sum, review) => sum + Number(review.rating || 0), 0) / filtered.length;
 }
 
 function toTime(d) {

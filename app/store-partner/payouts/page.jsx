@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useStores } from "@/lib/store-partner/useStores";
+import { SkeletonBlock } from "@/components/ui/PageSkeletons";
 
 const THEME_ACCENT = "#771FA8";
 const THEME_ACCENT_SOFT = "rgba(119, 31, 168, 0.12)";
@@ -54,7 +55,7 @@ function asNumber(value) {
 }
 
 function getSessionStatus(row) {
-  return String(row?.status || row?.gateway_status || "").toUpperCase();
+  return String(row?.payment_status || row?.status || "").toUpperCase();
 }
 
 function isSuccessfulSession(row) {
@@ -66,7 +67,7 @@ function isCancelledSession(row) {
 }
 
 function getSessionTimestamp(row) {
-  return row?.verified_at || row?.created_at || null;
+  return row?.delivered_at || row?.accepted_at || row?.created_at || null;
 }
 
 function formatDateTime(value) {
@@ -165,6 +166,20 @@ function StatCard({ label, value, helper, icon: Icon, accent = "purple" }) {
           <Icon className="h-5 w-5" />
         </div>
       </div>
+    </div>
+  );
+}
+
+function TableLoadingSkeleton({ rows = 5, columns = 6 }) {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: rows }).map((_, rowIdx) => (
+        <div key={rowIdx} className={`grid gap-3 ${columns === 7 ? "md:grid-cols-7" : "md:grid-cols-6"}`}>
+          {Array.from({ length: columns }).map((__, colIdx) => (
+            <SkeletonBlock key={colIdx} className="h-12 w-full rounded-2xl" />
+          ))}
+        </div>
+      ))}
     </div>
   );
 }
@@ -410,11 +425,10 @@ export default function StorePartnerPayoutsPage() {
             .eq("store_id", selectedStoreId)
             .maybeSingle(),
           supabaseBrowser
-            .from("payment_sessions")
+            .from("store_orders")
             .select(
-              "id,tracking_id,payment_provider,amount_major,original_amount,discount_amount,currency_code,status,gateway_status,created_at,verified_at,discount_source"
+              "id,order_no,payment_method,total_amount,subtotal,discount_amount,payment_status,status,created_at,accepted_at,delivered_at"
             )
-            .eq("payment_context", "BILL_PAYMENT")
             .eq("store_id", selectedStoreId)
             .order("created_at", { ascending: false })
             .limit(500),
@@ -455,12 +469,12 @@ export default function StorePartnerPayoutsPage() {
     const cancelled = paymentSessions.filter(isCancelledSession);
 
     const grossCollected = successful.reduce(
-      (sum, row) => sum + asNumber(row.original_amount || row.amount_major),
+      (sum, row) => sum + asNumber(row.subtotal || row.total_amount),
       0
     );
-    const netCollected = successful.reduce((sum, row) => sum + asNumber(row.amount_major), 0);
+    const netCollected = successful.reduce((sum, row) => sum + asNumber(row.total_amount), 0);
     const discountsGiven = successful.reduce((sum, row) => sum + asNumber(row.discount_amount), 0);
-    const cancelledValue = cancelled.reduce((sum, row) => sum + asNumber(row.amount_major), 0);
+    const cancelledValue = cancelled.reduce((sum, row) => sum + asNumber(row.total_amount), 0);
 
     const inTransit = payoutRequests
       .filter((row) => IN_TRANSIT_PAYOUT_STATUSES.has(String(row.status || "").toUpperCase()))
@@ -520,7 +534,7 @@ export default function StorePartnerPayoutsPage() {
       .filter((row) => {
         const q = query.trim().toLowerCase();
         if (!q) return true;
-        return `${row.tracking_id} ${row.payment_provider} ${getSessionStatus(row)}`.toLowerCase().includes(q);
+        return `${row.order_no} ${row.payment_method} ${getSessionStatus(row)}`.toLowerCase().includes(q);
       });
   }, [paymentSessions, paymentStatusFilter, query]);
 
@@ -537,11 +551,10 @@ export default function StorePartnerPayoutsPage() {
           .eq("store_id", selectedStoreId)
           .maybeSingle(),
         supabaseBrowser
-          .from("payment_sessions")
+          .from("store_orders")
           .select(
-            "id,tracking_id,payment_provider,amount_major,original_amount,discount_amount,currency_code,status,gateway_status,created_at,verified_at,discount_source"
+            "id,order_no,payment_method,total_amount,subtotal,discount_amount,payment_status,status,created_at,accepted_at,delivered_at"
           )
-          .eq("payment_context", "BILL_PAYMENT")
           .eq("store_id", selectedStoreId)
           .order("created_at", { ascending: false })
           .limit(500),
@@ -620,14 +633,14 @@ export default function StorePartnerPayoutsPage() {
       ]),
       [],
       ["Transactions"],
-      ["Tracking ID", "Date", "Provider", "Gross Amount", "Discount", "Net Amount", "Status"],
+      ["Order No", "Date", "Payment Method", "Gross Amount", "Discount", "Net Amount", "Status"],
       ...transactionRows.map((row) => [
-        row.tracking_id || row.id,
+        row.order_no || row.id,
         getSessionTimestamp(row),
-        row.payment_provider || "",
-        asNumber(row.original_amount || row.amount_major),
+        row.payment_method || "",
+        asNumber(row.subtotal || row.total_amount),
         asNumber(row.discount_amount),
-        asNumber(row.amount_major),
+        asNumber(row.total_amount),
         isCancelledSession(row) ? "Cancelled" : "Paid",
       ]),
     ];
@@ -842,10 +855,7 @@ export default function StorePartnerPayoutsPage() {
           }
         >
           {loading ? (
-            <div className="flex items-center gap-3 py-8 text-sm text-slate-600">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading payout requests...
-            </div>
+            <TableLoadingSkeleton rows={4} columns={6} />
           ) : filteredPayoutRequests.length ? (
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
@@ -902,18 +912,15 @@ export default function StorePartnerPayoutsPage() {
           }
         >
           {loading || storesLoading ? (
-            <div className="flex items-center gap-3 py-8 text-sm text-slate-600">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading settlement ledger...
-            </div>
+            <TableLoadingSkeleton rows={5} columns={7} />
           ) : transactionRows.length ? (
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-slate-500" style={{ borderColor: THEME_BORDER }}>
-                    <th className="py-3 pr-4 font-medium">Tracking ID</th>
+                    <th className="py-3 pr-4 font-medium">Order No</th>
                     <th className="py-3 pr-4 font-medium">Date</th>
-                    <th className="py-3 pr-4 font-medium">Provider</th>
+                    <th className="py-3 pr-4 font-medium">Payment Method</th>
                     <th className="py-3 pr-4 font-medium">Gross</th>
                     <th className="py-3 pr-4 font-medium">Discount</th>
                     <th className="py-3 pr-4 font-medium">Net</th>
@@ -926,14 +933,14 @@ export default function StorePartnerPayoutsPage() {
                     return (
                       <tr key={row.id} className="border-b last:border-b-0" style={{ borderColor: "rgba(226,232,240,0.8)" }}>
                         <td className="py-4 pr-4">
-                          <div className="font-semibold text-slate-900">{row.tracking_id || String(row.id).slice(0, 8).toUpperCase()}</div>
-                          <div className="mt-1 text-xs text-slate-500">{row.currency_code || "MUR"}</div>
+                          <div className="font-semibold text-slate-900">{row.order_no || String(row.id).slice(0, 8).toUpperCase()}</div>
+                          <div className="mt-1 text-xs text-slate-500">MUR</div>
                         </td>
                         <td className="py-4 pr-4 text-slate-600">{formatDateTime(getSessionTimestamp(row))}</td>
-                        <td className="py-4 pr-4 text-slate-700">{row.payment_provider || "-"}</td>
-                        <td className="py-4 pr-4">{amountNode(asNumber(row.original_amount || row.amount_major))}</td>
+                        <td className="py-4 pr-4 text-slate-700">{row.payment_method || "-"}</td>
+                        <td className="py-4 pr-4">{amountNode(asNumber(row.subtotal || row.total_amount))}</td>
                         <td className="py-4 pr-4">{amountNode(asNumber(row.discount_amount))}</td>
-                        <td className="py-4 pr-4">{amountNode(asNumber(row.amount_major))}</td>
+                        <td className="py-4 pr-4">{amountNode(asNumber(row.total_amount))}</td>
                         <td className="py-4 pr-0">
                           <StatusPill status={isCancelled ? "Cancelled" : "Paid"} tone="payment" />
                         </td>
@@ -947,7 +954,7 @@ export default function StorePartnerPayoutsPage() {
             <EmptyState
               icon={ReceiptText}
               title="No payment ledger entries"
-              body="Paid and cancelled bill payments for the selected store will appear here."
+              body="Paid and cancelled store orders for the selected store will appear here."
             />
           )}
         </Card>

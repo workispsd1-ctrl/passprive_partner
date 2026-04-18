@@ -45,13 +45,13 @@ export function useDashboard(storeId, filters) {
 
     const filter = `store_id=eq.${storeId}`;
     const channel = supabaseBrowser
-      .channel(`dashboard-payment-sessions-${storeId}`)
+      .channel(`dashboard-store-orders-${storeId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
-          table: "payment_sessions",
+          table: "store_orders",
           filter,
         },
         () => {

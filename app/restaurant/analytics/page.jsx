@@ -2,10 +2,15 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import {
+  fetchOwnedRestaurantBase,
+  fetchOwnedRestaurantOffersData,
+  fetchOwnedRestaurantReviews,
+} from "@/lib/restaurantData";
 
-function isMissingRestaurantReviewsColumn(error) {
+function isMissingRestaurantPaymentDetailsTable(error) {
   const msg = String(error?.message || "").toLowerCase();
-  return msg.includes("restaurants.reviews") && msg.includes("does not exist");
+  return msg.includes("restaurant_payment_details") && (msg.includes("does not exist") || msg.includes("schema cache"));
 }
 
 /* =======================================================
@@ -47,17 +52,6 @@ function GlassCard({ title, sub, right, children }) {
       </div>
       <div className="p-6">{children}</div>
     </div>
-  );
-}
-
-function SoftButton({ children, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      className="rounded-2xl border border-white/60 bg-white/70 px-4 py-2 text-sm text-slate-700 backdrop-blur hover:bg-white/90 active:scale-[0.98] transition"
-    >
-      {children}
-    </button>
   );
 }
 
@@ -378,44 +372,56 @@ export default function Page() {
     }
 
     let rData = null;
-    const { data: restaurantWithReviews, error: rErr } = await supabaseBrowser
-      .from("restaurants")
-      .select("id, rating, total_ratings, food_rating, service_rating, ambience_rating, reviews, offer, menu, booking_enabled, created_at")
-      .eq("owner_user_id", user.id)
-      .single();
+    try {
+      const [restaurantBase, restaurantReviews, offersData] = await Promise.all([
+        fetchOwnedRestaurantBase(
+          supabaseBrowser,
+          user.id,
+          "id, booking_enabled, created_at"
+        ),
+        fetchOwnedRestaurantReviews(supabaseBrowser, user.id),
+        fetchOwnedRestaurantOffersData(supabaseBrowser, user.id),
+      ]);
 
-    if (rErr && isMissingRestaurantReviewsColumn(rErr)) {
-      const { data: restaurantFallback, error: fallbackErr } = await supabaseBrowser
-        .from("restaurants")
-        .select("id, rating, total_ratings, food_rating, service_rating, ambience_rating, offer, menu, booking_enabled, created_at")
-        .eq("owner_user_id", user.id)
-        .single();
+      const ratingValues = restaurantReviews.reviews
+        .map((review) => Number(review.rating))
+        .filter((value) => Number.isFinite(value));
+      const avgRating = ratingValues.length
+        ? ratingValues.reduce((sum, value) => sum + value, 0) / ratingValues.length
+        : null;
 
-      if (fallbackErr) {
-        setError(fallbackErr.message || "Failed to load restaurant");
-        setLoading(false);
-        return;
-      }
-
-      rData = restaurantFallback ? { ...restaurantFallback, reviews: [] } : restaurantFallback;
-    } else {
-      if (rErr) {
-        setError(rErr.message || "Failed to load restaurant");
-        setLoading(false);
-        return;
-      }
-      rData = restaurantWithReviews;
+      rData = {
+        ...restaurantBase,
+        rating: avgRating,
+        total_ratings: ratingValues.length,
+        food_rating: null,
+        service_rating: null,
+        ambience_rating: null,
+        reviews: restaurantReviews.reviews,
+        offers: offersData.offers,
+        menu: offersData.menu,
+      };
+    } catch (error) {
+      setError(error.message || "Failed to load restaurant");
+      setLoading(false);
+      return;
     }
 
     const rid = rData?.id;
     setRestaurantId(rid);
     setRestaurantRow(rData || null);
 
-    const { data: pData } = await supabaseBrowser
+    const { data: pData, error: pErr } = await supabaseBrowser
       .from("restaurant_payment_details")
       .select("restaurant_id, payout_method, settlement_cycle, commission_percent, currency, kyc_status, billing_email, billing_phone, updated_at")
       .eq("restaurant_id", rid)
       .maybeSingle();
+
+    if (pErr && !isMissingRestaurantPaymentDetailsTable(pErr)) {
+      setError(pErr.message || "Failed to load payment details");
+      setLoading(false);
+      return;
+    }
 
     setPaymentDetails(pData || null);
 
@@ -613,8 +619,7 @@ export default function Page() {
 
     const keywords = topKeywords(r, 10);
 
-    const offerRaw = restaurantRow.offer;
-    const offers = Array.isArray(offerRaw) ? offerRaw : offerRaw && typeof offerRaw === "object" ? [offerRaw] : [];
+    const offers = Array.isArray(restaurantRow.offers) ? restaurantRow.offers : [];
     const offersTotal = offers.length;
     const offersActive = offers.filter((o) => o && o.isActive !== false).length;
 

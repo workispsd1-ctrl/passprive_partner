@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   CircleDollarSign,
 } from "lucide-react";
+import { SkeletonBlock } from "@/components/ui/PageSkeletons";
 
 function CardShell({ title, right, children }) {
   return (
@@ -55,6 +56,20 @@ function Amount({ value }) {
       <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">MUR</span>
       <span className="font-semibold text-gray-900">{num}</span>
     </span>
+  );
+}
+
+function TransactionsSkeleton() {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: 6 }).map((_, idx) => (
+        <div key={idx} className="grid gap-3 md:grid-cols-6">
+          {Array.from({ length: 6 }).map((__, colIdx) => (
+            <SkeletonBlock key={colIdx} className="h-12 w-full rounded-2xl border-gray-200 bg-gray-100" />
+          ))}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -308,7 +323,7 @@ export default function StoreTransactionsPage() {
           </div>
 
           {loading ? (
-            <div className="text-sm text-gray-500">Loading transactions...</div>
+            <TransactionsSkeleton />
           ) : filteredTransactions.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center">
               <div className="mx-auto h-12 w-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">

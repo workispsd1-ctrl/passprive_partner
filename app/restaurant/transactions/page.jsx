@@ -101,8 +101,8 @@ async function loadRestaurantTransactions(restaurantIds) {
 
   const [tablePrimary, pickupPrimary] = await Promise.all([
     supabaseBrowser
-      .from("restaurant_table_orders")
-      .select("id,restaurant_id,total_amount,payment_method,payment_status,status,created_at,updated_at")
+      .from("restaurant_bookings")
+      .select("id,restaurant_id,payment_amount,payment_method,payment_status,status,created_at,updated_at")
       .in("restaurant_id", ids)
       .order("created_at", { ascending: false })
       .limit(3000),
@@ -119,8 +119,8 @@ async function loadRestaurantTransactions(restaurantIds) {
     tableRows = tablePrimary.data || [];
   } else if (isSchemaError(tablePrimary.error)) {
     const fallback = await supabaseBrowser
-      .from("restaurant_table_orders")
-      .select("id,restaurant_id,total_amount,status,created_at,updated_at")
+      .from("restaurant_bookings")
+      .select("id,restaurant_id,payment_amount,status,created_at,updated_at")
       .in("restaurant_id", ids)
       .order("created_at", { ascending: false })
       .limit(3000);
@@ -146,13 +146,13 @@ async function loadRestaurantTransactions(restaurantIds) {
   const normalizedTable = tableRows.map((r) => ({
     id: `table_${r.id}`,
     restaurant_id: r.restaurant_id,
-    total_amount: Number(r.total_amount || 0),
+    total_amount: Number(r.payment_amount || 0),
     payment_method: r.payment_method || "ONLINE",
-    payment_status: r.payment_status || "PAID",
-    status: r.status || "NEW",
+    payment_status: String(r.payment_status || "pending").toUpperCase(),
+    status: String(r.status || "pending").toUpperCase(),
     created_at: r.created_at,
     updated_at: r.updated_at,
-    source: "Table",
+    source: "Booking",
   }));
 
   const normalizedPickup = pickupRows.map((r) => ({

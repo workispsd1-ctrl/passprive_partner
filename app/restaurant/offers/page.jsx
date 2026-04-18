@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import {
+  activateRestaurantSubscription,
+  fetchOwnedRestaurantOffersData,
+  replaceRestaurantOffers,
+} from "@/lib/restaurantData";
 
 /* ----------------------------
    OFFER TYPES
@@ -535,30 +540,19 @@ export default function OffersPage() {
       return;
     }
 
-    const { data, error } = await supabaseBrowser
-      .from("restaurants")
-      .select(
-        "id, offer, menu, subscribed, subscribed_plan, premium_unlock_all, premium_time_slot_enabled, premium_repeat_rewards_enabled, premium_dish_discounts_enabled"
-      )
-      .eq("owner_user_id", user.id)
-      .single();
-
-    if (error) {
+    let data = null;
+    try {
+      data = await fetchOwnedRestaurantOffersData(supabaseBrowser, user.id);
+    } catch (error) {
       setLastError(error.message || "Failed to load offers");
       setLoading(false);
       return;
     }
 
     if (data) {
-      setRestaurantId(data.id);
-      setOffers(normalizeOffers(data.offer).map(normalizeOneOffer));
-
-      const unlockAll = Boolean(data.premium_unlock_all);
-      const timeSlot = Boolean(data.premium_time_slot_enabled || unlockAll);
-      const repeatRewards = Boolean(data.premium_repeat_rewards_enabled || unlockAll);
-      const discounts = Boolean(data.premium_dish_discounts_enabled || unlockAll);
-
-      setPremiumAccess({ unlockAll, timeSlot, repeatRewards, discounts });
+      setRestaurantId(data.restaurantId);
+      setOffers(normalizeOffers(data.offers).map(normalizeOneOffer));
+      setPremiumAccess(data.premiumAccess);
 
       const sections = Array.isArray(data?.menu?.sections) ? data.menu.sections : [];
       const items = [];
@@ -584,12 +578,13 @@ export default function OffersPage() {
     setSaving(true);
     setLastError("");
 
-    const { error } = await supabaseBrowser
-      .from("restaurants")
-      .update({ offer: nextOffers.map(sanitizeOffer) })
-      .eq("id", restaurantId);
-
-    if (error) {
+    try {
+      await replaceRestaurantOffers(
+        supabaseBrowser,
+        restaurantId,
+        nextOffers.map((offer) => sanitizeOffer(offer))
+      );
+    } catch (error) {
       setLastError(error.message || "Failed to save offers");
       setSaving(false);
       return false;
@@ -620,19 +615,9 @@ export default function OffersPage() {
     const nextAccess = nextAccessForPlan(premiumAccess, planKey);
     const subscribedPlan = nextAccess.unlockAll ? PLAN_KEY.ALL : planKey;
 
-    const payload = {
-      subscribed: true,
-      subscribed_plan: subscribedPlan,
-      premium_unlock_all: nextAccess.unlockAll,
-      premium_time_slot_enabled: nextAccess.timeSlot,
-      premium_repeat_rewards_enabled: nextAccess.repeatRewards,
-      premium_dish_discounts_enabled: nextAccess.discounts,
-      premium_unlocked_at: new Date().toISOString(),
-    };
-
-    const { error } = await supabaseBrowser.from("restaurants").update(payload).eq("id", restaurantId);
-
-    if (error) {
+    try {
+      await activateRestaurantSubscription(supabaseBrowser, restaurantId, subscribedPlan, nextAccess);
+    } catch (error) {
       setPaymentError(error.message || "Failed to activate premium.");
       return false;
     }

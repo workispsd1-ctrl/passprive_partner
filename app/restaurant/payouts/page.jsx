@@ -17,6 +17,11 @@ import {
   ReceiptText,
 } from "lucide-react";
 
+function isMissingRestaurantPaymentDetailsTable(error) {
+  const msg = String(error?.message || "").toLowerCase();
+  return msg.includes("restaurant_payment_details") && (msg.includes("does not exist") || msg.includes("schema cache"));
+}
+
 function CardShell({ title, right, children }) {
   return (
     <div className="rounded-3xl border border-gray-200 bg-white shadow-sm">
@@ -254,8 +259,8 @@ async function loadRestaurantOrders(restaurantIds) {
 
   const [tablePrimary, pickupPrimary] = await Promise.all([
     supabaseBrowser
-      .from("restaurant_table_orders")
-      .select("id,restaurant_id,total_amount,payment_method,payment_status,status,created_at,updated_at")
+      .from("restaurant_bookings")
+      .select("id,restaurant_id,payment_amount,payment_method,payment_status,status,created_at,updated_at")
       .in("restaurant_id", ids)
       .order("created_at", { ascending: false })
       .limit(2000),
@@ -272,8 +277,8 @@ async function loadRestaurantOrders(restaurantIds) {
     tableRows = tablePrimary.data || [];
   } else if (isSchemaError(tablePrimary.error)) {
     const fallback = await supabaseBrowser
-      .from("restaurant_table_orders")
-      .select("id,restaurant_id,total_amount,status,created_at,updated_at")
+      .from("restaurant_bookings")
+      .select("id,restaurant_id,payment_amount,status,created_at,updated_at")
       .in("restaurant_id", ids)
       .order("created_at", { ascending: false })
       .limit(2000);
@@ -299,13 +304,13 @@ async function loadRestaurantOrders(restaurantIds) {
   const normalizedTable = tableRows.map((r) => ({
     id: `table_${r.id}`,
     restaurant_id: r.restaurant_id,
-    total_amount: r.total_amount,
+    total_amount: r.payment_amount,
     payment_method: r.payment_method || "ONLINE",
-    payment_status: r.payment_status || "PAID",
-    status: r.status || "NEW",
+    payment_status: String(r.payment_status || "pending").toUpperCase(),
+    status: String(r.status || "pending").toUpperCase(),
     created_at: r.created_at,
     updated_at: r.updated_at,
-    order_source: "TABLE",
+    order_source: "BOOKING",
   }));
 
   const normalizedPickup = pickupRows.map((r) => ({
@@ -330,22 +335,20 @@ async function loadPayoutRequests(userId, restaurantIds) {
 
   const { data, error } = await supabaseBrowser
     .from("partner_payout_requests")
-    .select("id,store_id,status,requested_amount,method,payout_details,requested_at,created_at,processed_at,paid_at,reference_no,notes")
+    .select("id,restaurant_id,status,requested_amount,method,payout_details,requested_at,created_at,processed_at,paid_at,reference_no,notes")
     .eq("user_id", userId)
+    .in("restaurant_id", ids)
     .order("created_at", { ascending: false })
     .limit(100);
 
   if (error && isSchemaError(error)) return [];
   if (error) throw error;
 
-  const rows = (data || []).filter((r) => {
-    const rid = String(r?.payout_details?.restaurant_id || "");
-    return ids.includes(rid);
-  });
+  const rows = data || [];
 
   return rows.map((r) => ({
     id: String(r.id),
-    restaurant_id: String(r?.payout_details?.restaurant_id || ""),
+    restaurant_id: String(r.restaurant_id || ""),
     status: r.status || "REQUESTED",
     amount: Number(r.requested_amount || 0),
     method: r.method || "BANK_TRANSFER",
@@ -363,20 +366,21 @@ async function createPayoutRequest(userId, restaurantId, amount, method, details
     .insert({
       user_id: userId,
       store_id: null,
+      restaurant_id: restaurantId,
       requested_amount: amount,
       method,
       payout_details: { ...(details || {}), partner_type: "RESTAURANT", restaurant_id: restaurantId },
       status: "REQUESTED",
       requested_at: nowIso,
     })
-    .select("id,status,requested_amount,method,requested_at,created_at")
+    .select("id,restaurant_id,status,requested_amount,method,requested_at,created_at")
     .single();
 
   if (error) throw error;
 
   return {
     id: String(data?.id || `${Date.now()}`),
-    restaurant_id: String(restaurantId),
+    restaurant_id: String(data?.restaurant_id || restaurantId),
     status: data?.status || "REQUESTED",
     amount: Number(data?.requested_amount || amount || 0),
     method: data?.method || method,
@@ -447,7 +451,7 @@ export default function RestaurantPartnerPayoutsPage() {
           loadPayoutRequests(userId, restaurantIds),
         ]);
 
-        if (paymentRes.error) throw paymentRes.error;
+        if (paymentRes.error && !isMissingRestaurantPaymentDetailsTable(paymentRes.error)) throw paymentRes.error;
 
         if (!cancelled) {
           setOrders(ordersData || []);

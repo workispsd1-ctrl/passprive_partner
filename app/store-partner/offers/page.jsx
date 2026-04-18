@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useStores } from "@/lib/store-partner/useStores";
+import { SkeletonBlock } from "@/components/ui/PageSkeletons";
 
 const THEME_ACCENT = "#771FA8";
 const THEME_ACCENT_SOFT = "rgba(119, 31, 168, 0.12)";
@@ -146,22 +147,6 @@ function normalizeOffer(raw, index) {
   };
 }
 
-function serializeOffer(form, existingId) {
-  return {
-    id: existingId || crypto.randomUUID(),
-    title: String(form.title || "").trim(),
-    description: String(form.description || "").trim(),
-    badge_text: String(form.badgeText || "").trim(),
-    discount_type: String(form.discountType || "PERCENT").toUpperCase(),
-    discount_value: form.discountValue === "" ? null : Number(form.discountValue),
-    min_bill_amount: form.minBillAmount === "" ? null : Number(form.minBillAmount),
-    status: String(form.status || "ACTIVE").toUpperCase(),
-    starts_at: form.startsAt || null,
-    ends_at: form.endsAt || null,
-    is_active: ["ACTIVE", "LIVE", "PUBLISHED"].includes(String(form.status || "ACTIVE").toUpperCase()),
-  };
-}
-
 function formFromOffer(offer) {
   return {
     title: offer?.title || "",
@@ -196,6 +181,37 @@ function StatCard({ icon: Icon, label, value, hint }) {
           <Icon className="h-5 w-5" />
         </div>
       </div>
+    </div>
+  );
+}
+
+function OffersListSkeleton() {
+  return (
+    <div className="space-y-4">
+      {Array.from({ length: 3 }).map((_, idx) => (
+        <div
+          key={idx}
+          className="rounded-[28px] border bg-white p-5 shadow-sm"
+          style={{ borderColor: THEME_BORDER }}
+        >
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div className="flex-1 space-y-3">
+              <SkeletonBlock className="h-4 w-24" />
+              <SkeletonBlock className="h-8 w-48" />
+              <SkeletonBlock className="h-4 w-full max-w-xl" />
+              <div className="flex flex-wrap gap-3">
+                <SkeletonBlock className="h-10 w-32 rounded-full" />
+                <SkeletonBlock className="h-10 w-28 rounded-full" />
+                <SkeletonBlock className="h-10 w-36 rounded-full" />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <SkeletonBlock className="h-10 w-10 rounded-2xl" />
+              <SkeletonBlock className="h-10 w-10 rounded-2xl" />
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -373,6 +389,7 @@ export default function StorePartnerOffersRoute() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [storeRecord, setStoreRecord] = useState(null);
+  const [offersRows, setOffersRows] = useState([]);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState("create");
   const [editorOfferId, setEditorOfferId] = useState("");
@@ -396,18 +413,30 @@ export default function StorePartnerOffersRoute() {
         else setLoading(true);
         setError("");
 
-        const { data, error: queryError } = await supabaseBrowser
-          .from("stores")
-          .select("id,name,city,logo_url,offers,updated_at,is_active")
-          .eq("id", selectedStoreId)
-          .maybeSingle();
+        const [storeRes, offersRes] = await Promise.all([
+          supabaseBrowser
+            .from("stores")
+            .select("id,name,city,logo_url,updated_at,is_active")
+            .eq("id", selectedStoreId)
+            .maybeSingle(),
+          supabaseBrowser
+            .from("store_offers")
+            .select("id,title,description,badge_text,offer_type,discount_value,min_spend,start_at,end_at,is_active,metadata,updated_at")
+            .eq("store_id", selectedStoreId)
+            .order("created_at", { ascending: false }),
+        ]);
 
-        if (queryError) throw queryError;
-        if (!cancelled) setStoreRecord(data || null);
+        if (storeRes.error) throw storeRes.error;
+        if (offersRes.error) throw offersRes.error;
+        if (!cancelled) {
+          setStoreRecord(storeRes.data || null);
+          setOffersRows(offersRes.data || []);
+        }
       } catch (e) {
         if (!cancelled) {
           setError(e?.message || "Failed to load offers.");
           setStoreRecord(null);
+          setOffersRows([]);
         }
       } finally {
         if (!cancelled) {
@@ -424,10 +453,22 @@ export default function StorePartnerOffersRoute() {
   }, [selectedStoreId]);
 
   const offers = useMemo(() => {
-    const raw = storeRecord?.offers;
-    if (!Array.isArray(raw)) return [];
-    return raw.map((row, index) => normalizeOffer(row, index)).filter(Boolean);
-  }, [storeRecord]);
+    return offersRows.map((row, index) =>
+      normalizeOffer(
+        {
+          ...row,
+          name: row.title,
+          badge: row.badge_text,
+          discount_type: row.offer_type === "percentage" ? "PERCENT" : "FLAT",
+          min_bill_amount: row.min_spend,
+          starts_at: row.start_at,
+          ends_at: row.end_at,
+          status: row.is_active ? "ACTIVE" : "PAUSED",
+        },
+        index
+      )
+    ).filter(Boolean);
+  }, [offersRows]);
 
   const activeOffers = useMemo(() => offers.filter((offer) => offer.isActive).length, [offers]);
   const inactiveOffers = Math.max(offers.length - activeOffers, 0);
@@ -438,13 +479,22 @@ export default function StorePartnerOffersRoute() {
     try {
       setRefreshing(true);
       setError("");
-      const { data, error: queryError } = await supabaseBrowser
-        .from("stores")
-        .select("id,name,city,logo_url,offers,updated_at,is_active")
-        .eq("id", selectedStoreId)
-        .maybeSingle();
-      if (queryError) throw queryError;
-      setStoreRecord(data || null);
+      const [storeRes, offersRes] = await Promise.all([
+        supabaseBrowser
+          .from("stores")
+          .select("id,name,city,logo_url,updated_at,is_active")
+          .eq("id", selectedStoreId)
+          .maybeSingle(),
+        supabaseBrowser
+          .from("store_offers")
+          .select("id,title,description,badge_text,offer_type,discount_value,min_spend,start_at,end_at,is_active,metadata,updated_at")
+          .eq("store_id", selectedStoreId)
+          .order("created_at", { ascending: false }),
+      ]);
+      if (storeRes.error) throw storeRes.error;
+      if (offersRes.error) throw offersRes.error;
+      setStoreRecord(storeRes.data || null);
+      setOffersRows(offersRes.data || []);
     } catch (e) {
       setError(e?.message || "Failed to refresh offers.");
     } finally {
@@ -481,26 +531,29 @@ export default function StorePartnerOffersRoute() {
       setSaving(true);
       setError("");
 
-      const currentOffers = Array.isArray(storeRecord?.offers) ? storeRecord.offers.filter(hasOfferContent) : [];
-      const nextOffer = serializeOffer(editorForm, editorMode === "edit" ? editorOfferId : "");
-      const nextOffers =
+      const payload = {
+        store_id: selectedStoreId,
+        title: String(editorForm.title || "").trim(),
+        description: String(editorForm.description || "").trim() || null,
+        badge_text: String(editorForm.badgeText || "").trim() || null,
+        offer_type: String(editorForm.discountType || "PERCENT").toUpperCase() === "PERCENT" ? "percentage" : "flat",
+        discount_value: editorForm.discountValue === "" ? null : Number(editorForm.discountValue),
+        min_spend: editorForm.minBillAmount === "" ? null : Number(editorForm.minBillAmount),
+        start_at: editorForm.startsAt || null,
+        end_at: editorForm.endsAt || null,
+        is_active: String(editorForm.status || "ACTIVE").toUpperCase() === "ACTIVE",
+        metadata: {},
+      };
+
+      const query =
         editorMode === "edit"
-          ? currentOffers.map((row, index) => {
-              const normalized = normalizeOffer(row, index);
-              return String(normalized?.id || "") === String(editorOfferId) ? nextOffer : row;
-            })
-          : [...currentOffers, nextOffer];
+          ? supabaseBrowser.from("store_offers").update(payload).eq("id", editorOfferId)
+          : supabaseBrowser.from("store_offers").insert(payload);
 
-      const { data, error: updateError } = await supabaseBrowser
-        .from("stores")
-        .update({ offers: nextOffers })
-        .eq("id", selectedStoreId)
-        .select("id,name,city,logo_url,offers,updated_at,is_active")
-        .maybeSingle();
-
+      const { error: updateError } = await query;
       if (updateError) throw updateError;
 
-      setStoreRecord(data || null);
+      await handleRefresh();
       setEditorOpen(false);
     } catch (e) {
       setError(e?.message || "Failed to save offer.");
@@ -529,7 +582,7 @@ export default function StorePartnerOffersRoute() {
               </div>
               <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900">Offers for the selected store</h1>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">
-                This page reads directly from the selected store record, filters out empty placeholder entries, and lets you manage the real offers list.
+                This page reads directly from the store offers table and lets you manage the live offers list for the selected store.
               </p>
               <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-600">
                 <span className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-sm">
@@ -571,7 +624,7 @@ export default function StorePartnerOffersRoute() {
         </section>
 
         <section className="grid gap-4 md:grid-cols-3">
-          <StatCard icon={Gift} label="Total Offers" value={loading ? "..." : String(offers.length)} hint="Live count from the selected store record" />
+          <StatCard icon={Gift} label="Total Offers" value={loading ? "..." : String(offers.length)} hint="Live count from the offers table" />
           <StatCard icon={TicketPercent} label="Active Offers" value={loading ? "..." : String(activeOffers)} hint="Offers currently marked active/live" />
           <StatCard icon={Tag} label="Inactive Offers" value={loading ? "..." : String(inactiveOffers)} hint={storeRecord?.updated_at ? `Updated ${formatDate(storeRecord.updated_at)}` : "Waiting for store data"} />
         </section>
@@ -580,10 +633,7 @@ export default function StorePartnerOffersRoute() {
           {error ? <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
           {storesLoading || loading ? (
-            <div className="flex items-center gap-3 py-10 text-sm text-slate-600">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading store offers...
-            </div>
+            <OffersListSkeleton />
           ) : offers.length ? (
             <div className="space-y-4">
               {offers.map((offer) => (

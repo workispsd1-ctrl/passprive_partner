@@ -30,12 +30,51 @@ import { PartnerOfferTargetsEditor } from "./PartnerOfferTargetsEditor";
 import { PartnerOfferConditionsEditor } from "./PartnerOfferConditionsEditor";
 import { PartnerOfferLimitsEditor } from "./PartnerOfferLimitsEditor";
 import { PartnerOfferApplicabilityTester } from "./PartnerOfferApplicabilityTester";
+import { SkeletonBlock } from "@/components/ui/PageSkeletons";
 
 const TERMS = [
   "Customers must inform the cashier that they will pay through the District app before making payment.",
   "PassPrive has no role to play in taxes and charges levied by the government or the outlet.",
   "Offers are applicable only on payment through the app and not on cash transactions.",
 ];
+
+function PartnerOffersSkeleton() {
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 lg:grid-cols-2">
+        {Array.from({ length: 2 }).map((_, idx) => (
+          <div key={idx} className="rounded-3xl border border-gray-200 bg-gray-50 p-4">
+            <div className="space-y-3">
+              <SkeletonBlock className="h-4 w-28 border-gray-200 bg-gray-200/70" />
+              <SkeletonBlock className="h-8 w-24 border-gray-200 bg-gray-200/70" />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-4 md:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, idx) => (
+          <SkeletonBlock key={idx} className="h-11 w-full rounded-2xl border-gray-200 bg-gray-200/70" />
+        ))}
+      </div>
+      <div className="space-y-4">
+        {Array.from({ length: 3 }).map((_, idx) => (
+          <div key={idx} className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="space-y-3">
+              <SkeletonBlock className="h-4 w-24 border-gray-200 bg-gray-200/70" />
+              <SkeletonBlock className="h-7 w-52 border-gray-200 bg-gray-200/70" />
+              <SkeletonBlock className="h-4 w-full border-gray-200 bg-gray-200/70" />
+              <div className="flex flex-wrap gap-3">
+                <SkeletonBlock className="h-9 w-28 rounded-full border-gray-200 bg-gray-200/70" />
+                <SkeletonBlock className="h-9 w-32 rounded-full border-gray-200 bg-gray-200/70" />
+                <SkeletonBlock className="h-9 w-24 rounded-full border-gray-200 bg-gray-200/70" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function toLocalDateInput(value) {
   if (!value) return "";
@@ -743,10 +782,7 @@ export function PartnerOffersPage({ partnerEntityType = "STORE" }) {
           }
         >
           {loading ? (
-            <div className="flex items-center gap-3 text-sm text-gray-600">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading merchant offers...
-            </div>
+            <PartnerOffersSkeleton />
           ) : (
             <div className="space-y-5">
               <div className="grid gap-4 lg:grid-cols-2">

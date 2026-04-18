@@ -24,10 +24,16 @@ import {
   CreditCard,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import {
+  activateRestaurantSubscription,
+  fetchOwnedRestaurantOffersData,
+  replaceRestaurantMediaUrls,
+} from "@/lib/restaurantData";
 
 const BUCKET_NAME = "restaurants";
 const BUCKET_ROOT_FOLDER = "menu";
 const MENU_PREMIUM_PRICE = 3000;
+const STRUCTURED_MENU_SUPPORTED = false;
 
 const DEMO_CARD = {
   number: "4242 4242 4242 4242",
@@ -285,33 +291,25 @@ export default function RestaurantMenuPage() {
         return;
       }
 
-      const { data: restaurant, error } = await supabaseBrowser
-        .from("restaurants")
-        .select(
-          "id, menu, subscribed, premium_unlock_all, premium_dish_discounts_enabled, subscribed_plan"
-        )
-        .eq("owner_user_id", user.id)
-        .single();
-
-      if (error) {
+      let restaurant = null;
+      try {
+        restaurant = await fetchOwnedRestaurantOffersData(supabaseBrowser, user.id);
+      } catch (error) {
         setSaveError(error.message);
         setLoading(false);
         return;
       }
-      if (!restaurant?.id) {
+      if (!restaurant?.restaurantId) {
         setSaveError("Restaurant not found for this partner.");
         setLoading(false);
         return;
       }
 
       const menuUnlocked =
-        restaurant?.premium_unlock_all === true ||
-        restaurant?.premium_dish_discounts_enabled === true ||
-        restaurant?.subscribed_plan === "ALL" ||
-        restaurant?.subscribed_plan === "DISCOUNTS" ||
-        restaurant?.subscribed === true;
+        restaurant?.premiumAccess?.unlockAll === true ||
+        restaurant?.premiumAccess?.discounts === true;
 
-      setRestaurantId(restaurant.id);
+      setRestaurantId(restaurant.restaurantId);
       setIsSubscribed(Boolean(menuUnlocked));
 
       const parsed = safeMenu(restaurant.menu);
@@ -320,12 +318,12 @@ export default function RestaurantMenuPage() {
       setSelectedSectionId(parsed.sections?.[0]?.id || null);
 
       if (typeof window !== "undefined") {
-        const catalogUrl = `${window.location.origin}/public-menu?id=${restaurant.id}`;
+        const catalogUrl = `${window.location.origin}/public-menu?id=${restaurant.restaurantId}`;
         setMenuUrl(menuUnlocked ? catalogUrl : getMenuImageUrls(parsed)[0] || "");
       }
 
       if (!restaurant.menu || Array.isArray(restaurant.menu)) {
-        await saveMenu(parsed, restaurant.id);
+        await saveMenu(parsed, restaurant.restaurantId);
       }
 
       setLoading(false);
@@ -351,47 +349,45 @@ export default function RestaurantMenuPage() {
     setInfoMsg("");
 
     const payload = { ...safeMenu(nextMenu), updated_at: new Date().toISOString() };
+    try {
+      const savedUrls = await replaceRestaurantMediaUrls(
+        supabaseBrowser,
+        rid,
+        "menu",
+        getMenuImageUrls(payload)
+      );
+      const fresh = safeMenu({
+        ...payload,
+        full_menu_image_urls: savedUrls,
+        full_menu_image_url: savedUrls[0] || null,
+        sections: [],
+      });
+      originalMenuRef.current = fresh;
+      setMenu(fresh);
+      setInfoMsg("Menu images saved.");
+    } catch (error) {
+      setSaveError(error.message || "Failed to save menu images.");
+    } finally {
+      setSaving(false);
+    }
 
-    const { data, error } = await supabaseBrowser
-      .from("restaurants")
-      .update({ menu: payload })
-      .eq("id", rid)
-      .select("id, menu")
-      .single();
-
-    setSaving(false);
-
-    if (error) {
-      setSaveError(error.message || "Failed to save menu.");
+    if ((payload.sections || []).length > 0) {
+      setInfoMsg("Menu images saved. Item catalogue is not stored in the current schema.");
       return;
     }
-    if (!data?.id) {
-      setSaveError("Update returned no row (RLS may be blocking update).");
-      return;
-    }
-
-    const fresh = safeMenu(data.menu);
-    originalMenuRef.current = fresh;
-    setMenu(fresh);
-    setInfoMsg("Menu saved.");
   };
 
   const activateSubscriptionDemo = async () => {
     if (!restaurantId) return false;
 
-    const { error } = await supabaseBrowser
-      .from("restaurants")
-      .update({
-        subscribed: true,
-        subscribed_plan: "DISCOUNTS",
-        premium_dish_discounts_enabled: true,
-        premium_unlocked_at: new Date().toISOString(),
-      })
-      .eq("id", restaurantId)
-      .select("id")
-      .single();
-
-    if (error) {
+    try {
+      await activateRestaurantSubscription(supabaseBrowser, restaurantId, "DISCOUNTS", {
+        unlockAll: false,
+        timeSlot: false,
+        repeatRewards: false,
+        discounts: true,
+      });
+    } catch (error) {
       setSaveError(error.message || "Failed to activate premium subscription.");
       return false;
     }
@@ -823,8 +819,8 @@ export default function RestaurantMenuPage() {
             </div>
             <div className="mt-2 text-sm text-gray-600">
               {isSubscribed
-                ? "You can now manage catalogue items and show full digital menu from QR."
-                : "Unlock to manage catalogue items and show full digital menu from QR."}
+                ? "Premium is active. With the current schema, QR and menu images are supported."
+                : "Unlock premium to use QR with menu images."}
             </div>
           </div>
 
@@ -851,14 +847,14 @@ export default function RestaurantMenuPage() {
           <div className="text-2xl font-bold text-gray-900">Menu</div>
           <div className="text-sm text-gray-500 mt-1">
             {isSubscribed
-              ? "Manage menu sections, item details, and item images."
-              : "Catalogue is hidden for non-premium partners."}
+              ? "Menu images are stored and shown through QR. Structured section/item catalogue is not available in the current schema."
+              : "Catalogue editing is hidden until premium is active."}
           </div>
 
           <div className="mt-4 flex items-center gap-2">
             <button
               type="button"
-              disabled={!isSubscribed}
+              disabled={!isSubscribed || !STRUCTURED_MENU_SUPPORTED}
               onClick={openNewSection}
               className="h-10 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 px-3 text-sm font-semibold flex items-center gap-2"
             >
@@ -875,7 +871,7 @@ export default function RestaurantMenuPage() {
           </div>
 
           <div className="mt-2 text-xs text-gray-500">
-            {isSubscribed ? "Scan the QR code to browse the digital catalogue and order from your table." : "QR opens first uploaded menu image."}
+            {isSubscribed ? "Scan the QR code to open your uploaded menu images." : "QR opens first uploaded menu image."}
           </div>
 
           <div className="mt-3">
@@ -934,7 +930,20 @@ export default function RestaurantMenuPage() {
             Catalogue Hidden (Dish Discounts Premium Required)
           </div>
           <div className="mt-2 text-xs text-gray-500">
-            Existing sections/items are stored, but hidden until Dish Discounts premium is active.
+            Premium controls QR/menu-image access. Structured section and item storage is not part of the current schema.
+          </div>
+        </div>
+      ) : !STRUCTURED_MENU_SUPPORTED ? (
+        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+          <div className="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">
+            <Lock className="h-4 w-4" />
+            Structured Catalogue Unavailable
+          </div>
+          <div className="mt-2 text-xs text-gray-500">
+            Your current restaurant schema stores menu images in <b>restaurant_media_assets</b> but does not include a table for menu sections, dishes, or dish images.
+          </div>
+          <div className="mt-2 text-xs text-gray-500">
+            Image uploads, QR generation, offers, bookings, and pickup orders remain available. Section/item add or edit has been disabled so the UI matches what can actually be saved.
           </div>
         </div>
       ) : (

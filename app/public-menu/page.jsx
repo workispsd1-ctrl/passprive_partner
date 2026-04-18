@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { fetchRestaurantPublicMenuData } from "@/lib/restaurantData";
 import {
   Leaf,
   CircleDot,
@@ -108,13 +109,7 @@ function PublicRestaurantMenuContent() {
           return;
         }
 
-        const { data, error: qErr } = await supabaseBrowser
-          .from("restaurants")
-          .select("id,name,city,area,menu,is_active")
-          .eq("id", restaurantId)
-          .maybeSingle();
-
-        if (qErr) throw qErr;
+        const data = await fetchRestaurantPublicMenuData(supabaseBrowser, restaurantId);
         if (!data) {
           setError("Restaurant not found.");
           setLoading(false);
@@ -211,31 +206,32 @@ function PublicRestaurantMenuContent() {
 
     setPlacingOrder(true);
 
+    const now = new Date();
+    const bookingDate = now.toISOString().slice(0, 10);
+    const bookingTime = now.toTimeString().slice(0, 8);
+    const itemsSummary = cartItems
+      .map((it) => `${it.name} x ${it.qty}`)
+      .join(", ");
+
     const payload = {
       restaurant_id: restaurantId,
       customer_name: customerName.trim() || "Guest",
       customer_phone: customerPhone.trim() || "N/A",
-      table_no: tableNo.trim() || null,
-      notes: notes.trim() || null,
-      items: cartItems.map((it) => ({
-        item_id: it.itemId,
-        name: it.name,
-        price: it.price,
-        qty: it.qty,
-        section_id: it.sectionId,
-        section_name: it.sectionName,
-        line_total: Number(it.price || 0) * Number(it.qty || 0),
-      })),
-      subtotal_amount: Number(subtotalAmount.toFixed(2)),
-      tax_percent: TAX_PERCENT,
-      tax_amount: Number(taxAmount.toFixed(2)),
-      total_amount: Number(totalAmount.toFixed(2)),
-      currency: "INR",
-      status: "PLACED",
-      source: "PUBLIC_MENU",
+      booking_date: bookingDate,
+      booking_time: bookingTime,
+      duration_minutes: 90,
+      party_size: 1,
+      status: "pending",
+      source: "app",
+      special_request: notes.trim() || null,
+      notes_internal: `Public menu request. Table: ${tableNo.trim() || "N/A"}. Items: ${itemsSummary}`,
+      payment_required: false,
+      payment_status: "pending",
+      payment_amount: Number(totalAmount.toFixed(2)),
+      booked_slot_label: tableNo.trim() ? `Table ${tableNo.trim()}` : null,
     };
 
-    const { error: insErr } = await supabaseBrowser.from("restaurant_table_orders").insert(payload);
+    const { error: insErr } = await supabaseBrowser.from("restaurant_bookings").insert(payload);
 
     setPlacingOrder(false);
 

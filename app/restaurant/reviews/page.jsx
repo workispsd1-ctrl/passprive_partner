@@ -2,32 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
-
-function isMissingRestaurantReviewsColumn(error) {
-  const msg = String(error?.message || "").toLowerCase();
-  return msg.includes("restaurants.reviews") && msg.includes("does not exist");
-}
-
-/**
- * Reviews are stored in restaurants.reviews (jsonb).
- *
- * Works best with array structure:
- * reviews: [
- *  {
- *    id: "rev_xxx",
- *    userName?: "Rahul",
- *    userAvatar?: "https://...",
- *    rating: 4.5,
- *    food_rating?: 4.0,
- *    service_rating?: 4.5,
- *    ambience_rating?: 4.0,
- *    comment: "Great food...",
- *    images?: string[],
- *    createdAt: "2026-02-04T10:00:00Z",
- *    reply?: { text: "Thanks!", createdAt: "..." }
- *  }
- * ]
- */
+import { fetchOwnedRestaurantReviews } from "@/lib/restaurantData";
 
 function isArray(v) {
   return Array.isArray(v);
@@ -160,12 +135,11 @@ function Skeleton() {
 
 export default function Page() {
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [lastError, setLastError] = useState("");
-  const [reviewsColumnMissing, setReviewsColumnMissing] = useState(false);
+  const [repliesUnsupported, setRepliesUnsupported] = useState(true);
+  const saving = false;
 
   const [restaurantId, setRestaurantId] = useState(null);
-  const [restaurantName, setRestaurantName] = useState("");
   const [reviews, setReviews] = useState([]);
 
   // UI controls
@@ -180,7 +154,6 @@ export default function Page() {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function load() {
@@ -204,44 +177,14 @@ export default function Page() {
       return;
     }
 
-    let data = null;
-    const { data: restaurantWithReviews, error } = await supabaseBrowser
-      .from("restaurants")
-      .select("id, name, reviews")
-      .eq("owner_user_id", user.id)
-      .single();
+    try {
+      const data = await fetchOwnedRestaurantReviews(supabaseBrowser, user.id);
+      setRepliesUnsupported(true);
+      setRestaurantId(data.restaurantId);
 
-    if (error && isMissingRestaurantReviewsColumn(error)) {
-      const { data: restaurantFallback, error: fallbackErr } = await supabaseBrowser
-        .from("restaurants")
-        .select("id, name")
-        .eq("owner_user_id", user.id)
-        .single();
-
-      if (fallbackErr) {
-        setLastError(fallbackErr.message || "Failed to load restaurant");
-        setLoading(false);
-        return;
-      }
-
-      setReviewsColumnMissing(true);
-      data = { ...(restaurantFallback || {}), reviews: [] };
-    } else {
-      if (error) {
-        setLastError(error.message || "Failed to load restaurant");
-        setLoading(false);
-        return;
-      }
-      setReviewsColumnMissing(false);
-      data = restaurantWithReviews;
-    }
-
-    setRestaurantId(data.id);
-    setRestaurantName(data.name || "");
-
-    const normalized = normalizeReviews(data.reviews)
-      .map(ensureId)
-      .map((r) => {
+      const normalized = normalizeReviews(data.reviews)
+        .map(ensureId)
+        .map((r) => {
         const createdAt = r.createdAt || r.created_at || r.created || r.date;
         const replyObj =
           r.reply && typeof r.reply === "object"
@@ -268,50 +211,27 @@ export default function Page() {
           createdAt: typeof createdAt === "string" ? createdAt : undefined,
           reply: replyObj,
         };
-      });
+        });
 
-    setReviews(normalized);
+      setReviews(normalized);
 
-    const drafts = {};
-    for (const r of normalized) drafts[r.id] = r.reply?.text || "";
-    setReplyDraft(drafts);
-
-    setLoading(false);
+      const drafts = {};
+      for (const r of normalized) drafts[r.id] = r.reply?.text || "";
+      setReplyDraft(drafts);
+    } catch (error) {
+      setLastError(error?.message || "Failed to load restaurant");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  async function saveReviews(next) {
+  async function saveReviews() {
     if (!restaurantId) return false;
-    if (reviewsColumnMissing) {
-      setLastError("Reviews storage is not available in this database schema.");
+    if (repliesUnsupported) {
+      setLastError("Reply saving is not available in the current review schema.");
       return false;
     }
-
-    setSaving(true);
-    setLastError("");
-
-    const payload = next.map((r) => ({
-      ...r,
-      reply: r.reply ? { text: r.reply.text, createdAt: r.reply.createdAt } : null,
-    }));
-
-    const { error } = await supabaseBrowser
-      .from("restaurants")
-      .update({ reviews: payload })
-      .eq("id", restaurantId);
-
-    if (error) {
-      if (isMissingRestaurantReviewsColumn(error)) {
-        setReviewsColumnMissing(true);
-        setLastError("Reviews storage is not available in this database schema.");
-      } else {
-        setLastError(error.message || "Failed to save replies");
-      }
-      setSaving(false);
-      return false;
-    }
-
-    setSaving(false);
-    return true;
+    return false;
   }
 
   async function upsertReply(reviewId) {
@@ -643,11 +563,11 @@ export default function Page() {
 
                         <div className="mt-3 flex items-center justify-between gap-3">
                           <p className="text-xs text-slate-500">
-                            Replies are saved to <b>restaurants.reviews</b> (jsonb).
+                            Replies are not yet mapped in the new review schema.
                           </p>
 
                           <button
-                            disabled={saving}
+                            disabled={saving || repliesUnsupported}
                             onClick={() => upsertReply(r.id)}
                             className="rounded-xl bg-[#DA3224] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
                           >

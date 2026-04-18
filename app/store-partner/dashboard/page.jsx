@@ -339,11 +339,11 @@ export default function StorePartnerDashboardPage() {
   const loading = storesLoading || dashboardLoading;
   const dashboardErrorMessage = storesError || dashboardError || "";
 
-  const recentPayments = activity || [];
+  const recentOrders = activity || [];
   const visibleTransactionCount = expandedTransactionCountByStore[selectedStoreId] || 10;
-  const visiblePayments = recentPayments.slice(0, visibleTransactionCount);
+  const visibleOrders = recentOrders.slice(0, visibleTransactionCount);
 
-  const handleSeeMorePayments = () => {
+  const handleSeeMoreOrders = () => {
     if (visibleTransactionCount < 20) {
       setExpandedTransactionCountByStore((prev) => ({
         ...prev,
@@ -358,7 +358,7 @@ export default function StorePartnerDashboardPage() {
   const stats = useMemo(
     () => [
       {
-        title: "Bills Paid",
+        title: "Paid Orders",
         value: String(kpis?.billsPaid ?? 0),
         change: kpis?.billsPaidDelta?.change || "0%",
         changeType: kpis?.billsPaidDelta?.changeType || "neutral",
@@ -372,7 +372,7 @@ export default function StorePartnerDashboardPage() {
         icon: CircleDollarSign,
       },
       {
-        title: "Cancelled Payments",
+        title: "Cancelled Orders",
         value: String(kpis?.cancelledPayments ?? 0),
         change: kpis?.cancelledPaymentsDelta?.change || "0%",
         changeType: kpis?.cancelledPaymentsDelta?.changeType || "neutral",
@@ -397,9 +397,9 @@ export default function StorePartnerDashboardPage() {
     stats.forEach((s) => rows.push([s.title, s.value, s.change]));
 
     rows.push([]);
-    rows.push(["Recent Payments"]);
+    rows.push(["Recent Orders"]);
     rows.push([
-      "Payment ID",
+      "Order ID",
       "Date",
       "Method",
       "Discount Applied",
@@ -408,7 +408,7 @@ export default function StorePartnerDashboardPage() {
       "Final Amount",
       "Status",
     ]);
-    recentPayments.forEach((p) =>
+    recentOrders.forEach((p) =>
       rows.push([
         p.id,
         p.date,
@@ -587,7 +587,7 @@ export default function StorePartnerDashboardPage() {
                       </div>
                     </div>
                     <div className="rounded-2xl bg-gray-50 border border-gray-200 p-3">
-                      <div className="text-xs text-gray-500">Discounted Bills</div>
+                      <div className="text-xs text-gray-500">Discounted Orders</div>
                       <div className="font-semibold">
                         {String(kpis?.discountedBills ?? 0)}
                       </div>
@@ -606,12 +606,12 @@ export default function StorePartnerDashboardPage() {
         </div>
 
         <CardShell
-          title="Recent Payments"
+          title="Recent Orders"
           right={
-            recentPayments.length > 10 ? (
+            recentOrders.length > 10 ? (
               <button
                 type="button"
-                onClick={handleSeeMorePayments}
+                onClick={handleSeeMoreOrders}
                 className="h-9 rounded-full px-4 text-sm font-semibold"
                 style={{
                   background: THEME_BG,
@@ -634,7 +634,7 @@ export default function StorePartnerDashboardPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-gray-500">
-                    <th className="py-2 pr-4 font-medium">Payment ID</th>
+                    <th className="py-2 pr-4 font-medium">Order ID</th>
                     <th className="py-2 pr-4 font-medium">Date</th>
                     <th className="py-2 pr-4 font-medium">Method</th>
                     <th className="py-2 pr-4 font-medium">Discount</th>
@@ -645,8 +645,8 @@ export default function StorePartnerDashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {visiblePayments.length ? (
-                    visiblePayments.map((p) => (
+                  {visibleOrders.length ? (
+                    visibleOrders.map((p) => (
                       <tr
                         key={p.id}
                         className="border-t border-gray-100 hover:bg-gray-50/60 transition-colors"
@@ -685,7 +685,7 @@ export default function StorePartnerDashboardPage() {
                   ) : (
                     <tr className="border-t border-gray-100">
                       <td className="py-6 text-center text-sm text-gray-500" colSpan={8}>
-                        No payments found for this store yet.
+                        No orders found for this store yet.
                       </td>
                     </tr>
                   )}

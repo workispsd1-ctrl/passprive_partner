@@ -5,12 +5,12 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { Bell, Phone, Hash } from "lucide-react";
 
 const STATUS = {
-  PLACED: "PLACED",
-  ACCEPTED: "ACCEPTED",
-  PREPARING: "PREPARING",
-  READY: "READY",
-  COMPLETED: "COMPLETED",
-  CANCELLED: "CANCELLED",
+  PENDING: "pending",
+  CONFIRMED: "confirmed",
+  PAYMENT_SUCCESSFULL: "payment_successfull",
+  COMPLETED: "completed",
+  CANCELLED: "cancelled",
+  NO_SHOW: "no_show",
 };
 
 function money(n) {
@@ -29,16 +29,15 @@ function toItems(v) {
 }
 
 function badgeClass(status) {
-  if (status === STATUS.PLACED) return "bg-amber-50 text-amber-700 border-amber-200";
-  if (status === STATUS.ACCEPTED) return "bg-blue-50 text-blue-700 border-blue-200";
-  if (status === STATUS.PREPARING) return "bg-violet-50 text-violet-700 border-violet-200";
-  if (status === STATUS.READY) return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (status === STATUS.COMPLETED) return "bg-slate-100 text-slate-700 border-slate-200";
+  if (status === STATUS.PENDING) return "bg-amber-50 text-amber-700 border-amber-200";
+  if (status === STATUS.CONFIRMED) return "bg-blue-50 text-blue-700 border-blue-200";
+  if (status === STATUS.PAYMENT_SUCCESSFULL) return "bg-violet-50 text-violet-700 border-violet-200";
+  if (status === STATUS.COMPLETED) return "bg-emerald-50 text-emerald-700 border-emerald-200";
   return "bg-rose-50 text-rose-700 border-rose-200";
 }
 
 function statusLabel(s) {
-  return s.charAt(0) + s.slice(1).toLowerCase();
+  return String(s || "").replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
 export default function TableOrdersPage() {
@@ -136,7 +135,7 @@ export default function TableOrdersPage() {
     if (!firstLoad) setRefreshing(true);
 
     const { data, error: qErr } = await supabaseBrowser
-      .from("restaurant_table_orders")
+      .from("restaurant_bookings")
       .select("*")
       .eq("restaurant_id", rid)
       .order("created_at", { ascending: false });
@@ -174,7 +173,7 @@ export default function TableOrdersPage() {
         {
           event: "*",
           schema: "public",
-          table: "restaurant_table_orders",
+          table: "restaurant_bookings",
           filter: `restaurant_id=eq.${rid}`,
         },
         () => {
@@ -215,9 +214,10 @@ export default function TableOrdersPage() {
     setDraftStatusById((prev) => ({ ...prev, [orderId]: nextStatus }));
 
     const { error: upErr } = await supabaseBrowser
-      .from("restaurant_table_orders")
+      .from("restaurant_bookings")
       .update({
         status: nextStatus,
+        read: true,
         updated_at: new Date().toISOString(),
       })
       .eq("id", orderId);
@@ -271,9 +271,9 @@ export default function TableOrdersPage() {
       <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-xl font-bold text-slate-900">Table Orders</div>
+            <div className="text-xl font-bold text-slate-900">Bookings</div>
             <div className="text-sm text-slate-500 mt-1">
-              {restaurantName} • Live incoming orders from customer menu
+              {restaurantName} • Live incoming booking requests
             </div>
           </div>
           {refreshing ? <div className="text-xs text-slate-500">Refreshing...</div> : null}
@@ -340,15 +340,17 @@ export default function TableOrdersPage() {
                   </div>
                   <div className="inline-flex items-center gap-1.5">
                     <Hash className="h-3.5 w-3.5 text-slate-500" />
-                    Table: {o.table_no || "N/A"}
+                    Slot: {o.booked_slot_label || o.booking_code || "N/A"}
                   </div>
                 </div>
 
                 <div className="mt-3 rounded-xl border border-slate-200 overflow-hidden">
-                  <div className="px-3 py-2 bg-slate-50 text-xs font-semibold text-slate-700">Items</div>
+                  <div className="px-3 py-2 bg-slate-50 text-xs font-semibold text-slate-700">Booking Details</div>
                   <div className="divide-y divide-slate-100">
                     {items.length === 0 ? (
-                      <div className="px-3 py-2 text-xs text-slate-500">No items</div>
+                      <div className="px-3 py-2 text-xs text-slate-500">
+                        {o.notes_internal || o.special_request || "No extra details"}
+                      </div>
                     ) : (
                       items.map((it, idx) => (
                         <div key={`${o.id}-${idx}`} className="px-3 py-2 text-xs flex justify-between gap-2">
@@ -366,20 +368,20 @@ export default function TableOrdersPage() {
 
                 <div className="mt-3 grid sm:grid-cols-3 gap-2 text-xs">
                   <div className="rounded-lg bg-slate-50 px-3 py-2 text-slate-700">
-                    Subtotal: <span className="font-semibold text-slate-900">{money(o.subtotal_amount)}</span>
+                    Party Size: <span className="font-semibold text-slate-900">{o.party_size || 1}</span>
                   </div>
                   <div className="rounded-lg bg-slate-50 px-3 py-2 text-slate-700">
-                    Tax ({Number(o.tax_percent || 0)}%):{" "}
-                    <span className="font-semibold text-slate-900">{money(o.tax_amount)}</span>
+                    Payment:{" "}
+                    <span className="font-semibold text-slate-900">{String(o.payment_status || "pending")}</span>
                   </div>
                   <div className="rounded-lg bg-amber-50 border-amber-700 border px-3 py-2 text-black">
-                    Total: <span className="font-semibold">{money(o.total_amount)}</span>
+                    Amount: <span className="font-semibold">{money(o.payment_amount)}</span>
                   </div>
                 </div>
 
-                {o.notes ? (
+                {o.special_request ? (
                   <div className="mt-3 text-xs rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700">
-                    Note: {o.notes}
+                    Note: {o.special_request}
                   </div>
                 ) : null}
 

@@ -4,6 +4,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { SkeletonBlock } from "@/components/ui/PageSkeletons";
+import { fetchMyStores } from "@/lib/store-partner/stores";
 import {
   Boxes,
   BriefcaseBusiness,
@@ -75,11 +77,6 @@ function savePreferredStoreId(id) {
   if (typeof window === "undefined" || !id) return;
   STORE_ID_STORAGE_KEYS.forEach((key) => window.localStorage.setItem(key, String(id)));
   window.dispatchEvent(new Event("store-selection-changed"));
-}
-
-function normalizeMemberStore(storesField) {
-  if (Array.isArray(storesField)) return storesField[0] || null;
-  return storesField || null;
 }
 
 function normalizeStoreType(value) {
@@ -189,13 +186,146 @@ function Card({ title, subtitle, right, children }) {
   );
 }
 
-function SectionSkeleton() {
+function CatalogueHeroSkeleton() {
   return (
-    <div className="space-y-4 animate-pulse">
-      <div className="h-6 w-56 rounded bg-gray-100" />
-      <div className="h-12 w-full rounded-2xl bg-gray-100" />
-      <div className="h-24 w-full rounded-2xl bg-gray-100" />
-      <div className="h-12 w-44 rounded-full bg-gray-100" />
+    <div className="space-y-5">
+      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr]">
+        <div className="rounded-3xl border border-gray-200 bg-gray-50 p-4">
+          <SkeletonBlock className="h-4 w-24 border-gray-200 bg-gray-100" />
+          <SkeletonBlock className="mt-4 h-11 w-full rounded-2xl border-gray-200 bg-white" />
+        </div>
+        {Array.from({ length: 3 }).map((_, idx) => (
+          <div key={idx} className="rounded-3xl border border-gray-200 bg-white p-4">
+            <SkeletonBlock className="h-4 w-24 border-gray-200 bg-gray-100" />
+            <SkeletonBlock className="mt-4 h-7 w-28 border-gray-200 bg-gray-100" />
+            <SkeletonBlock className="mt-3 h-4 w-36 border-gray-200 bg-gray-100" />
+          </div>
+        ))}
+      </div>
+      <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+        <SkeletonBlock className="h-4 w-44 border-gray-200 bg-gray-100" />
+        <SkeletonBlock className="mt-3 h-4 w-full border-gray-200 bg-gray-100" />
+      </div>
+    </div>
+  );
+}
+
+function CatalogueEditorSkeleton({ service = false }) {
+  return (
+    <div className="space-y-4">
+      {Array.from({ length: service ? 5 : 4 }).map((_, idx) => (
+        <div key={idx} className="space-y-3">
+          <SkeletonBlock className="h-4 w-28 border-gray-200 bg-gray-100" />
+          <SkeletonBlock className="h-11 w-full rounded-2xl border-gray-200 bg-gray-100" />
+        </div>
+      ))}
+      <SkeletonBlock className="h-28 w-full rounded-2xl border-gray-200 bg-gray-100" />
+      <div className={`grid gap-4 ${service ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
+        {Array.from({ length: service ? 2 : 3 }).map((_, idx) => (
+          <div key={idx} className="rounded-2xl border border-gray-200 bg-white p-4">
+            <SkeletonBlock className="h-5 w-32 border-gray-200 bg-gray-100" />
+            <SkeletonBlock className="mt-3 h-4 w-full border-gray-200 bg-gray-100" />
+          </div>
+        ))}
+      </div>
+      <SkeletonBlock className="h-11 w-44 rounded-full border-gray-200 bg-gray-100" />
+    </div>
+  );
+}
+
+function CatalogueStructureSkeleton({ service = false }) {
+  return (
+    <div className="space-y-4">
+      {Array.from({ length: 2 }).map((_, idx) => (
+        <div key={idx} className="rounded-3xl border border-gray-200 bg-white p-5">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="space-y-3">
+              <SkeletonBlock className="h-6 w-40 border-gray-200 bg-gray-100" />
+              <div className="flex flex-wrap gap-2">
+                <SkeletonBlock className="h-7 w-24 rounded-full border-gray-200 bg-gray-100" />
+                <SkeletonBlock className="h-7 w-32 rounded-full border-gray-200 bg-gray-100" />
+              </div>
+              <SkeletonBlock className="h-4 w-52 border-gray-200 bg-gray-100" />
+            </div>
+            <div className="flex gap-2">
+              <SkeletonBlock className="h-9 w-24 rounded-full border-gray-200 bg-gray-100" />
+              <SkeletonBlock className="h-9 w-24 rounded-full border-gray-200 bg-gray-100" />
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {Array.from({ length: 2 }).map((__, itemIdx) => (
+              <div
+                key={itemIdx}
+                className={`grid gap-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 ${
+                  service ? "md:grid-cols-[84px_1fr]" : "md:grid-cols-[96px_1fr_auto]"
+                }`}
+              >
+                <SkeletonBlock className={`${service ? "h-20" : "h-24"} w-full rounded-2xl border-gray-200 bg-white`} />
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    <SkeletonBlock className="h-5 w-36 border-gray-200 bg-gray-100" />
+                    <SkeletonBlock className="h-6 w-20 rounded-full border-gray-200 bg-gray-100" />
+                    <SkeletonBlock className="h-6 w-24 rounded-full border-gray-200 bg-gray-100" />
+                  </div>
+                  <SkeletonBlock className="h-4 w-full border-gray-200 bg-gray-100" />
+                  <SkeletonBlock className="h-4 w-3/4 border-gray-200 bg-gray-100" />
+                </div>
+                {service ? null : (
+                  <div className="flex gap-2">
+                    <SkeletonBlock className="h-9 w-24 rounded-full border-gray-200 bg-gray-100" />
+                    <SkeletonBlock className="h-9 w-24 rounded-full border-gray-200 bg-gray-100" />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ServiceScheduleSkeleton() {
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, idx) => (
+          <div key={idx} className="space-y-3">
+            <SkeletonBlock className="h-4 w-24 border-gray-200 bg-gray-100" />
+            <SkeletonBlock className="h-11 w-full rounded-2xl border-gray-200 bg-gray-100" />
+          </div>
+        ))}
+      </div>
+      <div className="rounded-3xl border border-gray-200 bg-gray-50 p-4">
+        <SkeletonBlock className="h-5 w-28 border-gray-200 bg-gray-100" />
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, idx) => (
+            <div key={idx} className="rounded-2xl border border-gray-200 bg-white p-4">
+              <SkeletonBlock className="h-5 w-32 border-gray-200 bg-gray-100" />
+              <SkeletonBlock className="mt-3 h-4 w-full border-gray-200 bg-gray-100" />
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4">
+          <SkeletonBlock className="h-5 w-40 border-gray-200 bg-gray-100" />
+          <div className="mt-4 space-y-3">
+            {Array.from({ length: 3 }).map((_, idx) => (
+              <div key={idx} className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 px-4 py-3">
+                <div className="space-y-2">
+                  <SkeletonBlock className="h-4 w-40 border-gray-200 bg-gray-100" />
+                  <div className="flex gap-2">
+                    <SkeletonBlock className="h-6 w-24 rounded-full border-gray-200 bg-gray-100" />
+                    <SkeletonBlock className="h-6 w-24 rounded-full border-gray-200 bg-gray-100" />
+                  </div>
+                </div>
+                <SkeletonBlock className="h-5 w-5 rounded border-gray-200 bg-gray-100" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <SkeletonBlock className="h-11 w-52 rounded-full border-gray-200 bg-gray-100" />
     </div>
   );
 }
@@ -401,32 +531,8 @@ export default function PartnerCataloguePage() {
       return [];
     }
 
-    const ownerRes = await supabaseBrowser
-      .from("stores")
-      .select(
-        "id,name,city,is_active,owner_user_id,store_type,pickup_mode,pickup_premium_enabled,pickup_premium_plan,pickup_premium_expires_at,supports_time_slots,slot_duration_minutes,slot_buffer_minutes,slot_advance_days,slot_max_per_window"
-      )
-      .eq("owner_user_id", userId)
-      .order("name", { ascending: true });
-
-    if (ownerRes.error) throw ownerRes.error;
-
-    const memberRes = await supabaseBrowser
-      .from("store_members")
-      .select(
-        "store_id,role,stores:store_id(id,name,city,is_active,owner_user_id,store_type,pickup_mode,pickup_premium_enabled,pickup_premium_plan,pickup_premium_expires_at,supports_time_slots,slot_duration_minutes,slot_buffer_minutes,slot_advance_days,slot_max_per_window)"
-      )
-      .eq("user_id", userId);
-
-    if (memberRes.error) throw memberRes.error;
-
-    const ownerStores = ownerRes.data || [];
-    const memberStores = (memberRes.data || []).map((row) => normalizeMemberStore(row.stores)).filter(Boolean);
-
-    const merged = new Map();
-    [...ownerStores, ...memberStores].forEach((store) => merged.set(String(store.id), store));
-
-    return Array.from(merged.values()).sort((a, b) =>
+    const stores = await fetchMyStores();
+    return [...stores].sort((a, b) =>
       String(a.name || "").localeCompare(String(b.name || ""))
     );
   };
@@ -1003,7 +1109,7 @@ export default function PartnerCataloguePage() {
           }
         >
           {loadingStores ? (
-            <SectionSkeleton />
+            <CatalogueHeroSkeleton />
           ) : !stores.length ? (
             <EmptyState
               title="No linked branches found"
@@ -1088,53 +1194,57 @@ export default function PartnerCataloguePage() {
                 ) : null
               }
             >
-              <div className="space-y-4">
-                <Field label="Category Title">
-                  <Input
-                    value={categoryForm.title}
-                    onChange={(e) => setCategoryForm((prev) => ({ ...prev, title: e.target.value }))}
-                    placeholder={isServiceStore ? "Haircuts" : "New Arrivals"}
+              {loadingData ? (
+                <CatalogueEditorSkeleton service={isServiceStore} />
+              ) : (
+                <div className="space-y-4">
+                  <Field label="Category Title">
+                    <Input
+                      value={categoryForm.title}
+                      onChange={(e) => setCategoryForm((prev) => ({ ...prev, title: e.target.value }))}
+                      placeholder={isServiceStore ? "Haircuts" : "New Arrivals"}
+                    />
+                  </Field>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field label="Starting From">
+                      <Input
+                        value={categoryForm.starting_from}
+                        onChange={(e) => setCategoryForm((prev) => ({ ...prev, starting_from: e.target.value }))}
+                        placeholder="Optional price hint"
+                        inputMode="decimal"
+                      />
+                    </Field>
+
+                    <Field label="Sort Order">
+                      <Input
+                        value={categoryForm.sort_order}
+                        onChange={(e) => setCategoryForm((prev) => ({ ...prev, sort_order: e.target.value }))}
+                        placeholder="0"
+                        inputMode="numeric"
+                      />
+                    </Field>
+                  </div>
+
+                  <Toggle
+                    checked={categoryForm.enabled}
+                    onChange={(checked) => setCategoryForm((prev) => ({ ...prev, enabled: checked }))}
+                    label="Category enabled"
+                    description="Disabled categories stay hidden from the customer-facing preview."
                   />
-                </Field>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Field label="Starting From">
-                    <Input
-                      value={categoryForm.starting_from}
-                      onChange={(e) => setCategoryForm((prev) => ({ ...prev, starting_from: e.target.value }))}
-                      placeholder="Optional price hint"
-                      inputMode="decimal"
-                    />
-                  </Field>
-
-                  <Field label="Sort Order">
-                    <Input
-                      value={categoryForm.sort_order}
-                      onChange={(e) => setCategoryForm((prev) => ({ ...prev, sort_order: e.target.value }))}
-                      placeholder="0"
-                      inputMode="numeric"
-                    />
-                  </Field>
+                  <button
+                    type="button"
+                    onClick={handleSaveCategory}
+                    disabled={savingCategory}
+                    className="inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white shadow-lg shadow-[rgba(119,31,168,0.28)] disabled:opacity-60"
+                    style={{ background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)" }}
+                  >
+                    {savingCategory ? <Loader2 className="h-4 w-4 animate-spin" /> : editingCategoryId ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                    {editingCategoryId ? "Save Category" : "Create Category"}
+                  </button>
                 </div>
-
-                <Toggle
-                  checked={categoryForm.enabled}
-                  onChange={(checked) => setCategoryForm((prev) => ({ ...prev, enabled: checked }))}
-                  label="Category enabled"
-                  description="Disabled categories stay hidden from the customer-facing preview."
-                />
-
-                <button
-                  type="button"
-                  onClick={handleSaveCategory}
-                  disabled={savingCategory}
-                  className="inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white shadow-lg shadow-[rgba(119,31,168,0.28)] disabled:opacity-60"
-                  style={{ background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)" }}
-                >
-                  {savingCategory ? <Loader2 className="h-4 w-4 animate-spin" /> : editingCategoryId ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                  {editingCategoryId ? "Save Category" : "Create Category"}
-                </button>
-              </div>
+              )}
             </Card>
             </div>
 
@@ -1445,6 +1555,9 @@ export default function PartnerCataloguePage() {
             }
             subtitle="Apply service slot settings to this branch, all linked branches, or a custom branch set."
           >
+            {loadingData ? (
+              <ServiceScheduleSkeleton />
+            ) : (
             <div className="space-y-5">
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                 <Field label="Slot Booking">
@@ -1604,6 +1717,7 @@ export default function PartnerCataloguePage() {
                 {effectiveScheduleTargetIds.length > 1 ? "Apply To Linked Branches" : "Save Branch Schedule"}
               </button>
             </div>
+            )}
           </Card>
         ) : null}
 
@@ -1614,7 +1728,7 @@ export default function PartnerCataloguePage() {
               subtitle="Manage categories and items with clear separation between visual-only and orderable flows."
             >
               {loadingData ? (
-                <SectionSkeleton />
+                <CatalogueStructureSkeleton service={isServiceStore} />
               ) : !sortedCategories.length ? (
                 <EmptyState
                   title={`No ${selectedSectionLabel.toLowerCase()} categories yet`}
@@ -1781,7 +1895,7 @@ export default function PartnerCataloguePage() {
               }
             >
               {loadingData ? (
-                <SectionSkeleton />
+                <CatalogueStructureSkeleton service={isServiceStore} />
               ) : !previewCategories.length ? (
                 <EmptyState
                   title="Nothing to preview yet"

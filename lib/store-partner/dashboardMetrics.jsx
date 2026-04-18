@@ -1,7 +1,7 @@
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
-const SUCCESS_STATUSES = new Set(["VERIFIED_SUCCESS", "FINALIZED"]);
-const CANCELLED_STATUSES = new Set(["CANCELLED"]);
+const SUCCESS_STATUSES = new Set(["PAID"]);
+const CANCELLED_STATUSES = new Set(["CANCELLED", "REJECTED"]);
 function asNumber(value) {
   const n = Number(value || 0);
   return Number.isFinite(n) ? n : 0;
@@ -57,7 +57,7 @@ function formatDelta(current, previous) {
 }
 
 function getNormalizedStatus(row) {
-  return String(row?.status || row?.gateway_status || "").toUpperCase();
+  return String(row?.payment_status || row?.status || "").toUpperCase();
 }
 
 function isSuccessfulSession(row) {
@@ -69,7 +69,7 @@ function isCancelledSession(row) {
 }
 
 function getSessionTimestamp(row) {
-  return row.verified_at || row.created_at;
+  return row.delivered_at || row.accepted_at || row.created_at;
 }
 
 function getRangeConfig(filters) {
@@ -102,16 +102,15 @@ function getRangeConfig(filters) {
   return { mode: "30d", start, end };
 }
 
-async function fetchPaymentSessions(storeId) {
+async function fetchStoreOrders(storeId) {
   if (!storeId) return [];
 
   const { data, error } = await supabaseBrowser
-    .from("payment_sessions")
+    .from("store_orders")
     .select(
-      "id,tracking_id,payment_provider,amount_major,original_amount,discount_amount,discount_source,currency_code,status,gateway_status,created_at,verified_at,store_id"
+      "id,order_no,store_id,customer_name,total_amount,subtotal,discount_amount,payment_method,payment_status,status,created_at,accepted_at,delivered_at,service_type,order_flow"
     )
-    .eq("payment_context", "BILL_PAYMENT")
-    .or(`store_id.eq.${storeId}`)
+    .eq("store_id", storeId)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -142,7 +141,7 @@ function buildDailyTrend(rows, start, end) {
 export async function fetchDashboardKPIs(storeId, filters) {
   if (!storeId) return emptyKPIs();
 
-  const rows = await fetchPaymentSessions(storeId);
+  const rows = await fetchStoreOrders(storeId);
   const now = Date.now();
   const todayStart = startOfDay(now);
   const thisWeekStart = startOfDay(addDays(todayStart, -6));
@@ -167,22 +166,22 @@ export async function fetchDashboardKPIs(storeId, filters) {
   );
 
   const revenueCollected = successfulRows.reduce(
-    (sum, row) => sum + asNumber(row.amount_major),
+    (sum, row) => sum + asNumber(row.total_amount),
     0
   );
-  const rangeRevenue = rangeRows.reduce((sum, row) => sum + asNumber(row.amount_major), 0);
+  const rangeRevenue = rangeRows.reduce((sum, row) => sum + asNumber(row.total_amount), 0);
   const previousRangeRevenue = previousRangeRows.reduce(
-    (sum, row) => sum + asNumber(row.amount_major),
+    (sum, row) => sum + asNumber(row.total_amount),
     0
   );
 
   const todayRevenue = successfulRows
     .filter((row) => isWithinRange(getSessionTimestamp(row), todayStart.getTime(), now))
-    .reduce((sum, row) => sum + asNumber(row.amount_major), 0);
+    .reduce((sum, row) => sum + asNumber(row.total_amount), 0);
 
   const thisWeekRevenue = successfulRows
     .filter((row) => isWithinRange(getSessionTimestamp(row), thisWeekStart.getTime(), now))
-    .reduce((sum, row) => sum + asNumber(row.amount_major), 0);
+    .reduce((sum, row) => sum + asNumber(row.total_amount), 0);
 
   const discountsGiven = rangeRows.reduce(
     (sum, row) => sum + asNumber(row.discount_amount),
@@ -211,22 +210,20 @@ export async function fetchDashboardKPIs(storeId, filters) {
 }
 
 export async function fetchRecentActivity(storeId) {
-  const rows = await fetchPaymentSessions(storeId);
+  const rows = await fetchStoreOrders(storeId);
 
   return rows
     .filter((row) => isSuccessfulSession(row) || isCancelledSession(row))
     .slice(0, 50)
     .map((row) => ({
-    id: row.tracking_id || String(row.id).slice(0, 8).toUpperCase(),
+    id: row.order_no || String(row.id).slice(0, 8).toUpperCase(),
     date: new Date(getSessionTimestamp(row)).toLocaleDateString("en-GB"),
-    currencyCode: row.currency_code || "MUR",
-    originalAmount: asNumber(row.original_amount || row.amount_major),
+    currencyCode: "MUR",
+    originalAmount: asNumber(row.subtotal || row.total_amount),
     discountAmount: asNumber(row.discount_amount),
-    finalAmount: asNumber(row.amount_major),
-    discountApplied:
-      asNumber(row.discount_amount) > 0 ||
-      String(row.discount_source || "").toUpperCase() !== "NONE",
-    method: row.payment_provider || "N/A",
+    finalAmount: asNumber(row.total_amount),
+    discountApplied: asNumber(row.discount_amount) > 0,
+    method: row.payment_method || "N/A",
     status: isCancelledSession(row) ? "Cancelled" : "Paid",
   }));
 }

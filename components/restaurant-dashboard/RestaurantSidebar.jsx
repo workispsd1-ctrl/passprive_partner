@@ -13,6 +13,7 @@ import {
   Wallet,
   Receipt,
   Settings,
+  Clock3,
   Soup,
   Megaphone,
   QrCode,
@@ -20,6 +21,7 @@ import {
   Crown,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { fetchOwnedRestaurantStatus } from "@/lib/restaurantData";
 
 const THEME_BG = "#F4E7D1";
 const THEME_ACCENT = "#771FA899";
@@ -34,6 +36,7 @@ const nav = [
   { label: "Offers", href: "/restaurant/offers", icon: Tag, },
   { label: "Reviews", href: "/restaurant/reviews", icon: Star },
   { label: "Analytics", href: "/restaurant/analytics", icon: LineChart },
+  { label: "Timings", href: "/restaurant/timings", icon: Clock3 },
   { label: "Transactions", href: "/restaurant/transactions", icon: Receipt },
   { label: "Payouts", href: "/restaurant/payouts", icon: Wallet },
   { label: "Ads & Boost", href: "/restaurant/add-request", icon: Megaphone },
@@ -114,10 +117,12 @@ function ConfirmModal({
   );
 }
 
-export default function RestaurantSidebar() {
+export default function RestaurantSidebar({ collapsed = false }) {
   const pathname = usePathname();
 
   const [restaurantId, setRestaurantId] = useState(null);
+  const [restaurantName, setRestaurantName] = useState("Restaurant");
+  const [restaurantLogo, setRestaurantLogo] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [tablesSubscribed, setTablesSubscribed] = useState(false);
 
@@ -132,7 +137,7 @@ export default function RestaurantSidebar() {
 
   const tableOrdersSeenKey = useMemo(() => {
     if (!restaurantId) return null;
-    return `restaurant_table_orders_last_seen_${restaurantId}`;
+    return `restaurant_bookings_last_seen_${restaurantId}`;
   }, [restaurantId]);
 
   const pickupOrdersSeenKey = useMemo(() => {
@@ -163,18 +168,16 @@ export default function RestaurantSidebar() {
         return;
       }
 
-      const { data, error } = await supabaseBrowser
-        .from("restaurants")
-        .select("id, is_active, subscribed")
-        .eq("owner_user_id", user.id)
-        .single();
-
-      if (!mounted) return;
-
-      if (!error && data) {
-        setRestaurantId(data.id);
-        setIsActive(Boolean(data.is_active));
-        setTablesSubscribed(data?.subscribed === true);
+      try {
+        const data = await fetchOwnedRestaurantStatus(supabaseBrowser, user.id);
+        if (!mounted) return;
+        setRestaurantId(data.restaurantId);
+        setRestaurantName(data.restaurantName || "Restaurant");
+        setRestaurantLogo(data.restaurantLogo || "");
+        setIsActive(Boolean(data.isActive));
+        setTablesSubscribed(Boolean(data.hasSubscription));
+      } catch {
+        if (!mounted) return;
       }
 
       setStatusLoading(false);
@@ -215,10 +218,10 @@ export default function RestaurantSidebar() {
       const lastSeenAt = localStorage.getItem(tableOrdersSeenKey) || "1970-01-01T00:00:00.000Z";
 
       const { count, error } = await supabaseBrowser
-        .from("restaurant_table_orders")
+        .from("restaurant_bookings")
         .select("id", { count: "exact", head: true })
         .eq("restaurant_id", restaurantId)
-        .eq("status", "PLACED")
+        .eq("read", false)
         .gt("created_at", lastSeenAt);
 
       if (!mounted) return;
@@ -264,7 +267,7 @@ export default function RestaurantSidebar() {
         {
           event: "*",
           schema: "public",
-          table: "restaurant_table_orders",
+          table: "restaurant_bookings",
           filter: `restaurant_id=eq.${restaurantId}`,
         },
         refreshUnreadCounts
@@ -338,19 +341,34 @@ export default function RestaurantSidebar() {
   return (
     <>
       <aside
-        className="
-          hidden lg:flex lg:flex-col lg:w-70
-          sticky top-0 h-screen
-          border-r border-gray-200 bg-white
-        "
+        className="hidden lg:flex lg:flex-col sticky top-0 h-screen border-r border-gray-200 bg-white transition-[width] duration-200 ease-out"
+        style={{ width: collapsed ? "5.5rem" : "17.5rem" }}
       >
-        <div className="h-16 flex items-center px-6 border-b border-gray-200 shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-xl" style={{ backgroundColor: "var(--accent)" }} />
-            <div>
-              <div className="font-bold leading-tight">Restaurant Partner</div>
-              <div className="text-xs text-gray-500">Dashboard</div>
+        <div className={`h-16 flex items-center border-b border-gray-200 shrink-0 ${collapsed ? "justify-center px-3" : "px-6"}`}>
+          <div className={`flex items-center ${collapsed ? "justify-center" : "gap-2"}`}>
+            <div className="h-10 w-10 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+              {restaurantLogo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={restaurantLogo}
+                  alt={restaurantName}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div
+                  className="grid h-full w-full place-items-center text-sm font-bold text-white"
+                  style={{ backgroundColor: "var(--accent)" }}
+                >
+                  {String(restaurantName || "R").slice(0, 1).toUpperCase()}
+                </div>
+              )}
             </div>
+            {!collapsed ? (
+              <div>
+                <div className="max-w-[150px] truncate font-bold leading-tight">{restaurantName}</div>
+                <div className="text-xs text-gray-500">Restaurant</div>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -370,8 +388,10 @@ export default function RestaurantSidebar() {
               <Link
                 key={item.href}
                 href={item.href}
+                title={collapsed ? item.label : undefined}
                 className={[
-                  "relative flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition",
+                  "relative flex items-center rounded-xl px-3 py-2.5 text-sm font-medium transition",
+                  collapsed ? "justify-center" : "justify-between",
                   active
                     ? "text-gray-900 border"
                     : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
@@ -386,20 +406,29 @@ export default function RestaurantSidebar() {
                     : undefined
                 }
               >
-                <span className="flex items-center gap-3">
-                  <Icon className="h-4 w-4" style={{ color: active ? THEME_ACCENT_SOLID : undefined }} />
-                  {item.label}
-                  {item.premium ? (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-1.5 py-0.5 text-[9px] font-semibold text-green-700">
-                      <Crown className="h-2.5 w-2.5" />
-                      Premium
-                    </span>
+                <span className={`flex min-w-0 items-center ${collapsed ? "justify-center" : "gap-3"}`}>
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+                    <Icon className="h-4 w-4" style={{ color: active ? THEME_ACCENT_SOLID : undefined }} />
+                  </span>
+                  {!collapsed ? (
+                    <>
+                      <span className="truncate">{item.label}</span>
+                      {item.premium ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-1.5 py-0.5 text-[9px] font-semibold text-green-700">
+                          <Crown className="h-2.5 w-2.5" />
+                          Premium
+                        </span>
+                      ) : null}
+                    </>
                   ) : null}
                 </span>
 
                 {badgeCount > 0 ? (
                   <span
-                    className="inline-flex min-w-[22px] h-[22px] items-center justify-center rounded-full px-1.5 text-[11px] font-semibold text-white"
+                    className={[
+                      "inline-flex min-w-[22px] h-[22px] items-center justify-center rounded-full px-1.5 text-[11px] font-semibold text-white",
+                      collapsed ? "absolute right-2 top-1.5" : "",
+                    ].join(" ")}
                     style={{ backgroundColor: THEME_ACCENT_SOLID }}
                   >
                     {badgeCount > 99 ? "99+" : badgeCount}
@@ -410,44 +439,71 @@ export default function RestaurantSidebar() {
           })}
         </nav>
 
-        <div className="p-4 shrink-0 border-t border-gray-200 space-y-3">
-          <div className="rounded-2xl border border-gray-200 bg-white p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold">Restaurant Visibility</div>
-                <div className="text-xs text-gray-600 mt-1">
-                  {statusLoading
-                    ? "Loading status..."
-                    : isActive
-                    ? "Visible to customers"
-                    : "Hidden from customers"}
+        <div className={`shrink-0 border-t border-gray-200 ${collapsed ? "p-3" : "p-4"} space-y-3`}>
+          <div className={`rounded-2xl border border-gray-200 bg-white ${collapsed ? "p-3" : "p-4"}`}>
+            <div
+              className={`flex gap-3 ${
+                collapsed ? "flex-col items-center justify-center" : "items-center justify-between"
+              }`}
+            >
+              {!collapsed ? (
+                <div>
+                  <div className="text-sm font-semibold">Restaurant Visibility</div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    {statusLoading
+                      ? "Loading status..."
+                      : isActive
+                      ? "Visible to customers"
+                      : "Hidden from customers"}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div
+                  className={`h-2.5 w-2.5 rounded-full ${
+                    statusLoading ? "bg-gray-300" : isActive ? "bg-emerald-500" : "bg-amber-500"
+                  }`}
+                  title={
+                    statusLoading
+                      ? "Loading visibility status"
+                      : isActive
+                      ? "Restaurant visible to customers"
+                      : "Restaurant hidden from customers"
+                  }
+                />
+              )}
               <StatusSwitch
                 checked={isActive}
                 onChange={onToggleActive}
                 disabled={statusLoading || statusSaving || !restaurantId}
               />
             </div>
-            {statusSaving ? <div className="text-xs text-amber-600 mt-2">Saving status...</div> : null}
+            {!collapsed && statusSaving ? <div className="text-xs text-amber-600 mt-2">Saving status...</div> : null}
           </div>
 
           <Link href="/restaurant/offers" className="block">
             <div
-              className="rounded-2xl border p-4"
+              className={`rounded-2xl border ${collapsed ? "p-3" : "p-4"}`}
               style={{ background: THEME_BG, borderColor: THEME_ACCENT }}
             >
-              <div className="text-sm font-semibold">Quick Actions</div>
-              <div className="text-xs text-gray-600 mt-1">
-                Create offers, update hours, manage menu.
-              </div>
-              <button
-                className="mt-3 w-full rounded-xl border bg-white py-2 text-sm font-medium cursor-pointer"
-                style={{ borderColor: THEME_ACCENT, color: THEME_ACCENT_SOLID }}
-                type="button"
-              >
-                Create Offer
-              </button>
+              {!collapsed ? (
+                <>
+                  <div className="text-sm font-semibold">Quick Actions</div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    Create offers, update hours, manage menu.
+                  </div>
+                  <button
+                    className="mt-3 w-full rounded-xl border bg-white py-2 text-sm font-medium cursor-pointer"
+                    style={{ borderColor: THEME_ACCENT, color: THEME_ACCENT_SOLID }}
+                    type="button"
+                  >
+                    Create Offer
+                  </button>
+                </>
+              ) : (
+                <div className="flex justify-center">
+                  <Tag className="h-5 w-5" style={{ color: THEME_ACCENT_SOLID }} />
+                </div>
+              )}
             </div>
           </Link>
         </div>

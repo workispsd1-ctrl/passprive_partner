@@ -7,6 +7,7 @@ import {
   CheckCircle,
   XCircle,
   ChevronRight,
+  ChevronLeft,
   PackageCheck,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -19,6 +20,7 @@ const TITLE_MAP = {
   "/restaurant/offers": "Offers",
   "/restaurant/reviews": "Reviews",
   "/restaurant/analytics": "Analytics",
+  "/restaurant/timings": "Timings",
   "/restaurant/transactions": "Transactions",
   "/restaurant/payouts": "Payouts",
   "/restaurant/settings": "Settings",
@@ -41,7 +43,7 @@ function fmtTime(t) {
   return String(t).slice(0, 5);
 }
 
-export default function RestaurantTopbar() {
+export default function RestaurantTopbar({ collapsed = false, onToggleSidebar }) {
   const router = useRouter();
   const pathname = usePathname();
   const title = useMemo(() => getTitleFromPath(pathname), [pathname]);
@@ -413,7 +415,7 @@ export default function RestaurantTopbar() {
     router.push("/restaurant/bookings");
   };
 
-  const onClickOrderRow = (o) => {
+  const onClickOrderRow = () => {
     setOpen(false);
     router.push("/restaurant/orders");
   };
@@ -439,7 +441,20 @@ export default function RestaurantTopbar() {
     <header className="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-gray-200">
       <div className="h-16 flex items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-3">
-          <div className="font-bold text-gray-900 text-xl">{title}</div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onToggleSidebar}
+              className="hidden lg:inline-flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-50"
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              <ChevronLeft
+                className={`h-4 w-4 transition-transform ${collapsed ? "rotate-180" : ""}`}
+              />
+            </button>
+            <div className="font-bold text-gray-900 text-xl">{title}</div>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
