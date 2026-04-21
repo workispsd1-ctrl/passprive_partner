@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import StoreServicesManager from "@/components/store-dashboard/StoreServicesManager";
 import { ArrowLeft, Loader2, Save } from "lucide-react";
 
 function Card({ title, children }) {
@@ -71,6 +72,7 @@ export default function EditStorePage() {
     description: "",
     is_active: true,
     is_featured: false,
+    store_type: "",
   });
 
   const canSave = useMemo(() => {
@@ -98,7 +100,7 @@ export default function EditStorePage() {
         const { data, error } = await supabaseBrowser
           .from("stores")
           .select(
-            "id,name,category,city,region,postal_code,address_line1,address_line2,phone,whatsapp,email,website,description,is_active,is_featured,owner_user_id"
+            "id,name,category,city,region,postal_code,address_line1,address_line2,phone,whatsapp,email,website,description,is_active,is_featured,store_type,owner_user_id"
           )
           .eq("id", storeId)
           .eq("owner_user_id", userId)
@@ -123,6 +125,7 @@ export default function EditStorePage() {
             description: data.description || "",
             is_active: data.is_active !== false,
             is_featured: !!data.is_featured,
+            store_type: data.store_type || "",
           });
         }
       } catch (e) {
@@ -244,48 +247,52 @@ export default function EditStorePage() {
         ) : null}
 
         {!loading && !err ? (
-          <Card title="Edit Store">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label="Store Name *" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
-              <Field label="Category *" value={form.category} onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))} />
-              <Field label="City" value={form.city} onChange={(e) => setForm((p) => ({ ...p, city: e.target.value }))} />
-              <Field label="Region" value={form.region} onChange={(e) => setForm((p) => ({ ...p, region: e.target.value }))} />
-              <Field label="Postal Code" value={form.postal_code} onChange={(e) => setForm((p) => ({ ...p, postal_code: e.target.value }))} />
-              <Field label="Phone" value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
-              <Field label="Address Line 1" value={form.address_line1} onChange={(e) => setForm((p) => ({ ...p, address_line1: e.target.value }))} />
-              <Field label="Address Line 2" value={form.address_line2} onChange={(e) => setForm((p) => ({ ...p, address_line2: e.target.value }))} />
-              <Field label="WhatsApp" value={form.whatsapp} onChange={(e) => setForm((p) => ({ ...p, whatsapp: e.target.value }))} />
-              <Field label="Store Email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} />
-              <Field label="Website" value={form.website} onChange={(e) => setForm((p) => ({ ...p, website: e.target.value }))} />
-            </div>
+          <div className="space-y-6">
+            <Card title="Edit Store">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="Store Name *" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
+                <Field label="Category *" value={form.category} onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))} />
+                <Field label="City" value={form.city} onChange={(e) => setForm((p) => ({ ...p, city: e.target.value }))} />
+                <Field label="Region" value={form.region} onChange={(e) => setForm((p) => ({ ...p, region: e.target.value }))} />
+                <Field label="Postal Code" value={form.postal_code} onChange={(e) => setForm((p) => ({ ...p, postal_code: e.target.value }))} />
+                <Field label="Phone" value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
+                <Field label="Address Line 1" value={form.address_line1} onChange={(e) => setForm((p) => ({ ...p, address_line1: e.target.value }))} />
+                <Field label="Address Line 2" value={form.address_line2} onChange={(e) => setForm((p) => ({ ...p, address_line2: e.target.value }))} />
+                <Field label="WhatsApp" value={form.whatsapp} onChange={(e) => setForm((p) => ({ ...p, whatsapp: e.target.value }))} />
+                <Field label="Store Email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} />
+                <Field label="Website" value={form.website} onChange={(e) => setForm((p) => ({ ...p, website: e.target.value }))} />
+              </div>
 
-            <div className="mt-4">
-              <TextArea
-                label="Description"
-                value={form.description}
-                onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-              />
-            </div>
+              <div className="mt-4">
+                <TextArea
+                  label="Description"
+                  value={form.description}
+                  onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+                />
+              </div>
 
-            <div className="mt-4 flex items-center gap-6">
-              <label className="flex items-center gap-2 text-sm text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={form.is_active}
-                  onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))}
-                />
-                Active
-              </label>
-              <label className="flex items-center gap-2 text-sm text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={form.is_featured}
-                  onChange={(e) => setForm((p) => ({ ...p, is_featured: e.target.checked }))}
-                />
-                Featured
-              </label>
-            </div>
-          </Card>
+              <div className="mt-4 flex items-center gap-6">
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={form.is_active}
+                    onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))}
+                  />
+                  Active
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={form.is_featured}
+                    onChange={(e) => setForm((p) => ({ ...p, is_featured: e.target.checked }))}
+                  />
+                  Featured
+                </label>
+              </div>
+            </Card>
+
+            <StoreServicesManager storeId={storeId} storeType={form.store_type} />
+          </div>
         ) : null}
       </div>
     </div>

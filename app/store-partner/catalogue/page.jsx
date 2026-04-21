@@ -10,7 +10,6 @@ import {
   Boxes,
   BriefcaseBusiness,
   CalendarClock,
-  CheckCircle2,
   Eye,
   ImagePlus,
   Loader2,
@@ -20,8 +19,6 @@ import {
   Save,
   Store,
   Trash2,
-  Crown,
-  AlertTriangle,
 } from "lucide-react";
 
 const BUCKET_NAME = "stores";
@@ -833,8 +830,8 @@ export default function PartnerCataloguePage() {
       return "Slot-bookable services need a duration.";
     }
 
-    if (isServiceStore && premiumUnlocked && itemForm.is_billable && price === null) {
-      return "Billable services need a price.";
+    if (isServiceStore && (price === null || price < 0)) {
+      return "Service price is required.";
     }
 
     return "";
@@ -1139,18 +1136,6 @@ export default function PartnerCataloguePage() {
                 </div>
 
                 <div className="rounded-3xl border border-gray-200 bg-white p-4">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Premium State</div>
-                  <div className="mt-3">
-                    <Badge tone={premiumUnlocked ? "green" : "amber"}>
-                      {premiumUnlocked ? "Premium active" : "Premium gated"}
-                    </Badge>
-                  </div>
-                  <div className="mt-2 text-sm text-gray-500">
-                    {selectedStore?.pickup_mode ? `Pickup mode: ${selectedStore.pickup_mode}` : "Using standard pickup mode."}
-                  </div>
-                </div>
-
-                <div className="rounded-3xl border border-gray-200 bg-white p-4">
                   <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Current Content</div>
                   <div className="mt-3 text-lg font-semibold text-gray-900">
                     {categories.length} categories
@@ -1158,20 +1143,6 @@ export default function PartnerCataloguePage() {
                   <div className="mt-1 text-sm text-gray-500">{items.length} items configured</div>
                 </div>
               </div>
-
-              {!premiumUnlocked ? (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                  <div className="flex items-center gap-2 font-semibold">
-                    <Crown className="h-4 w-4" />
-                    Premium-only actions are gated
-                  </div>
-                  <div className="mt-1">
-                    {isServiceStore
-                      ? "This branch can publish a service menu now, but slot booking and billable service actions stay disabled until premium is active."
-                      : "This branch stays in image catalogue mode. Full pickup-ready products, billable items, and inventory controls unlock only with premium."}
-                  </div>
-                </div>
-              ) : null}
             </div>
           )}
         </Card>
@@ -1377,7 +1348,7 @@ export default function PartnerCataloguePage() {
                     />
                   </Field>
 
-                  <Field label={isServiceStore ? (premiumUnlocked && itemForm.is_billable ? "Price" : "Price (optional)") : currentItemIsImageOnly ? "Price (optional)" : itemForm.is_billable ? "Price" : "Price (optional)"}>
+                  <Field label={isServiceStore ? "Price *" : currentItemIsImageOnly ? "Price (optional)" : itemForm.is_billable ? "Price" : "Price (optional)"}>
                     <Input
                       value={itemForm.price}
                       onChange={(e) => setItemForm((prev) => ({ ...prev, price: e.target.value }))}
@@ -1449,25 +1420,6 @@ export default function PartnerCataloguePage() {
                         <option value="BILLABLE">Billable / orderable</option>
                       </Select>
                     </Field>
-                  </div>
-                ) : null}
-
-                {isServiceStore ? (
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <Toggle
-                      checked={itemForm.supports_slot_booking}
-                      onChange={(checked) => setItemForm((prev) => ({ ...prev, supports_slot_booking: checked }))}
-                      label="Supports slot booking"
-                      description="Customers can choose a time slot for this service."
-                      disabled={!premiumUnlocked}
-                    />
-                    <Toggle
-                      checked={itemForm.is_billable}
-                      onChange={(checked) => setItemForm((prev) => ({ ...prev, is_billable: checked }))}
-                      label="Billable service"
-                      description="Marks the service ready for payment flows."
-                      disabled={!premiumUnlocked}
-                    />
                   </div>
                 ) : null}
 
@@ -1693,18 +1645,6 @@ export default function PartnerCataloguePage() {
                   </div>
                 </div>
               </div>
-
-              {!premiumUnlocked ? (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                  <div className="flex items-center gap-2 font-semibold">
-                    <AlertTriangle className="h-4 w-4" />
-                    Premium gating reminder
-                  </div>
-                  <div className="mt-1">
-                    Slot settings can be prepared here, but the customer-facing booking flow should remain gated until this service branch is premium-enabled.
-                  </div>
-                </div>
-              ) : null}
 
               <button
                 type="button"
@@ -1988,27 +1928,6 @@ export default function PartnerCataloguePage() {
           </div>
         )}
 
-        {loadingStores ? null : !stores.length ? null : (
-          <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="flex items-start gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
-                <CheckCircle2 className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="text-lg font-semibold text-gray-900">Flow Summary</div>
-                <div className="mt-2 text-sm text-gray-600">
-                  {isProductStore && !premiumUnlocked
-                    ? "This branch is correctly constrained to image-only catalogue behavior. Price, billing, and inventory stay optional or hidden."
-                    : isProductStore
-                    ? "This branch is ready for full product catalogue management, pickup ordering readiness, and optional inventory controls."
-                    : premiumUnlocked
-                    ? "This branch is ready for service menu publishing, slot booking readiness, and billable service setup."
-                    : "This branch can publish a service menu now while premium-only slot booking and payment readiness remain clearly gated."}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import StoreServicesManager from "@/components/store-dashboard/StoreServicesManager";
 import {
   ArrowLeft,
   Store,
@@ -342,7 +343,7 @@ export default function StoreDetailsPage() {
         const { data, error } = await supabaseBrowser
           .from("stores")
           .select(
-            "id,name,slug,description,category,subcategory,tags,phone,whatsapp,email,website,city,region,country,postal_code,address_line1,address_line2,is_active,is_featured,logo_url,cover_image_url,cover_media_type,cover_media_url,updated_at,created_at,owner_user_id"
+            "id,name,slug,description,category,subcategory,tags,phone,whatsapp,email,website,city,region,country,postal_code,address_line1,address_line2,is_active,is_featured,store_type,logo_url,cover_image_url,cover_media_type,cover_media_url,updated_at,created_at,owner_user_id"
           )
           .eq("id", storeId)
           .eq("owner_user_id", userId)
@@ -824,110 +825,114 @@ export default function StoreDetailsPage() {
             )}
 
             {tab === "settings" && (
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                <div className="xl:col-span-2">
-                  <CardShell
-                    title="Store Settings (Demo)"
-                    right={
-                      <button
-                        type="button"
-                        className="h-9 rounded-full border border-gray-200 bg-white px-4 text-sm font-semibold hover:bg-gray-50"
-                        onClick={goEditStore}
-                      >
-                        Open Full Edit Page
-                      </button>
-                    }
-                  >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <div className="text-xs font-medium text-gray-600">Store Name</div>
-                        <input
-                          className="mt-1 h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                          defaultValue={store.name || ""}
-                        />
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                  <div className="xl:col-span-2">
+                    <CardShell
+                      title="Store Settings (Demo)"
+                      right={
+                        <button
+                          type="button"
+                          className="h-9 rounded-full border border-gray-200 bg-white px-4 text-sm font-semibold hover:bg-gray-50"
+                          onClick={goEditStore}
+                        >
+                          Open Full Edit Page
+                        </button>
+                      }
+                    >
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <div className="text-xs font-medium text-gray-600">Store Name</div>
+                          <input
+                            className="mt-1 h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
+                            defaultValue={store.name || ""}
+                          />
+                        </div>
+
+                        <div>
+                          <div className="text-xs font-medium text-gray-600">Category</div>
+                          <input
+                            className="mt-1 h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
+                            defaultValue={store.category || ""}
+                          />
+                        </div>
+
+                        <div>
+                          <div className="text-xs font-medium text-gray-600">City</div>
+                          <input
+                            className="mt-1 h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
+                            defaultValue={store.city || ""}
+                          />
+                        </div>
+
+                        <div>
+                          <div className="text-xs font-medium text-gray-600">Postal Code</div>
+                          <input
+                            className="mt-1 h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
+                            defaultValue={store.postal_code || ""}
+                          />
+                        </div>
                       </div>
 
-                      <div>
-                        <div className="text-xs font-medium text-gray-600">Category</div>
-                        <input
-                          className="mt-1 h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                          defaultValue={store.category || ""}
-                        />
+                      <div className="mt-4 flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          className="h-10 rounded-full border border-gray-200 bg-white px-4 text-sm font-semibold hover:bg-gray-50"
+                          onClick={() => alert("Demo: discard")}
+                        >
+                          Discard
+                        </button>
+                        <button
+                          type="button"
+                          className="h-10 rounded-full px-4 text-sm font-semibold text-white"
+                          style={{
+                            background:
+                              "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
+                          }}
+                          onClick={() => alert("Demo: save settings")}
+                        >
+                          Save Changes
+                        </button>
+                      </div>
+                    </CardShell>
+                  </div>
+
+                  <CardShell title="Status">
+                    <div className="space-y-3">
+                      <div className="rounded-2xl border border-gray-200 bg-white p-4 flex items-start gap-3">
+                        <div className="h-10 w-10 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-center">
+                          {store.is_active !== false ? (
+                            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                          ) : (
+                            <XCircle className="h-5 w-5 text-red-600" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="font-semibold text-gray-900">Store Status</div>
+                          <div className="text-sm text-gray-600 mt-1">
+                            Currently: {store.is_active !== false ? "Active" : "Inactive"}
+                          </div>
+                          <div className="mt-2">{storeStatusPill}</div>
+                        </div>
                       </div>
 
-                      <div>
-                        <div className="text-xs font-medium text-gray-600">City</div>
-                        <input
-                          className="mt-1 h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                          defaultValue={store.city || ""}
-                        />
+                      <div className="rounded-2xl border border-gray-200 bg-white p-4 flex items-start gap-3">
+                        <div className="h-10 w-10 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center">
+                          <Star className="h-5 w-5 text-amber-600" />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-gray-900">Featured</div>
+                          <div className="text-sm text-gray-600 mt-1">
+                            Featured stores appear higher in discovery.
+                          </div>
+                          <div className="mt-2">{featuredPill}</div>
+                        </div>
                       </div>
-
-                      <div>
-                        <div className="text-xs font-medium text-gray-600">Postal Code</div>
-                        <input
-                          className="mt-1 h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                          defaultValue={store.postal_code || ""}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="mt-4 flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        className="h-10 rounded-full border border-gray-200 bg-white px-4 text-sm font-semibold hover:bg-gray-50"
-                        onClick={() => alert("Demo: discard")}
-                      >
-                        Discard
-                      </button>
-                      <button
-                        type="button"
-                        className="h-10 rounded-full px-4 text-sm font-semibold text-white"
-                        style={{
-                          background:
-                            "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
-                        }}
-                        onClick={() => alert("Demo: save settings")}
-                      >
-                        Save Changes
-                      </button>
                     </div>
                   </CardShell>
                 </div>
 
-                <CardShell title="Status">
-                  <div className="space-y-3">
-                    <div className="rounded-2xl border border-gray-200 bg-white p-4 flex items-start gap-3">
-                      <div className="h-10 w-10 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-center">
-                        {store.is_active !== false ? (
-                          <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                        ) : (
-                          <XCircle className="h-5 w-5 text-red-600" />
-                        )}
-                      </div>
-                      <div>
-                        <div className="font-semibold text-gray-900">Store Status</div>
-                        <div className="text-sm text-gray-600 mt-1">
-                          Currently: {store.is_active !== false ? "Active" : "Inactive"}
-                        </div>
-                        <div className="mt-2">{storeStatusPill}</div>
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-gray-200 bg-white p-4 flex items-start gap-3">
-                      <div className="h-10 w-10 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center">
-                        <Star className="h-5 w-5 text-amber-600" />
-                      </div>
-                      <div>
-                        <div className="font-semibold text-gray-900">Featured</div>
-                        <div className="text-sm text-gray-600 mt-1">
-                          Featured stores appear higher in discovery.
-                        </div>
-                        <div className="mt-2">{featuredPill}</div>
-                      </div>
-                    </div>
-                  </div>
-                </CardShell>
+                <StoreServicesManager storeId={storeId} storeType={store.store_type} />
               </div>
             )}
           </>
