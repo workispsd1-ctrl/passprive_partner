@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 
 const BUCKET_NAME = "stores";
+const SERVICE_MENU_ASSET_TYPE = "service_menu";
 const STORE_ID_STORAGE_KEYS = [
   "store_partner_selected_store_id",
   "selectedStoreId",
@@ -425,6 +426,7 @@ export default function PartnerCataloguePage() {
   const router = useRouter();
   const categoryFormRef = useRef(null);
   const itemFormRef = useRef(null);
+  const serviceMenuFileRef = useRef(null);
 
   const [loadingStores, setLoadingStores] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
@@ -450,6 +452,9 @@ export default function PartnerCataloguePage() {
   const [scheduleScope, setScheduleScope] = useState("CURRENT");
   const [scheduleTargetIds, setScheduleTargetIds] = useState([]);
   const [savingSchedule, setSavingSchedule] = useState(false);
+  const [serviceMenuAssets, setServiceMenuAssets] = useState([]);
+  const [newServiceMenuFiles, setNewServiceMenuFiles] = useState([]);
+  const [savingServiceMenuAssets, setSavingServiceMenuAssets] = useState(false);
 
   const storeMap = useMemo(() => {
     const map = new Map();
@@ -505,6 +510,16 @@ export default function PartnerCataloguePage() {
       .filter((category) => category.items.length > 0);
   }, [sortedCategories, itemsByCategory]);
 
+  const newServiceMenuPreviews = useMemo(
+    () =>
+      newServiceMenuFiles.map((file, index) => ({
+        key: `${file.name}_${index}_${file.lastModified || ""}`,
+        file,
+        url: URL.createObjectURL(file),
+      })),
+    [newServiceMenuFiles]
+  );
+
   const linkedServiceBranches = useMemo(() => {
     return stores.filter((store) => normalizeStoreType(store.store_type) === "SERVICE");
   }, [stores]);
@@ -538,12 +553,14 @@ export default function PartnerCataloguePage() {
     if (!storeId) {
       setCategories([]);
       setItems([]);
+      setServiceMenuAssets([]);
+      setNewServiceMenuFiles([]);
       return;
     }
 
     setLoadingData(true);
     try {
-      const [categoryRes, itemRes] = await Promise.all([
+      const [categoryRes, itemRes, serviceMenuRes] = await Promise.all([
         supabaseBrowser
           .from("store_catalogue_categories")
           .select("id,store_id,title,starting_from,enabled,sort_order,created_at,updated_at")
@@ -558,10 +575,18 @@ export default function PartnerCataloguePage() {
           .eq("store_id", storeId)
           .order("sort_order", { ascending: true })
           .order("created_at", { ascending: false }),
+        supabaseBrowser
+          .from("store_media_assets")
+          .select("id,store_id,asset_type,file_url,file_path,sort_order,is_active,created_at")
+          .eq("store_id", storeId)
+          .eq("asset_type", SERVICE_MENU_ASSET_TYPE)
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: true }),
       ]);
 
       if (categoryRes.error) throw categoryRes.error;
       if (itemRes.error) throw itemRes.error;
+      if (serviceMenuRes.error) throw serviceMenuRes.error;
 
       const loadedCategories = categoryRes.data || [];
       const loadedItems = (itemRes.data || []).map((item) => ({
@@ -573,6 +598,8 @@ export default function PartnerCataloguePage() {
 
       setCategories(loadedCategories);
       setItems(loadedItems);
+      setServiceMenuAssets(serviceMenuRes.data || []);
+      setNewServiceMenuFiles([]);
 
       setCategoryForm(getInitialCategoryForm());
       setEditingCategoryId("");
@@ -658,6 +685,12 @@ export default function PartnerCataloguePage() {
     setScheduleScope("CURRENT");
     setScheduleTargetIds(selectedStoreId ? [String(selectedStoreId)] : []);
   }, [selectedStoreId, selectedStore]);
+
+  useEffect(() => {
+    return () => {
+      newServiceMenuPreviews.forEach((preview) => URL.revokeObjectURL(preview.url));
+    };
+  }, [newServiceMenuPreviews]);
 
   useEffect(() => {
     setItemForm((prev) => {
@@ -1055,6 +1088,100 @@ export default function PartnerCataloguePage() {
       toast.error(error?.message || "Failed to update slot settings.");
     } finally {
       setSavingSchedule(false);
+    }
+  };
+
+  const uploadServiceMenuImage = async (storeId, file) => {
+    const ext = getExt(file);
+    const path = `store-media/${storeId}/service-menu/${uid()}.${ext}`;
+
+    const { error } = await supabaseBrowser.storage.from(BUCKET_NAME).upload(path, file, {
+      upsert: false,
+      contentType: file?.type || undefined,
+    });
+    if (error) throw error;
+
+    const { data } = supabaseBrowser.storage.from(BUCKET_NAME).getPublicUrl(path);
+    return {
+      id: uid(),
+      file_url: data?.publicUrl || "",
+      file_path: path,
+      sort_order: 100,
+      is_active: true,
+    };
+  };
+
+  const onPickServiceMenuFiles = (event) => {
+    const incoming = Array.from(event.target.files || []).filter(isImage);
+    if (!incoming.length) {
+      toast.error("Select image files for service menu.");
+      return;
+    }
+    setNewServiceMenuFiles((prev) => [...prev, ...incoming]);
+    event.target.value = "";
+  };
+
+  const removeExistingServiceMenuAsset = (index) => {
+    setServiceMenuAssets((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const removeNewServiceMenuFile = (index) => {
+    setNewServiceMenuFiles((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleSaveServiceMenuAssets = async () => {
+    if (!selectedStoreId || !isServiceStore || savingServiceMenuAssets) return;
+
+    try {
+      setSavingServiceMenuAssets(true);
+
+      const uploadedAssets = newServiceMenuFiles.length
+        ? await Promise.all(newServiceMenuFiles.map((file) => uploadServiceMenuImage(selectedStoreId, file)))
+        : [];
+
+      const merged = [...serviceMenuAssets, ...uploadedAssets].filter((asset) => asset?.file_url);
+      const deduped = [];
+      const seen = new Set();
+      merged.forEach((asset) => {
+        const key = String(asset.file_url || "").trim();
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        deduped.push(asset);
+      });
+
+      const deleteRes = await supabaseBrowser
+        .from("store_media_assets")
+        .delete()
+        .eq("store_id", selectedStoreId)
+        .eq("asset_type", SERVICE_MENU_ASSET_TYPE);
+      if (deleteRes.error) throw deleteRes.error;
+
+      if (deduped.length) {
+        const { error } = await supabaseBrowser.from("store_media_assets").insert(
+          deduped.map((asset, index) => ({
+            store_id: selectedStoreId,
+            asset_type: SERVICE_MENU_ASSET_TYPE,
+            file_url: asset.file_url,
+            file_path: asset.file_path || null,
+            sort_order: index,
+            is_active: true,
+          }))
+        );
+        if (error) throw error;
+      }
+
+      const normalized = deduped.map((asset, index) => ({
+        ...asset,
+        sort_order: index,
+        is_active: true,
+      }));
+      setServiceMenuAssets(normalized);
+      setNewServiceMenuFiles([]);
+      toast.success("Service menu images updated.");
+    } catch (error) {
+      toast.error(error?.message || "Failed to update service menu images.");
+    } finally {
+      setSavingServiceMenuAssets(false);
     }
   };
 
@@ -1819,112 +1946,179 @@ export default function PartnerCataloguePage() {
               )}
             </Card>
 
-            <Card
-              title={
-                <div className="flex items-center gap-2">
-                  <Eye className="h-5 w-5 text-violet-600" />
-                  <span>Preview Mode</span>
-                </div>
-              }
-              subtitle={
-                isServiceStore
-                  ? "Customer-facing service menu preview with duration, billing, and slot-booking indicators."
-                  : premiumUnlocked
-                  ? "Customer-facing pickup catalogue preview for full products and image-only entries."
-                  : "Customer-facing image catalogue preview for non-premium product stores."
-              }
-            >
-              {loadingData ? (
-                <CatalogueStructureSkeleton service={isServiceStore} />
-              ) : !previewCategories.length ? (
-                <EmptyState
-                  title="Nothing to preview yet"
-                  body={`Enabled categories with available ${isServiceStore ? "services" : "items"} will appear here.`}
+            {isServiceStore ? (
+              <Card
+                title={
+                  <div className="flex items-center gap-2">
+                    <ImagePlus className="h-5 w-5 text-violet-600" />
+                    <span>Service Menu Images</span>
+                  </div>
+                }
+                subtitle="Upload service menu images."
+                right={
+                  <button
+                    type="button"
+                    onClick={() => serviceMenuFileRef.current?.click()}
+                    disabled={savingServiceMenuAssets}
+                    className="inline-flex h-9 w-40 items-center gap-2 rounded-full border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                  >
+                    <ImagePlus className="h-4 w-4" />
+                    Add Images
+                  </button>
+                }
+              >
+                <input
+                  ref={serviceMenuFileRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={onPickServiceMenuFiles}
                 />
-              ) : (
-                <div className="space-y-5">
-                  {previewCategories.map((category) => (
-                    <div key={category.id} className="rounded-3xl border border-gray-200 bg-white p-4">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="text-base font-semibold text-gray-900">{category.title}</div>
-                        {category.starting_from !== null && category.starting_from !== undefined ? (
-                          <Badge tone="blue">Starting from {money(category.starting_from)}</Badge>
-                        ) : null}
-                      </div>
 
-                      <div className="mt-4 space-y-3">
-                        {category.items.map((item) =>
-                          isServiceStore ? (
-                            <div
-                              key={item.id}
-                              className="grid gap-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 md:grid-cols-[84px_1fr]"
-                            >
-                              <div className="h-20 overflow-hidden rounded-2xl border border-gray-200 bg-white">
-                                {item.image_url ? (
-                                  <img src={item.image_url} alt={item.title || "Service"} className="h-full w-full object-cover" />
-                                ) : (
-                                  <div className="flex h-full items-center justify-center text-xs text-gray-400">No image</div>
-                                )}
-                              </div>
-                              <div>
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <div className="font-semibold text-gray-900">{item.title}</div>
-                                  {item.price !== null && item.price !== undefined ? <Badge tone="green">{money(item.price)}</Badge> : null}
-                                  {item.duration_minutes ? <Badge tone="blue">{item.duration_minutes} mins</Badge> : null}
-                                  {item.supports_slot_booking ? <Badge tone="blue">Slot-bookable</Badge> : null}
-                                  {item.is_billable ? <Badge tone="green">Billable</Badge> : null}
-                                </div>
-                                <div className="mt-2 text-sm text-gray-500">{item.description || "No description added yet."}</div>
-                              </div>
-                            </div>
-                          ) : premiumUnlocked && !item.is_image_catalogue ? (
-                            <div
-                              key={item.id}
-                              className="grid gap-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 md:grid-cols-[96px_1fr_auto]"
-                            >
-                              <div className="h-24 overflow-hidden rounded-2xl border border-gray-200 bg-white">
-                                {item.image_url ? (
-                                  <img src={item.image_url} alt={item.title || "Product"} className="h-full w-full object-cover" />
-                                ) : (
-                                  <div className="flex h-full items-center justify-center text-xs text-gray-400">No image</div>
-                                )}
-                              </div>
-                              <div>
-                                <div className="font-semibold text-gray-900">{item.title}</div>
-                                <div className="mt-2 text-sm text-gray-500">{item.description || "No description added yet."}</div>
-                              </div>
-                              <div className="flex flex-col items-end gap-2">
-                                {item.price !== null && item.price !== undefined ? <Badge tone="green">{money(item.price)}</Badge> : null}
-                                {item.is_billable ? <Badge tone="green">Ready for pickup order flow</Badge> : null}
-                              </div>
-                            </div>
-                          ) : (
-                            <div
-                              key={item.id}
-                              className="rounded-2xl border border-gray-200 bg-gray-50 p-3"
-                            >
-                              <div className="aspect-square overflow-hidden rounded-2xl border border-gray-200 bg-white">
-                                {item.image_url ? (
-                                  <img src={item.image_url} alt={item.title || "Catalogue image"} className="h-full w-full object-cover" />
-                                ) : (
-                                  <div className="flex h-full items-center justify-center text-xs text-gray-400">No image</div>
-                                )}
-                              </div>
-                              {(item.title || item.price !== null) ? (
-                                <div className="mt-3 flex items-center justify-between gap-3">
-                                  <div className="text-sm font-medium text-gray-900">{item.title || "Image-only entry"}</div>
-                                  {item.price !== null && item.price !== undefined ? <div className="text-sm text-gray-500">{money(item.price)}</div> : null}
-                                </div>
-                              ) : null}
-                            </div>
-                          )
-                        )}
-                      </div>
+                <div className="space-y-4">
+                  {loadingData ? (
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                      {Array.from({ length: 6 }).map((_, idx) => (
+                        <SkeletonBlock key={idx} className="h-24 w-full rounded-2xl border-gray-200 bg-gray-100" />
+                      ))}
                     </div>
-                  ))}
+                  ) : serviceMenuAssets.length || newServiceMenuPreviews.length ? (
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                      {serviceMenuAssets.map((asset, idx) => (
+                        <div key={`existing_${asset.id || idx}`} className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 p-2">
+                          <img src={asset.file_url} alt={`Service menu ${idx + 1}`} className="h-24 w-full rounded-xl object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => removeExistingServiceMenuAsset(idx)}
+                            disabled={savingServiceMenuAssets}
+                            className="absolute right-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60"
+                            title="Remove"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+
+                      {newServiceMenuPreviews.map((preview, idx) => (
+                        <div key={`new_${preview.key}`} className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 p-2">
+                          <img src={preview.url} alt={preview.file.name || `New service menu ${idx + 1}`} className="h-24 w-full rounded-xl object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => removeNewServiceMenuFile(idx)}
+                            disabled={savingServiceMenuAssets}
+                            className="absolute right-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60"
+                            title="Remove"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <EmptyState title="No service menu images yet" body="Add images to build your service menu gallery." />
+                  )}
+
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleSaveServiceMenuAssets}
+                      disabled={savingServiceMenuAssets || loadingData}
+                      className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-white disabled:opacity-60"
+                      style={{
+                        background:
+                          "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
+                      }}
+                    >
+                      {savingServiceMenuAssets ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                      Save Menu Images
+                    </button>
+                  </div>
                 </div>
-              )}
-            </Card>
+              </Card>
+            ) : (
+              <Card
+                title={
+                  <div className="flex items-center gap-2">
+                    <Eye className="h-5 w-5 text-violet-600" />
+                    <span>Preview Mode</span>
+                  </div>
+                }
+                subtitle={
+                  premiumUnlocked
+                    ? "Customer-facing pickup catalogue preview for full products and image-only entries."
+                    : "Customer-facing image catalogue preview for non-premium product stores."
+                }
+              >
+                {loadingData ? (
+                  <CatalogueStructureSkeleton service={false} />
+                ) : !previewCategories.length ? (
+                  <EmptyState
+                    title="Nothing to preview yet"
+                    body="Enabled categories with available items will appear here."
+                  />
+                ) : (
+                  <div className="space-y-5">
+                    {previewCategories.map((category) => (
+                      <div key={category.id} className="rounded-3xl border border-gray-200 bg-white p-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="text-base font-semibold text-gray-900">{category.title}</div>
+                          {category.starting_from !== null && category.starting_from !== undefined ? (
+                            <Badge tone="blue">Starting from {money(category.starting_from)}</Badge>
+                          ) : null}
+                        </div>
+
+                        <div className="mt-4 space-y-3">
+                          {category.items.map((item) =>
+                            premiumUnlocked && !item.is_image_catalogue ? (
+                              <div
+                                key={item.id}
+                                className="grid gap-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 md:grid-cols-[96px_1fr_auto]"
+                              >
+                                <div className="h-24 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                                  {item.image_url ? (
+                                    <img src={item.image_url} alt={item.title || "Product"} className="h-full w-full object-cover" />
+                                  ) : (
+                                    <div className="flex h-full items-center justify-center text-xs text-gray-400">No image</div>
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="font-semibold text-gray-900">{item.title}</div>
+                                  <div className="mt-2 text-sm text-gray-500">{item.description || "No description added yet."}</div>
+                                </div>
+                                <div className="flex flex-col items-end gap-2">
+                                  {item.price !== null && item.price !== undefined ? <Badge tone="green">{money(item.price)}</Badge> : null}
+                                  {item.is_billable ? <Badge tone="green">Ready for pickup order flow</Badge> : null}
+                                </div>
+                              </div>
+                            ) : (
+                              <div
+                                key={item.id}
+                                className="rounded-2xl border border-gray-200 bg-gray-50 p-3"
+                              >
+                                <div className="aspect-square overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                                  {item.image_url ? (
+                                    <img src={item.image_url} alt={item.title || "Catalogue image"} className="h-full w-full object-cover" />
+                                  ) : (
+                                    <div className="flex h-full items-center justify-center text-xs text-gray-400">No image</div>
+                                  )}
+                                </div>
+                                {(item.title || item.price !== null) ? (
+                                  <div className="mt-3 flex items-center justify-between gap-3">
+                                    <div className="text-sm font-medium text-gray-900">{item.title || "Image-only entry"}</div>
+                                    {item.price !== null && item.price !== undefined ? <div className="text-sm text-gray-500">{money(item.price)}</div> : null}
+                                  </div>
+                                ) : null}
+                              </div>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            )}
           </div>
         )}
 
