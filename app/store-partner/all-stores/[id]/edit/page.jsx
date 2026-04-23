@@ -3,7 +3,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
-import StoreServicesManager from "@/components/store-dashboard/StoreServicesManager";
 import { ArrowLeft, Loader2, Save } from "lucide-react";
 
 function Card({ title, children }) {
@@ -290,8 +289,6 @@ export default function EditStorePage() {
                 </label>
               </div>
             </Card>
-
-            <StoreServicesManager storeId={storeId} storeType={form.store_type} />
           </div>
         ) : null}
       </div>

@@ -343,7 +343,7 @@ export default function StoreDetailsPage() {
         const { data, error } = await supabaseBrowser
           .from("stores")
           .select(
-            "id,name,slug,description,category,subcategory,tags,phone,whatsapp,email,website,city,region,country,postal_code,address_line1,address_line2,is_active,is_featured,store_type,logo_url,cover_image_url,cover_media_type,cover_media_url,updated_at,created_at,owner_user_id"
+            "id,name,slug,description,category,subcategory,phone,whatsapp,email,website,city,region,country,postal_code,address_line1,address_line2,is_active,is_featured,store_type,logo_url,cover_image,top_items,updated_at,created_at,owner_user_id"
           )
           .eq("id", storeId)
           .eq("owner_user_id", userId)

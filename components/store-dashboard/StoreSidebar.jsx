@@ -20,6 +20,7 @@ import {
   Check,
   Crown,
   Package,
+  Star,
   ArrowUpRight,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
@@ -38,6 +39,7 @@ const baseNav = [
   { label: "Dashboard", href: "/store-partner/dashboard", icon: LayoutDashboard },
   { label: "Pickup Orders", href: "/store-partner/pickup-orders", icon: ShoppingCart, key: "pickup-orders", premium: true },
   { label: "Catalogue", href: "/store-partner/catalogue", icon: Boxes, key: "pickup-catalogue", dynamicLabel: true },
+  { label: "Top Items", href: "/store-partner/top-items", icon: Star },
   { label: "Inventory", href: "/store-partner/inventory", icon: Package, key: "inventory", premium: true },
   { label: "My Stores", href: "/store-partner/all-stores", icon: Store },
   { label: "Offers", href: "/store-partner/offers", icon: Tag },
