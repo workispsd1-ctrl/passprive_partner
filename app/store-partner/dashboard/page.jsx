@@ -473,7 +473,7 @@ export default function StorePartnerDashboardPage() {
             </button>
 
             <Link
-              href="/store-partner/offers"
+              href={selectedStoreId ? `/store-partner/offers/create?store_id=${selectedStoreId}` : "/store-partner/offers/create"}
               className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 shadow-lg shadow-[rgba(119,31,168,0.28)]"
               style={{
                 background:

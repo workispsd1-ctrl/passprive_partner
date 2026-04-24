@@ -5,7 +5,7 @@ import { fetchMyStores } from "./stores";
 
 const LS_KEY = "store_partner_selected_store_id";
 
-export function useStores() {
+export function useStores(preferredStoreId = null) {
   const [loading, setLoading] = useState(true);
   const [stores, setStores] = useState([]);
   const [selectedStoreId, setSelectedStoreId] = useState(null);
@@ -28,10 +28,14 @@ export function useStores() {
           typeof window !== "undefined" ? localStorage.getItem(LS_KEY) : null;
 
         const firstId = list?.[0]?.id || null;
+        const validPreferred =
+          preferredStoreId && list.some((s) => String(s.id) === String(preferredStoreId))
+            ? String(preferredStoreId)
+            : null;
         const validSaved =
           saved && list.some((s) => String(s.id) === String(saved)) ? saved : null;
 
-        const nextId = validSaved || firstId;
+        const nextId = validPreferred || validSaved || firstId;
 
         setSelectedStoreId(nextId);
 
@@ -49,7 +53,7 @@ export function useStores() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [preferredStoreId]);
 
   useEffect(() => {
     const syncSelectedStore = () => {

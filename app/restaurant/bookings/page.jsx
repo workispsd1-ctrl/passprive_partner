@@ -5,7 +5,6 @@ import {
   Search,
   Users,
   CheckCircle,
-  XCircle,
   StickyNote,
   ChevronLeft,
   ChevronRight,
@@ -14,6 +13,94 @@ import {
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 const PAGE_SIZE = 10;
+const BOOKING_SELECT_FIELDS = `
+  id,
+  restaurant_id,
+  customer_user_id,
+  customer_name,
+  customer_phone,
+  customer_email,
+  booking_date,
+  booking_time,
+  duration_minutes,
+  party_size,
+  status,
+  source,
+  special_request,
+  notes_internal,
+  booking_code,
+  cancelled_at,
+  cancel_reason,
+  read,
+  customer_booking_number,
+  created_at,
+  updated_at
+`;
+
+function normalizeBookingStatus(status) {
+  const normalized = String(status || "").toLowerCase();
+
+  return normalized;
+}
+
+function getBookingStatusLabel(status) {
+  const normalized = normalizeBookingStatus(status);
+
+  const labels = {
+    pending: "Pending",
+    payment_successful: "Paid",
+    payment_successfull: "Paid",
+    confirmed: "Confirmed",
+    completed: "Completed",
+    cancelled: "Cancelled",
+    no_show: "No show",
+  };
+
+  return labels[normalized] || (status ? String(status) : "—");
+}
+
+function isPendingStatus(status) {
+  return normalizeBookingStatus(status) === "pending";
+}
+
+function needsRestaurantDecision(status) {
+  const normalized = normalizeBookingStatus(status);
+  return normalized === "pending" || normalized === "payment_successful" || normalized === "payment_successfull";
+}
+
+function isPaidStatus(status) {
+  const normalized = normalizeBookingStatus(status);
+  return normalized === "payment_successful" || normalized === "payment_successfull";
+}
+
+function canConfirmBooking(status, isRestaurantVisible) {
+  return Boolean(isRestaurantVisible) && isPaidStatus(status);
+}
+
+function formatBookingDate(value) {
+  if (!value) return "—";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return String(value);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("en-CA", { dateStyle: "medium" }).format(date);
+}
+
+function formatBookingTime(value) {
+  if (!value) return "—";
+  const base = String(value).slice(0, 5);
+  if (!/^\d{2}:\d{2}$/.test(base)) return String(value);
+  return base;
+}
+
+function formatBookingDateTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("en-CA", {
+    dateStyle: "medium",
+    timeStyle: "medium",
+  }).format(date);
+}
 
 export default function RestaurantBookingsPage() {
   const [bookings, setBookings] = useState([]);
@@ -24,11 +111,7 @@ export default function RestaurantBookingsPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [restaurantId, setRestaurantId] = useState(null);
-
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [cancelBookingId, setCancelBookingId] = useState(null);
-  const [cancelReason, setCancelReason] = useState("");
-  const [cancelLoading, setCancelLoading] = useState(false);
+  const [isRestaurantVisible, setIsRestaurantVisible] = useState(true);
 
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [activeBooking, setActiveBooking] = useState(null);
@@ -68,11 +151,14 @@ export default function RestaurantBookingsPage() {
 
     const { data: restaurant } = await supabaseBrowser
       .from("restaurants")
-      .select("id")
+      .select("id, is_active")
       .eq("owner_user_id", user.id)
       .single();
 
-    if (restaurant?.id) setRestaurantId(restaurant.id);
+    if (restaurant?.id) {
+      setRestaurantId(restaurant.id);
+      setIsRestaurantVisible(Boolean(restaurant.is_active));
+    }
   };
 
   useEffect(() => {
@@ -89,38 +175,17 @@ export default function RestaurantBookingsPage() {
 
     let query = supabaseBrowser
       .from("restaurant_bookings")
-      .select(
-        `
-        id,
-        restaurant_id,
-        customer_user_id,
-        customer_name,
-        customer_phone,
-        customer_email,
-        booking_date,
-        booking_time,
-        duration_minutes,
-        party_size,
-        status,
-        source,
-        special_request,
-        notes_internal,
-        booking_code,
-        cancelled_at,
-        cancel_reason,
-        read,
-        customer_booking_number,
-        created_at,
-        updated_at
-      `,
-        { count: "exact" }
-      )
+      .select(BOOKING_SELECT_FIELDS, { count: "exact" })
       .eq("restaurant_id", restaurantId)
       .order("booking_date", { ascending: false })
       .order("booking_time", { ascending: false })
       .range(from, to);
 
-    if (status !== "all") query = query.eq("status", status);
+    if (status === "paid") {
+      query = query.in("status", ["payment_successful", "payment_successfull"]);
+    } else if (status !== "all") {
+      query = query.eq("status", status);
+    }
 
     if (search) {
       query = query.or(
@@ -181,75 +246,10 @@ export default function RestaurantBookingsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restaurantId, status, page, search]);
 
-  const openCancelModal = (bookingId) => {
-    setCancelBookingId(bookingId);
-    setCancelReason("");
-    setShowCancelModal(true);
-  };
-
-  const closeCancelModal = () => {
-    setShowCancelModal(false);
-    setCancelBookingId(null);
-    setCancelReason("");
-  };
-
-  const confirmCancel = async () => {
-    if (!cancelBookingId) return;
-
-    setCancelLoading(true);
-
-    const now = new Date().toISOString();
-
-    const { error } = await supabaseBrowser
-      .from("restaurant_bookings")
-      .update({
-        status: "cancelled",
-        cancel_reason: cancelReason || null,
-        cancelled_at: now,
-        read: true,
-        updated_at: now,
-      })
-      .eq("id", cancelBookingId);
-
-    setCancelLoading(false);
-    if (error) return;
-
-    closeCancelModal();
-
-    setBookings((prev) =>
-      prev.map((b) =>
-        b.id === cancelBookingId
-          ? {
-              ...b,
-              status: "cancelled",
-              read: true,
-              cancel_reason: cancelReason || null,
-              cancelled_at: now,
-              updated_at: now,
-            }
-          : b
-      )
-    );
-
-    if (activeBooking?.id === cancelBookingId) {
-      setActiveBooking((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: "cancelled",
-              read: true,
-              cancel_reason: cancelReason || null,
-              cancelled_at: now,
-              updated_at: now,
-            }
-          : prev
-      );
-    }
-
-    debouncedRefetch();
-  };
-
   const confirmBooking = async (bookingId) => {
+    const booking = bookings.find((b) => b.id === bookingId);
+    if (!booking || !canConfirmBooking(booking.status, isRestaurantVisible)) return;
+
     const now = new Date().toISOString();
 
     const { error } = await supabaseBrowser
@@ -280,9 +280,19 @@ export default function RestaurantBookingsPage() {
     debouncedRefetch();
   };
 
-  const openDetailsModal = (booking) => {
+  const openDetailsModal = async (booking) => {
     setActiveBooking(booking);
     setShowDetailsModal(true);
+
+    const { data } = await supabaseBrowser
+      .from("restaurant_bookings")
+      .select(BOOKING_SELECT_FIELDS)
+      .eq("id", booking.id)
+      .maybeSingle();
+
+    if (mountedRef.current && data) {
+      setActiveBooking(data);
+    }
   };
 
   const closeDetailsModal = () => {
@@ -318,11 +328,8 @@ export default function RestaurantBookingsPage() {
             className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
           >
             <option value="all">All bookings</option>
-            <option value="pending">Pending</option>
+            <option value="paid">Paid</option>
             <option value="confirmed">Confirmed</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="no_show">No show</option>
           </select>
         </div>
       </div>
@@ -368,7 +375,7 @@ export default function RestaurantBookingsPage() {
                     <div className="text-xs text-gray-500">
                       {b.customer_phone}
                       {b.booking_code && ` • ${b.booking_code}`}
-                      {b.status === "pending" && b.read === false && (
+                      {needsRestaurantDecision(b.status) && b.read === false && (
                         <span className="ml-2 inline-flex items-center rounded-full bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 text-[10px] font-bold">
                           NEW
                         </span>
@@ -412,20 +419,12 @@ export default function RestaurantBookingsPage() {
                       className="flex justify-end gap-2"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {b.status === "pending" && (
+                      {canConfirmBooking(b.status, isRestaurantVisible) && (
                         <ActionButton
                           icon={CheckCircle}
                           label="Confirm"
                           color="green"
                           onClick={() => confirmBooking(b.id)}
-                        />
-                      )}
-                      {b.status !== "cancelled" && (
-                        <ActionButton
-                          icon={XCircle}
-                          label="Cancel"
-                          color="red"
-                          onClick={() => openCancelModal(b.id)}
                         />
                       )}
                     </div>
@@ -470,48 +469,6 @@ export default function RestaurantBookingsPage() {
         </div>
       </div>
 
-      {showCancelModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5">
-            <div className="flex items-center justify-between">
-              <div className="font-semibold text-gray-900">Cancel booking</div>
-              <button onClick={closeCancelModal}>
-                <X className="h-5 w-5 text-gray-500" />
-              </button>
-            </div>
-
-            <div className="mt-4">
-              <label className="text-sm font-medium text-gray-700">
-                Cancellation remarks
-              </label>
-              <textarea
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                placeholder="Add reason for cancellation"
-                className="mt-2 w-full rounded-xl border border-gray-200 p-3 text-sm outline-none"
-                rows={4}
-              />
-            </div>
-
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                onClick={closeCancelModal}
-                className="rounded-xl border px-4 py-2 text-sm"
-              >
-                Back
-              </button>
-              <button
-                onClick={confirmCancel}
-                disabled={cancelLoading}
-                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-              >
-                {cancelLoading ? "Cancelling..." : "Confirm cancel"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {showDetailsModal && activeBooking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-full max-w-md rounded-2xl bg-white p-5">
@@ -524,43 +481,28 @@ export default function RestaurantBookingsPage() {
 
             <div className="mt-4 space-y-3 text-sm">
               <DetailRow label="Booking code" value={activeBooking.booking_code} />
-              <DetailRow label="Status" value={activeBooking.status} />
+              <DetailRow
+                label="Status"
+                value={getBookingStatusLabel(activeBooking.status)}
+              />
               <DetailRow label="Source" value={activeBooking.source} />
               <DetailRow label="Guest name" value={activeBooking.customer_name} />
               <DetailRow label="Phone" value={activeBooking.customer_phone} />
               <DetailRow label="Email" value={activeBooking.customer_email} />
-              <DetailRow label="Date" value={activeBooking.booking_date} />
-              <DetailRow label="Time" value={activeBooking.booking_time} />
+              <DetailRow label="Date" value={formatBookingDate(activeBooking.booking_date)} />
+              <DetailRow label="Time" value={formatBookingTime(activeBooking.booking_time)} />
               <DetailRow label="Duration (mins)" value={activeBooking.duration_minutes} />
               <DetailRow label="Party size" value={activeBooking.party_size} />
               <DetailRow label="Customer note" value={activeBooking.special_request} />
               <DetailRow label="Internal note" value={activeBooking.notes_internal} />
-              <DetailRow label="Cancelled at" value={activeBooking.cancelled_at} />
+              <DetailRow label="Cancelled at" value={formatBookingDateTime(activeBooking.cancelled_at)} />
               <DetailRow label="Cancel reason" value={activeBooking.cancel_reason} />
-              <DetailRow label="Total Visitings" value={activeBooking.customer_booking_number} />
-              <DetailRow label="Created at" value={activeBooking.created_at} />
-              <DetailRow label="Updated at" value={activeBooking.updated_at} />
+              <DetailRow label="Total Visits" value={activeBooking.customer_booking_number} />
+              <DetailRow label="Created at" value={formatBookingDateTime(activeBooking.created_at)} />
+              <DetailRow label="Updated at" value={formatBookingDateTime(activeBooking.updated_at)} />
             </div>
 
             <div className="mt-5 flex justify-end gap-2">
-              {activeBooking.status === "pending" && (
-                <button
-                  type="button"
-                  onClick={() => confirmBooking(activeBooking.id)}
-                  className="rounded-xl bg-green-600 hover:bg-green-500 text-white px-4 py-2 text-sm font-semibold"
-                >
-                  Confirm
-                </button>
-              )}
-              {activeBooking.status !== "cancelled" && (
-                <button
-                  type="button"
-                  onClick={() => openCancelModal(activeBooking.id)}
-                  className="rounded-xl bg-red-600 hover:bg-red-500 text-white px-4 py-2 text-sm font-semibold"
-                >
-                  Cancel
-                </button>
-              )}
               <button
                 onClick={closeDetailsModal}
                 className="rounded-xl border border-gray-300 bg-white hover:bg-gray-50 cursor-pointer text-gray-900 px-4 py-2 text-sm font-semibold"
@@ -616,16 +558,20 @@ function SkeletonRow() {
 }
 
 function StatusPill({ status }) {
+  const normalizedStatus = normalizeBookingStatus(status);
+
   const map = {
     pending: ["Pending", "#92400e", "rgba(245,158,11,.15)"],
+    payment_successful: ["Paid", "#92400e", "rgba(245,158,11,.15)"],
+    payment_successfull: ["Paid", "#92400e", "rgba(245,158,11,.15)"],
     confirmed: ["Confirmed", "#166534", "rgba(34,197,94,.15)"],
     completed: ["Completed", "#1e40af", "rgba(59,130,246,.15)"],
     cancelled: ["Cancelled", "#991b1b", "rgba(239,68,68,.15)"],
     no_show: ["No show", "#374151", "rgba(107,114,128,.15)"],
   };
 
-  const [label, color, bg] = map[status] || [
-    "—",
+  const [label, color, bg] = map[normalizedStatus] || [
+    status ? String(status) : "—",
     "#374151",
     "rgba(107,114,128,.15)",
   ];

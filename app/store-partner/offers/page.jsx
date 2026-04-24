@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Gift,
   Loader2,
@@ -8,11 +8,13 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Trash2,
   Store,
   Tag,
   TicketPercent,
   X,
 } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useStores } from "@/lib/store-partner/useStores";
 import { SkeletonBlock } from "@/components/ui/PageSkeletons";
@@ -26,12 +28,14 @@ function emptyOfferForm() {
     title: "",
     description: "",
     badgeText: "",
-    discountType: "PERCENT",
+    offerType: "percentage",
     discountValue: "",
-    minBillAmount: "",
-    status: "ACTIVE",
+    maximumDiscount: "",
+    minSpend: "",
+    isActive: true,
     startsAt: "",
     endsAt: "",
+    metadata: {},
   };
 }
 
@@ -73,6 +77,26 @@ function formatDateInput(value) {
   return parsed.toISOString().slice(0, 10);
 }
 
+function toStartOfDayIsoOrNull(value) {
+  if (!value) return null;
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+}
+
+function toEndOfDayIsoOrNull(value) {
+  if (!value) return null;
+  const parsed = new Date(`${value}T23:59:59.999`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+}
+
+function toNumberOrNull(value) {
+  if (value === "" || value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function hasOfferContent(raw) {
   if (!raw || typeof raw !== "object") return false;
   return Boolean(
@@ -86,9 +110,11 @@ function hasOfferContent(raw) {
       raw.badge_text ||
       raw.badge ||
       raw.discount_value ||
+      raw.maximum_discount ||
       raw.value ||
       raw.amount ||
-      raw.discountAmount
+      raw.discountAmount ||
+      raw.metadata
   );
 }
 
@@ -118,32 +144,27 @@ function normalizeOffer(raw, index) {
 
   const title = raw?.title || raw?.name || raw?.offer_name || raw?.label || `Offer ${index + 1}`;
   const discountValue = raw?.discount_value ?? raw?.value ?? raw?.amount ?? raw?.discountAmount ?? null;
-  const discountType = raw?.discount_type || raw?.type || raw?.offer_type || raw?.value_type || "PERCENT";
+  const maximumDiscount = raw?.maximum_discount ?? raw?.max_discount_amount ?? null;
+  const offerType = String(raw?.offer_type || raw?.discount_type || raw?.type || raw?.value_type || "percentage").toLowerCase();
   const startsAt = raw?.starts_at || raw?.start_date || raw?.startDate || null;
   const endsAt = raw?.ends_at || raw?.end_date || raw?.endDate || raw?.expires_at || null;
-  const explicitStatus = String(raw?.status || "").trim().toUpperCase();
-  const activeFlag =
-    isTruthyFlag(raw?.is_active) ||
-    isTruthyFlag(raw?.active) ||
-    isTruthyFlag(raw?.enabled) ||
-    isTruthyFlag(raw?.isEnabled);
-  const isActive =
-    activeFlag ||
-    ["ACTIVE", "LIVE", "PUBLISHED"].includes(explicitStatus);
-  const status = isActive ? "ACTIVE" : explicitStatus || "PAUSED";
+  const metadata = raw?.metadata && typeof raw.metadata === "object" ? raw.metadata : {};
+  const isActive = isTruthyFlag(raw?.is_active) || isTruthyFlag(raw?.active) || isTruthyFlag(raw?.enabled) || isTruthyFlag(raw?.isEnabled);
 
   return {
     id: raw?.id || raw?.offer_id || `${title}-${index}`,
     title,
     description: raw?.description || raw?.subtitle || raw?.details || "",
     badgeText: raw?.badge_text || raw?.badge || "",
-    minBillAmount: raw?.min_bill_amount ?? raw?.minimum_bill ?? raw?.minAmount ?? null,
+    offerType,
     discountValue,
-    discountType,
+    maximumDiscount,
+    minSpend: raw?.min_spend ?? raw?.min_bill_amount ?? raw?.minimum_bill ?? raw?.minAmount ?? null,
     startsAt,
     endsAt,
-    status,
     isActive,
+    status: isActive ? "ACTIVE" : "INACTIVE",
+    metadata,
   };
 }
 
@@ -152,13 +173,33 @@ function formFromOffer(offer) {
     title: offer?.title || "",
     description: offer?.description || "",
     badgeText: offer?.badgeText || "",
-    discountType: String(offer?.discountType || "PERCENT").toUpperCase(),
+    offerType: String(offer?.offerType || "percentage").toLowerCase(),
     discountValue: offer?.discountValue ?? "",
-    minBillAmount: offer?.minBillAmount ?? "",
-    status: String(offer?.status || "ACTIVE").toUpperCase(),
+    maximumDiscount: offer?.maximumDiscount ?? "",
+    minSpend: offer?.minSpend ?? "",
+    isActive: Boolean(offer?.isActive),
     startsAt: formatDateInput(offer?.startsAt),
     endsAt: formatDateInput(offer?.endsAt),
+    metadata: offer?.metadata && typeof offer.metadata === "object" && !Array.isArray(offer.metadata) ? offer.metadata : {},
   };
+}
+
+function offerTypeLabel(value) {
+  const normalized = String(value || "").toLowerCase();
+  if (normalized === "percentage") return "Percentage";
+  if (normalized === "flat") return "Flat";
+  return normalized ? toTitleCase(normalized) : "Offer";
+}
+
+function formatOfferValueLabel(offer) {
+  const type = String(offer.offerType || "").toLowerCase();
+  const numericValue = offer.discountValue === null || offer.discountValue === "" ? null : Number(offer.discountValue);
+
+  if (numericValue === null || Number.isNaN(numericValue)) return "Offer details available";
+
+  if (type === "percentage") return `${formatAmountCompact(numericValue)}% off`;
+  if (type === "flat") return `MUR ${formatAmountCompact(numericValue)} off`;
+  return `MUR ${formatAmountCompact(numericValue)} off`;
 }
 
 function StatCard({ icon: Icon, label, value, hint }) {
@@ -216,14 +257,9 @@ function OffersListSkeleton() {
   );
 }
 
-function OfferCard({ offer, onEdit }) {
+function OfferCard({ offer, onEdit, onDelete }) {
   const tone = statusTone(offer.status);
-  const valueLabel =
-    offer.discountValue === null || offer.discountValue === ""
-      ? "Offer details available"
-      : String(offer.discountType || "").toUpperCase().includes("PERCENT")
-      ? `MUR ${formatAmountCompact(offer.discountValue)}% OFF`
-      : `MUR ${formatAmountCompact(offer.discountValue)} FLAT OFF`;
+  const metadataKeys = Object.keys(offer.metadata || {}).slice(0, 3);
 
   return (
     <div
@@ -241,6 +277,9 @@ function OfferCard({ offer, onEdit }) {
             <span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold" style={{ background: tone.bg, color: tone.color }}>
               {tone.label}
             </span>
+            <span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold" style={{ background: THEME_ACCENT_SOFT, color: THEME_ACCENT }}>
+              {offerTypeLabel(offer.offerType)}
+            </span>
             {offer.badgeText ? (
               <span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold" style={{ background: THEME_ACCENT_SOFT, color: THEME_ACCENT }}>
                 {offer.badgeText}
@@ -252,15 +291,21 @@ function OfferCard({ offer, onEdit }) {
 
         <div className="inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold" style={{ background: THEME_ACCENT_SOFT, color: THEME_ACCENT }}>
           <TicketPercent className="h-4 w-4" />
-          {valueLabel}
+          {formatOfferValueLabel(offer)}
         </div>
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <div className="rounded-2xl bg-slate-50 px-4 py-3">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Minimum bill</div>
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Minimum spend</div>
           <div className="mt-1 text-sm font-semibold text-slate-900">
-            {offer.minBillAmount !== null && offer.minBillAmount !== "" ? formatCurrency(offer.minBillAmount) : "No minimum"}
+            {offer.minSpend !== null && offer.minSpend !== "" ? formatCurrency(offer.minSpend) : "No minimum"}
+          </div>
+        </div>
+        <div className="rounded-2xl bg-slate-50 px-4 py-3">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Maximum discount</div>
+          <div className="mt-1 text-sm font-semibold text-slate-900">
+            {offer.maximumDiscount !== null && offer.maximumDiscount !== "" ? formatCurrency(offer.maximumDiscount) : "No cap"}
           </div>
         </div>
         <div className="rounded-2xl bg-slate-50 px-4 py-3">
@@ -269,18 +314,76 @@ function OfferCard({ offer, onEdit }) {
             {formatDate(offer.startsAt)} to {formatDate(offer.endsAt)}
           </div>
         </div>
+        <div className="rounded-2xl bg-slate-50 px-4 py-3">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Metadata</div>
+          <div className="mt-1 text-sm font-semibold text-slate-900">
+            {metadataKeys.length ? metadataKeys.join(", ") : "No metadata set"}
+          </div>
+        </div>
       </div>
 
       <div className="mt-4 flex justify-end">
-        <button
-          type="button"
-          onClick={() => onEdit(offer)}
-          className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
-          style={{ background: THEME_ACCENT_SOFT, color: THEME_ACCENT }}
-        >
-          <Pencil className="h-4 w-4" />
-          Edit offer
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onEdit(offer)}
+            className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
+            style={{ background: THEME_ACCENT_SOFT, color: THEME_ACCENT }}
+          >
+            <Pencil className="h-4 w-4" />
+            Edit offer
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(offer)}
+            className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold text-red-600"
+            style={{ borderColor: "rgba(220, 38, 38, 0.18)", background: "rgba(220, 38, 38, 0.06)" }}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DeleteConfirmModal({ open, offerTitle, deleting, onCancel, onConfirm }) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+      <div className="w-full max-w-md rounded-[28px] border bg-white shadow-2xl" style={{ borderColor: THEME_BORDER }}>
+        <div className="border-b px-6 py-5" style={{ borderColor: THEME_BORDER }}>
+          <h2 className="text-lg font-semibold text-slate-900">Delete offer</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            {offerTitle ? `This will permanently remove “${offerTitle}”.` : "This will permanently remove the selected offer."}
+          </p>
+        </div>
+
+        <div className="px-6 py-5 text-sm text-slate-600">
+          Deleted offers cannot be recovered.
+        </div>
+
+        <div className="flex items-center justify-end gap-3 border-t px-6 py-5" style={{ borderColor: THEME_BORDER }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-full border px-5 py-2.5 text-sm font-semibold text-slate-700"
+            style={{ borderColor: THEME_BORDER }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={deleting}
+            className="inline-flex items-center gap-2 rounded-full bg-red-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+          >
+            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+            Delete offer
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -308,7 +411,7 @@ function OfferEditor({ open, mode, form, saving, onChange, onClose, onSave }) {
       <div className="w-full max-w-3xl rounded-[32px] border bg-white shadow-2xl" style={{ borderColor: THEME_BORDER }}>
         <div className="flex items-center justify-between border-b px-6 py-5" style={{ borderColor: THEME_BORDER }}>
           <div>
-            <h2 className="text-xl font-semibold text-slate-900">{mode === "edit" ? "Edit offer" : "Add offer"}</h2>
+            <h2 className="text-xl font-semibold text-slate-900">{mode === "edit" ? "Edit offer" : "Create offer"}</h2>
             <p className="mt-1 text-sm text-slate-500">This saves directly into the selected store&apos;s offers data.</p>
           </div>
           <button type="button" onClick={onClose} className="inline-flex h-10 w-10 items-center justify-center rounded-full border text-slate-600" style={{ borderColor: THEME_BORDER }}>
@@ -330,27 +433,36 @@ function OfferEditor({ open, mode, form, saving, onChange, onClose, onSave }) {
             <input value={form.badgeText} onChange={(e) => onChange("badgeText", e.target.value)} className="h-11 w-full rounded-2xl border px-4 outline-none" style={{ borderColor: THEME_BORDER }} />
           </label>
           <label className="block">
-            <div className="mb-2 text-sm font-medium text-slate-700">Status</div>
-            <select value={form.status} onChange={(e) => onChange("status", e.target.value)} className="h-11 w-full rounded-2xl border px-4 outline-none" style={{ borderColor: THEME_BORDER }}>
-              <option value="ACTIVE">Active</option>
-              <option value="PAUSED">Paused</option>
-              <option value="EXPIRED">Expired</option>
+            <div className="mb-2 text-sm font-medium text-slate-700">Offer type</div>
+            <select value={form.offerType} onChange={(e) => onChange("offerType", e.target.value)} className="h-11 w-full rounded-2xl border px-4 outline-none" style={{ borderColor: THEME_BORDER }}>
+              <option value="flat">Flat - Fixed amount discount (MUR)</option>
+              <option value="percentage">Percentage - % discount off bill</option>
             </select>
           </label>
           <label className="block">
-            <div className="mb-2 text-sm font-medium text-slate-700">Discount type</div>
-            <select value={form.discountType} onChange={(e) => onChange("discountType", e.target.value)} className="h-11 w-full rounded-2xl border px-4 outline-none" style={{ borderColor: THEME_BORDER }}>
-              <option value="PERCENT">Percent</option>
-              <option value="FLAT">Flat amount</option>
-            </select>
+            <div className="mb-2 text-sm font-medium text-slate-700">
+              {form.offerType === "percentage" ? "Discount value (%)" : "Discount value (MUR)"}
+            </div>
+            <input value={form.discountValue} onChange={(e) => onChange("discountValue", e.target.value)} type="number" min="0" step="0.01" className="h-11 w-full rounded-2xl border px-4 outline-none" style={{ borderColor: THEME_BORDER }} />
+            <div className="mt-2 text-xs text-slate-500">
+              {form.offerType === "percentage" && "Enter value between 0-100"}
+              {form.offerType === "flat" && "Enter fixed amount in MUR"}
+            </div>
           </label>
           <label className="block">
-            <div className="mb-2 text-sm font-medium text-slate-700">Maximum discount</div>
-            <input value={form.discountValue} onChange={(e) => onChange("discountValue", e.target.value)} type="number" min="0" className="h-11 w-full rounded-2xl border px-4 outline-none" style={{ borderColor: THEME_BORDER }} />
+            <div className="mb-2 text-sm font-medium text-slate-700">Maximum discount (MUR)</div>
+            <input value={form.maximumDiscount} onChange={(e) => onChange("maximumDiscount", e.target.value)} type="number" min="0" step="0.01" className="h-11 w-full rounded-2xl border px-4 outline-none" style={{ borderColor: THEME_BORDER }} />
+            <div className="mt-2 text-xs text-slate-500">
+              {form.offerType === "percentage" && "Cap the maximum discount amount in MUR"}
+              {form.offerType === "flat" && "Optional cap on the flat discount"}
+            </div>
           </label>
           <label className="block">
-            <div className="mb-2 text-sm font-medium text-slate-700">Minimum bill amount</div>
-            <input value={form.minBillAmount} onChange={(e) => onChange("minBillAmount", e.target.value)} type="number" min="0" className="h-11 w-full rounded-2xl border px-4 outline-none" style={{ borderColor: THEME_BORDER }} />
+            <div className="mb-2 text-sm font-medium text-slate-700">Minimum spend (MUR)</div>
+            <input value={form.minSpend} onChange={(e) => onChange("minSpend", e.target.value)} type="number" min="0" step="0.01" className="h-11 w-full rounded-2xl border px-4 outline-none" style={{ borderColor: THEME_BORDER }} />
+            <div className="mt-2 text-xs text-slate-500">
+              Leave empty for no minimum requirement
+            </div>
           </label>
           <label className="block">
             <div className="mb-2 text-sm font-medium text-slate-700">Start date</div>
@@ -359,6 +471,13 @@ function OfferEditor({ open, mode, form, saving, onChange, onClose, onSave }) {
           <label className="block">
             <div className="mb-2 text-sm font-medium text-slate-700">End date</div>
             <input value={form.endsAt} onChange={(e) => onChange("endsAt", e.target.value)} type="date" className="h-11 w-full rounded-2xl border px-4 outline-none" style={{ borderColor: THEME_BORDER }} />
+          </label>
+          <label className="block">
+            <div className="mb-2 text-sm font-medium text-slate-700">Active</div>
+            <select value={form.isActive ? "true" : "false"} onChange={(e) => onChange("isActive", e.target.value === "true")} className="h-11 w-full rounded-2xl border px-4 outline-none" style={{ borderColor: THEME_BORDER }}>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
           </label>
         </div>
 
@@ -374,7 +493,7 @@ function OfferEditor({ open, mode, form, saving, onChange, onClose, onSave }) {
             style={{ background: THEME_ACCENT }}
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {mode === "edit" ? "Save changes" : "Add offer"}
+            {mode === "edit" ? "Save changes" : "Create offer"}
           </button>
         </div>
       </div>
@@ -383,7 +502,14 @@ function OfferEditor({ open, mode, form, saving, onChange, onClose, onSave }) {
 }
 
 export default function StorePartnerOffersRoute() {
-  const { loading: storesLoading, selectedStoreId, selectedStore } = useStores();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const preferredStoreId = searchParams.get("store_id") || null;
+  const isCreateRoute = pathname === "/store-partner/offers/create";
+  const { loading: storesLoading, selectedStoreId, selectedStore } = useStores(preferredStoreId);
+  const createRouteHref = selectedStoreId ? `/store-partner/offers/create?store_id=${selectedStoreId}` : "/store-partner/offers/create";
+  const offersListHref = selectedStoreId ? `/store-partner/offers?store_id=${selectedStoreId}` : "/store-partner/offers";
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -394,6 +520,11 @@ export default function StorePartnerOffersRoute() {
   const [editorMode, setEditorMode] = useState("create");
   const [editorOfferId, setEditorOfferId] = useState("");
   const [editorForm, setEditorForm] = useState(emptyOfferForm());
+  const autoOpenCreateRef = useRef(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteOfferId, setDeleteOfferId] = useState("");
+  const [deleteOfferTitle, setDeleteOfferTitle] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -421,7 +552,7 @@ export default function StorePartnerOffersRoute() {
             .maybeSingle(),
           supabaseBrowser
             .from("store_offers")
-            .select("id,title,description,badge_text,offer_type,discount_value,min_spend,start_at,end_at,is_active,metadata,updated_at")
+            .select("id,title,description,badge_text,offer_type,discount_value,maximum_discount,min_spend,start_at,end_at,is_active,metadata,updated_at")
             .eq("store_id", selectedStoreId)
             .order("created_at", { ascending: false }),
         ]);
@@ -459,11 +590,13 @@ export default function StorePartnerOffersRoute() {
           ...row,
           name: row.title,
           badge: row.badge_text,
-          discount_type: row.offer_type === "percentage" ? "PERCENT" : "FLAT",
-          min_bill_amount: row.min_spend,
+          offer_type: row.offer_type,
+          maximum_discount: row.maximum_discount,
+          min_spend: row.min_spend,
           starts_at: row.start_at,
           ends_at: row.end_at,
-          status: row.is_active ? "ACTIVE" : "PAUSED",
+          is_active: row.is_active,
+          metadata: row.metadata,
         },
         index
       )
@@ -487,7 +620,7 @@ export default function StorePartnerOffersRoute() {
           .maybeSingle(),
         supabaseBrowser
           .from("store_offers")
-          .select("id,title,description,badge_text,offer_type,discount_value,min_spend,start_at,end_at,is_active,metadata,updated_at")
+            .select("id,title,description,badge_text,offer_type,discount_value,maximum_discount,min_spend,start_at,end_at,is_active,metadata,updated_at")
           .eq("store_id", selectedStoreId)
           .order("created_at", { ascending: false }),
       ]);
@@ -503,6 +636,11 @@ export default function StorePartnerOffersRoute() {
   };
 
   const openCreate = () => {
+    if (!isCreateRoute) {
+      router.push(createRouteHref);
+      return;
+    }
+
     setEditorMode("create");
     setEditorOfferId("");
     setEditorForm(emptyOfferForm());
@@ -516,9 +654,33 @@ export default function StorePartnerOffersRoute() {
     setEditorOpen(true);
   };
 
+  const openDelete = (offer) => {
+    setDeleteOfferId(String(offer.id));
+    setDeleteOfferTitle(String(offer.title || ""));
+    setDeleteOpen(true);
+  };
+
+  const closeDelete = () => {
+    if (deleting) return;
+    setDeleteOpen(false);
+    setDeleteOfferId("");
+    setDeleteOfferTitle("");
+  };
+
   const handleEditorChange = (key, value) => {
     setEditorForm((prev) => ({ ...prev, [key]: value }));
   };
+
+  useEffect(() => {
+    if (!isCreateRoute || autoOpenCreateRef.current === true) return;
+    if (!selectedStoreId) return;
+
+    autoOpenCreateRef.current = true;
+    setEditorMode("create");
+    setEditorOfferId("");
+    setEditorForm(emptyOfferForm());
+    setEditorOpen(true);
+  }, [isCreateRoute, selectedStoreId]);
 
   const handleSaveOffer = async () => {
     if (!selectedStoreId) return;
@@ -536,13 +698,14 @@ export default function StorePartnerOffersRoute() {
         title: String(editorForm.title || "").trim(),
         description: String(editorForm.description || "").trim() || null,
         badge_text: String(editorForm.badgeText || "").trim() || null,
-        offer_type: String(editorForm.discountType || "PERCENT").toUpperCase() === "PERCENT" ? "percentage" : "flat",
-        discount_value: editorForm.discountValue === "" ? null : Number(editorForm.discountValue),
-        min_spend: editorForm.minBillAmount === "" ? null : Number(editorForm.minBillAmount),
-        start_at: editorForm.startsAt || null,
-        end_at: editorForm.endsAt || null,
-        is_active: String(editorForm.status || "ACTIVE").toUpperCase() === "ACTIVE",
-        metadata: {},
+        offer_type: String(editorForm.offerType || "percentage").trim().toLowerCase(),
+        discount_value: toNumberOrNull(editorForm.discountValue),
+        maximum_discount: toNumberOrNull(editorForm.maximumDiscount),
+        min_spend: toNumberOrNull(editorForm.minSpend),
+        start_at: toStartOfDayIsoOrNull(editorForm.startsAt),
+        end_at: toEndOfDayIsoOrNull(editorForm.endsAt),
+        is_active: Boolean(editorForm.isActive),
+        metadata: editorForm.metadata && typeof editorForm.metadata === "object" && !Array.isArray(editorForm.metadata) ? editorForm.metadata : {},
       };
 
       const query =
@@ -554,12 +717,54 @@ export default function StorePartnerOffersRoute() {
       if (updateError) throw updateError;
 
       await handleRefresh();
-      setEditorOpen(false);
+      if (isCreateRoute) {
+        setEditorOpen(false);
+        router.replace(offersListHref);
+      } else {
+        setEditorOpen(false);
+      }
     } catch (e) {
       setError(e?.message || "Failed to save offer.");
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleDeleteOffer = async () => {
+    if (!selectedStoreId || !deleteOfferId) return;
+
+    try {
+      setDeleting(true);
+      setError("");
+
+      const { error: deleteError } = await supabaseBrowser
+        .from("store_offers")
+        .delete()
+        .eq("id", deleteOfferId)
+        .eq("store_id", selectedStoreId);
+
+      if (deleteError) throw deleteError;
+
+      if (String(editorOfferId) === String(deleteOfferId)) {
+        setEditorOpen(false);
+      }
+
+      closeDelete();
+      await handleRefresh();
+    } catch (e) {
+      setError(e?.message || "Failed to delete offer.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const closeEditor = () => {
+    if (isCreateRoute) {
+      setEditorOpen(false);
+      router.replace(offersListHref);
+      return;
+    }
+    setEditorOpen(false);
   };
 
   return (
@@ -607,7 +812,7 @@ export default function StorePartnerOffersRoute() {
                 style={{ borderColor: THEME_BORDER, color: THEME_ACCENT, background: "#fff" }}
               >
                 <Plus className="h-4 w-4" />
-                Add offer
+                Create offer
               </button>
               <button
                 type="button"
@@ -637,7 +842,7 @@ export default function StorePartnerOffersRoute() {
           ) : offers.length ? (
             <div className="space-y-4">
               {offers.map((offer) => (
-                <OfferCard key={offer.id} offer={offer} onEdit={openEdit} />
+                <OfferCard key={offer.id} offer={offer} onEdit={openEdit} onDelete={openDelete} />
               ))}
             </div>
           ) : (
@@ -647,13 +852,21 @@ export default function StorePartnerOffersRoute() {
       </div>
 
       <OfferEditor
-        open={editorOpen}
+        open={editorOpen || isCreateRoute}
         mode={editorMode}
         form={editorForm}
         saving={saving}
         onChange={handleEditorChange}
-        onClose={() => setEditorOpen(false)}
+        onClose={closeEditor}
         onSave={handleSaveOffer}
+      />
+
+      <DeleteConfirmModal
+        open={deleteOpen}
+        offerTitle={deleteOfferTitle}
+        deleting={deleting}
+        onCancel={closeDelete}
+        onConfirm={handleDeleteOffer}
       />
     </div>
   );
