@@ -3,7 +3,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
-import StoreServicesManager from "@/components/store-dashboard/StoreServicesManager";
 import {
   ArrowLeft,
   Store,
@@ -932,7 +931,6 @@ export default function StoreDetailsPage() {
                   </CardShell>
                 </div>
 
-                <StoreServicesManager storeId={storeId} storeType={store.store_type} />
               </div>
             )}
           </>

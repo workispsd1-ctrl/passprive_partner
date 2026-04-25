@@ -128,12 +128,29 @@ export default function StoreServicesManager({ storeId, storeType }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [form, setForm] = useState(emptyForm());
+  const [categoryOptions, setCategoryOptions] = useState([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
 
   const canSubmit = useMemo(() => {
     const title = String(form.title || "").trim();
     const price = Number(form.base_price);
     return title.length > 0 && Number.isFinite(price) && price >= 0;
   }, [form]);
+
+  const resolvedCategoryOptions = useMemo(() => {
+    const seen = new Set();
+    const options = [];
+    for (const raw of categoryOptions) {
+      const title = String(raw || "").trim();
+      const key = title.toLowerCase();
+      if (!title || seen.has(key)) continue;
+      seen.add(key);
+      options.push(title);
+    }
+    const current = String(form.category || "").trim();
+    if (current && !seen.has(current.toLowerCase())) options.push(current);
+    return options;
+  }, [categoryOptions, form.category]);
 
   const loadServices = async () => {
     if (!storeId || !isServiceStore) return;
@@ -159,6 +176,36 @@ export default function StoreServicesManager({ storeId, storeType }) {
     if (isServiceStore && storeId) loadServices();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId, isServiceStore]);
+
+  useEffect(() => {
+    if (!isServiceStore) {
+      setCategoryOptions([]);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingCategories(true);
+        const { data, error: queryError } = await supabaseBrowser
+          .from("service_categories")
+          .select("title")
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true })
+          .order("title", { ascending: true });
+        if (queryError) throw queryError;
+        if (!cancelled) setCategoryOptions((data || []).map((row) => row?.title).filter(Boolean));
+      } catch {
+        if (!cancelled) setCategoryOptions([]);
+      } finally {
+        if (!cancelled) setLoadingCategories(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isServiceStore]);
 
   if (!isServiceStore) return null;
 
@@ -392,21 +439,32 @@ export default function StoreServicesManager({ storeId, storeType }) {
             </Field>
 
             <Field label="Category">
-              <input
+              <select
                 className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-4 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-[rgba(119,31,168,0.14)]"
                 value={form.category}
                 onChange={(e) => setField("category", e.target.value)}
-                placeholder="Hair"
-              />
+                disabled={loadingCategories}
+              >
+                <option value="">{loadingCategories ? "Loading categories..." : "Select category"}</option>
+                {resolvedCategoryOptions.map((title) => (
+                  <option key={title} value={title}>
+                    {title}
+                  </option>
+                ))}
+              </select>
             </Field>
 
             <Field label="Service Type">
-              <input
+              <select
                 className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-4 text-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-[rgba(119,31,168,0.14)]"
                 value={form.service_type}
                 onChange={(e) => setField("service_type", e.target.value)}
-                placeholder="Men"
-              />
+              >
+                <option value="">Select service type</option>
+                <option value="Men">Men</option>
+                <option value="Women">Women</option>
+                <option value="Unisex">Unisex</option>
+              </select>
             </Field>
 
             <Field label="Sort Order">
