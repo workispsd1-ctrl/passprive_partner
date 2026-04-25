@@ -363,15 +363,11 @@ export default function StoreServicesManager({ storeId, storeType }) {
   };
 
   const saveSelectedCategories = async () => {
-    if (!storeId || !checkedCategoryIds.length || savingCategories) return;
+    if (!storeId || savingCategories) return;
 
     const selectedCategories = checkedCategoryIds
       .map((id) => categories.find((row) => String(row.id) === String(id)))
       .filter(Boolean);
-    if (!selectedCategories.length) {
-      setError("Select at least one valid category.");
-      return;
-    }
 
     try {
       setSavingCategories(true);
@@ -380,7 +376,56 @@ export default function StoreServicesManager({ storeId, storeType }) {
 
       let snapshot = [...storeServices];
       let createdCount = 0;
+      let removedCount = 0;
       let nextActiveServiceId = activeServiceId;
+      const selectedCategoryIdSet = new Set(selectedCategories.map((category) => String(category.id)));
+
+      const removableServices = snapshot.filter((service) => {
+        const linkedCategory = categoryFromService(service, categories);
+        if (!linkedCategory?.id) return false;
+        return !selectedCategoryIdSet.has(String(linkedCategory.id));
+      });
+
+      if (removableServices.length) {
+        const blockedRows = removableServices.filter((service) =>
+          serviceItems.some((item) => String(item.service_id || "") === String(service.id))
+        );
+        if (blockedRows.length) {
+          const blockedLabels = blockedRows
+            .map((service) => categoryFromService(service, categories)?.title || service.title || "Untitled category")
+            .slice(0, 3)
+            .join(", ");
+          throw new Error(
+            `Remove items from ${blockedLabels}${blockedRows.length > 3 ? ", ..." : ""} before deselecting.`
+          );
+        }
+
+        const removableIds = removableServices.map((service) => service.id).filter(Boolean);
+        if (removableIds.length) {
+          const { error: deleteError } = await supabaseBrowser
+            .from("store_services")
+            .delete()
+            .eq("store_id", storeId)
+            .in("id", removableIds);
+          if (deleteError) throw deleteError;
+        }
+
+        removedCount = removableServices.length;
+        snapshot = snapshot.filter((service) => !removableIds.includes(service.id));
+
+        if (nextActiveServiceId && removableIds.some((id) => String(id) === String(nextActiveServiceId))) {
+          nextActiveServiceId = "";
+        }
+      }
+
+      if (!selectedCategories.length) {
+        setStoreServices(snapshot);
+        setActiveServiceId("");
+        setShowCategoryConfigurator(true);
+        resetItemForm("");
+        setSuccess(removedCount > 0 ? "Categories updated." : "No categories selected.");
+        return;
+      }
 
       for (const category of selectedCategories) {
         const existed = Boolean(findServiceForCategory(snapshot, category)?.id);
@@ -394,13 +439,17 @@ export default function StoreServicesManager({ storeId, storeType }) {
         }
       }
 
+      const finalActiveServiceId = nextActiveServiceId || (snapshot[0]?.id ? String(snapshot[0].id) : "");
+
       setStoreServices(snapshot);
-      if (nextActiveServiceId) setActiveServiceId(nextActiveServiceId);
+      setActiveServiceId(finalActiveServiceId);
       setShowCategoryConfigurator(false);
-      resetItemForm(nextActiveServiceId);
+      resetItemForm(finalActiveServiceId);
 
       if (createdCount > 0) {
         setSuccess(`${createdCount} ${createdCount > 1 ? "categories" : "category"} saved.`);
+      } else if (removedCount > 0) {
+        setSuccess(`${removedCount} ${removedCount > 1 ? "categories" : "category"} removed.`);
       } else {
         setSuccess("Categories updated.");
       }
@@ -647,7 +696,7 @@ export default function StoreServicesManager({ storeId, storeType }) {
                       background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
                     }}
                     onClick={saveSelectedCategories}
-                    disabled={!checkedCategoryIds.length || savingCategories}
+                    disabled={savingCategories}
                   >
                     {savingCategories ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                     Save Categories
