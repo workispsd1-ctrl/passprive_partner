@@ -801,28 +801,9 @@ export default function RestaurantPartnerPayoutsPage() {
             </>
           ) : (
             <>
-              <StatMini title="Business Made" value={formatMoney(settlement.businessMade)} helper="Total valid order value" icon={Wallet} tone="indigo" />
-              <StatMini title="Cash Received" value={formatMoney(settlement.cashReceived)} helper="Collected directly by restaurant" icon={CheckCircle2} tone="emerald" />
-              <StatMini title="Payable To Partner" value={formatMoney(settlement.partnerPayable)} helper="Online collections minus commission" icon={Loader2} tone="orange" />
-              <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-xs text-gray-500">To PassPrive</div>
-                    <div className="mt-1">
-                      <Amount
-                        value={settlement.toPassPrive}
-                        className="inline-flex items-baseline gap-1"
-                        currencyClassName="text-[10px] font-semibold uppercase tracking-wide text-gray-500"
-                        valueClassName="text-2xl font-bold text-gray-900"
-                      />
-                    </div>
-                    <div className="text-[11px] text-gray-500 mt-1">Pending platform recovery from partner</div>
-                  </div>
-                  <div className="h-11 w-11 rounded-2xl border flex items-center justify-center bg-slate-50 text-slate-700 border-slate-200">
-                    <CircleDollarSign className="h-5 w-5" />
-                  </div>
-                </div>
-              </div>
+              <StatMini title="Business Made" value={`MUR ${formatMoney(settlement.businessMade)}`} helper="Total valid order value" icon={Wallet} tone="indigo" />
+              <StatMini title="Online Collected" value={`MUR ${formatMoney(settlement.onlineCollected)}`} helper="Collected via online sessions" icon={CheckCircle2} tone="emerald" />
+              <StatMini title="Payable To Partner" value={`MUR ${formatMoney(settlement.partnerPayable)}`} helper="Online collections minus commission" icon={Loader2} tone="orange" />
             </>
           )}
         </div>
