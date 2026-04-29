@@ -56,7 +56,7 @@ const PREMIUM_PLANS = [
     price: PREMIUM_PRICING.unlockAllOffer,
     originalPrice: PREMIUM_PRICING.unlockAllOriginal,
     unlocks: [OFFER_KIND.TIME_SLOT, OFFER_KIND.VISIT, OFFER_KIND.DISH],
-    description: "Unlock all premium features at Rs. 2,000/month (80% off from Rs. 10,000).",
+    description: "Unlock all premium features at MUR 2,000/month (80% off from MUR 10,000).",
     features: [
       "Time Slot Offers",
       "Repeat Rewards",
@@ -94,7 +94,7 @@ const PREMIUM_PLANS = [
 ];
 
 function formatInr(value) {
-  return `Rs. ${Number(value).toLocaleString("en-IN")}`;
+  return `MUR ${Number(value).toLocaleString("en-IN")}`;
 }
 
 function uid() {
@@ -394,7 +394,7 @@ function formatVisitRewards(offer) {
     .map((t) => {
       if (t.rewardType === "FREE_ITEM") return `V${t.visitCount}: ${t.rewardLabel || "Free item"}`;
       if (t.rewardType === "PERCENT") return `V${t.visitCount}: ${t.rewardValue || 0}% OFF`;
-      return `V${t.visitCount}: Rs ${t.rewardValue || 0} OFF`;
+      return `V${t.visitCount}: MUR ${t.rewardValue || 0} OFF`;
     })
     .join(" • ");
 }
@@ -402,10 +402,10 @@ function formatVisitRewards(offer) {
 function formatOfferLine(o) {
   if (o.offerKind === OFFER_KIND.VISIT) return formatVisitRewards(o);
 
-  const amt = o.discountType === "PERCENT" ? `${o.discountValue || 0}% OFF` : `Rs ${o.discountValue || 0} OFF`;
+  const amt = o.discountType === "PERCENT" ? `${o.discountValue || 0}% OFF` : `MUR ${o.discountValue || 0} OFF`;
   const datePart = o.startDate || o.endDate ? `Valid ${o.startDate || "-"} -> ${o.endDate || "-"}` : "No date range";
   const minBill = Number(o?.conditions?.minBillAmount);
-  const minBillPart = Number.isFinite(minBill) && minBill > 0 ? `Min bill Rs ${minBill}` : "";
+  const minBillPart = Number.isFinite(minBill) && minBill > 0 ? `Min bill MUR ${minBill}` : "";
 
   if (o.offerKind === OFFER_KIND.TIME_SLOT) {
     const slotPart = o.slotStart && o.slotEnd ? `${o.slotStart} - ${o.slotEnd}` : "No time slot";
@@ -1345,7 +1345,7 @@ export default function OffersPage() {
                     </div>
 
                     <div>
-                      <p className="text-xs text-slate-600 mb-2">{formOffer.discountType === "PERCENT" ? "% OFF" : "Rs OFF"}</p>
+                      <p className="text-xs text-slate-600 mb-2">{formOffer.discountType === "PERCENT" ? "% OFF" : "MUR OFF"}</p>
                       <input
                         type="text"
                         inputMode="numeric"
@@ -1546,7 +1546,7 @@ export default function OffersPage() {
                             ) : (
                               <>
                                 <p className="text-[11px] text-slate-600 mb-1">
-                                  {tier.rewardType === "PERCENT" ? "Percent" : "Amount (Rs)"}
+                                  {tier.rewardType === "PERCENT" ? "Percent" : "Amount (MUR)"}
                                 </p>
                                 <input
                                   type="text"

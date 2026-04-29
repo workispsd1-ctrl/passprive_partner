@@ -455,18 +455,18 @@ function PublicRestaurantMenuContent() {
             {[restaurant?.area, restaurant?.city].filter(Boolean).join(", ")}
           </p>
           <p className="mt-2 text-xs text-slate-500">Tap + to add dishes to your cart.</p>
-          {orderSuccess ? <p className="mt-2 text-sm font-medium text-emerald-700">{orderSuccess}</p> : null}
         </div>
 
         {showPaymentResult ? (
-          <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-            <div className="text-sm font-semibold text-emerald-800">
+          <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sticky top-2 z-30 sm:static sm:z-auto">
+            <div className="text-sm sm:text-base font-semibold text-emerald-800">
               {paymentStatus === "FINALIZED" || paymentStatus === "SUCCESS"
                 ? "Payment successful. Your order is placed."
                 : "We are verifying your payment."}
             </div>
-            <div className="mt-1 text-xs text-emerald-900">
-              Tracking ID: {paymentTrackingId || "—"}{paymentBookingId ? ` • Booking ID: ${paymentBookingId}` : ""}
+            <div className="mt-2 text-xs text-emerald-900 space-y-1">
+              <div>Tracking ID: {paymentTrackingId || "—"}</div>
+              <div>Booking ID: {paymentBookingId || "—"}</div>
             </div>
             {paymentFinalizeError ? <div className="mt-2 text-xs text-rose-700">{paymentFinalizeError}</div> : null}
             <div className="mt-3 flex items-center gap-2">
@@ -480,13 +480,6 @@ function PublicRestaurantMenuContent() {
                   {isFinalizing ? "Verifying..." : "Check Payment Status"}
                 </button>
               ) : null}
-              <button
-                type="button"
-                onClick={() => setShowPaymentResult(false)}
-                className="rounded-lg border border-slate-300 bg-white text-slate-700 px-3 py-2 text-xs font-semibold"
-              >
-                Order More
-              </button>
             </div>
           </div>
         ) : null}
