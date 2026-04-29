@@ -67,7 +67,7 @@ function TransactionsSkeleton() {
 }
 
 function formatMoney(v) {
-  return Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `MUR ${Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function formatDateTime(v) {
@@ -300,7 +300,6 @@ export default function RestaurantTransactionsPage() {
                         <td className="py-3 pr-4"><Amount value={t.total_amount} /></td>
                         <td className="py-3 pr-4">
                           <div className="text-gray-900 font-medium">{t.payment_method || "IVERI"}</div>
-                          <div className="text-xs text-gray-600 mt-1">{t.payment_status}</div>
                         </td>
                         <td className="py-3 pr-0 text-xs text-gray-600">{formatDateTime(t.created_at)}</td>
                       </tr>
