@@ -288,7 +288,7 @@ function PublicRestaurantMenuContent() {
       return;
     }
     if (!normalizedPhone || normalizedPhone.length !== 8) {
-      setOrderError("Enter a valid 8-digit phone number.");
+      setOrderError("Enter your phone number.");
       return;
     }
     if (Math.abs(recomputedSubtotal - roundedSubtotal) > 0.01) {
