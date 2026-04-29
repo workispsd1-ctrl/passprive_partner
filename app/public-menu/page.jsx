@@ -741,7 +741,7 @@ function PublicRestaurantMenuContent() {
                       value={customerPhone}
                       onChange={(e) => setCustomerPhone(onlyDigits(e.target.value))}
                       className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none bg-white"
-                      placeholder="8-digit phone number"
+                      placeholder="Your phone number"
                     />
                   </div>
                   <div>
