@@ -9,7 +9,7 @@ const ROWS_PER_PAGE = 10;
 function money(n) {
   const num = Number(n);
   if (!Number.isFinite(num)) return "—";
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(num);
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "MUR", maximumFractionDigits: 2 }).format(num);
 }
 
 function fmtDateTime(v) {
@@ -295,15 +295,15 @@ export default function CashierDashboardPage() {
               ) : (
                 pagedRows.map((r) => {
                   const isBooking = activeView === "bookings";
-                  const isTable = activeView === "table_orders" || activeView === "bill_payments";
-                  const isPayment = activeView === "payment_sessions";
+                  const isTable = activeView === "table_orders";
+                  const isPayment = activeView === "payment_sessions" || activeView === "bill_payments";
                   const status = isBooking ? r.status : isTable ? r.booking_status : isPayment ? r.status : r.order_status;
                   const meta = isBooking
                     ? `${r.booking_date || "—"} ${String(r.booking_time || "").slice(0, 5) || ""}`
                     : isTable
                     ? `Table ${r.table_no || "—"}`
                     : isPayment
-                    ? `${r.payment_context || "PAYMENT"} • ${r.currency_code || "MUR"}`
+                    ? `${r.payment_context || "PAYMENT"} • ${r.currency_code || "MUR"}${r.table_no ? ` • Table ${r.table_no}` : ""}`
                     : `Code ${r.pickup_code || "—"}`;
                   const amount = isTable || activeView === "pickup_orders"
                     ? money(r.total_amount)
@@ -313,8 +313,8 @@ export default function CashierDashboardPage() {
                   return (
                     <tr key={r.id}>
                       <td className="px-3 py-2">#{String(r.id).slice(0, 8)}</td>
-                      <td className="px-3 py-2">{isPayment ? r.tracking_id || "—" : r.customer_name || "Guest"}</td>
-                      <td className="px-3 py-2">{isPayment ? r.merchant_trace || "—" : r.customer_phone || "—"}</td>
+                      <td className="px-3 py-2">{isPayment ? r.tracking_id || r.customer_name || "—" : r.customer_name || "Guest"}</td>
+                      <td className="px-3 py-2">{isPayment ? r.customer_phone || r.merchant_trace || "—" : r.customer_phone || "—"}</td>
                       <td className="px-3 py-2">{meta}</td>
                       <td className="px-3 py-2">
                         {isTable ? (

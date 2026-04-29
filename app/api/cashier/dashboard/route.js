@@ -44,6 +44,7 @@ export async function GET(request) {
 
     const paymentRows = paymentSessionsRes.data || [];
     const successStatuses = new Set(["VERIFIED_SUCCESS", "FINALIZED"]);
+    const failedStatuses = new Set(["VERIFIED_FAILED", "CANCELLED", "ERROR"]);
     const todayRevenue = paymentRows
       .filter((p) => successStatuses.has(String(p.status || "").toUpperCase()))
       .filter((p) => {
@@ -51,6 +52,23 @@ export async function GET(request) {
         return Number.isFinite(t) && t >= startOfDay.getTime() && t <= endOfDay.getTime();
       })
       .reduce((sum, p) => sum + Number(p.amount_major || 0), 0);
+
+    const billPaymentRows = paymentRows
+      .filter((p) => String(p.payment_context || "").toUpperCase() === "TABLE_ORDERS")
+      .map((p) => {
+        const snap = p?.gateway_payload?.order_snapshot || {};
+        return {
+          ...p,
+          customer_name: snap?.customer_name || "Guest",
+          customer_phone: snap?.customer_phone || "",
+          table_no: snap?.table_no || null,
+        };
+      });
+
+    const pendingBillPayments = billPaymentRows.filter((p) => {
+      const status = String(p.status || "").toUpperCase();
+      return !successStatuses.has(status) && !failedStatuses.has(status);
+    });
 
     return NextResponse.json({
       ok: true,
@@ -63,9 +81,7 @@ export async function GET(request) {
         bookings: bookingsRes.data || [],
         table_orders: tableOrdersRes.data || [],
         pickup_orders: pickupRes.data || [],
-        bill_payments: (tableOrdersRes.data || []).filter(
-          (o) => String(o.payment_status || "").toUpperCase() !== "PAID"
-        ),
+        bill_payments: pendingBillPayments,
         payment_sessions: paymentRows,
       },
       kpis: {
@@ -74,7 +90,7 @@ export async function GET(request) {
         table_orders_total: tableOrdersRes.count || 0,
         table_orders_active: (tableOrdersRes.data || []).filter((o) => !["SERVED", "CANCELLED"].includes(String(o.booking_status || "").toUpperCase())).length,
         pickup_active: (pickupRes.data || []).filter((o) => ["NEW", "ACCEPTED", "PREPARING", "READY_FOR_PICKUP"].includes(String(o.order_status || "").toUpperCase())).length,
-        bill_payments_pending: (tableOrdersRes.data || []).filter((o) => String(o.payment_status || "").toUpperCase() !== "PAID").length,
+        bill_payments_pending: pendingBillPayments.length,
         revenue_today: todayRevenue,
       },
     });
