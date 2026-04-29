@@ -22,6 +22,7 @@ import {
   Package,
   Star,
   ArrowUpRight,
+  UserRound,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchMyStores } from "@/lib/store-partner/stores";
@@ -42,6 +43,7 @@ const baseNav = [
   { label: "Top Items", href: "/store-partner/top-items", icon: Star },
   { label: "Inventory", href: "/store-partner/inventory", icon: Package, key: "inventory", premium: true },
   { label: "My Stores", href: "/store-partner/all-stores", icon: Store },
+  { label: "Staff", href: "/store-partner/staff", icon: UserRound },
   { label: "Offers", href: "/store-partner/offers", icon: Tag },
   { label: "Timings", href: "/store-partner/timings", icon: Clock3 },
   // { label: "Reviews", href: "/store-partner/reviews", icon: MessageSquareText },

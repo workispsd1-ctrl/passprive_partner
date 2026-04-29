@@ -1,9 +1,11 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchRestaurantPublicMenuData } from "@/lib/restaurantData";
+import { createPublicMenuSession, finalizePublicMenuPayment } from "@/lib/publicMenuPayments";
+import { toast } from "sonner";
 import {
   Leaf,
   CircleDot,
@@ -17,6 +19,8 @@ import {
 } from "lucide-react";
 
 const TAX_PERCENT = 15;
+const FINALIZE_RETRY_INTERVAL_MS = 3500;
+const MAX_FINALIZE_RETRIES = 5;
 
 function getMenuImageUrls(menuObj) {
   if (!menuObj || typeof menuObj !== "object") return [];
@@ -51,13 +55,46 @@ function money(n) {
   if (!Number.isFinite(num)) return "—";
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
-    currency: "INR",
+    currency: "MUR",
     maximumFractionDigits: 2,
   }).format(num);
 }
 
 function onlyDigits(v) {
   return String(v || "").replace(/\D/g, "");
+}
+
+function normalizeMauritiusPhone(raw) {
+  const digits = onlyDigits(raw);
+  if (!digits) return "";
+  if (digits.length === 11 && digits.startsWith("230")) return digits.slice(3);
+  return digits.slice(-8);
+}
+
+function isUuidLike(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
+}
+
+function submitGatewayFormToTarget(redirectUrl, method, fields, target) {
+  const form = document.createElement("form");
+  form.method = String(method || "POST").toUpperCase();
+  form.action = redirectUrl;
+  form.target = target;
+  Object.entries(fields || {}).forEach(([key, value]) => {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = key;
+    input.value = String(value ?? "");
+    form.appendChild(input);
+  });
+  document.body.appendChild(form);
+  form.submit();
+  document.body.removeChild(form);
+}
+
+function getStored(key) {
+  if (typeof window === "undefined") return "";
+  return String(sessionStorage.getItem(key) || "");
 }
 
 function MenuSkeleton() {
@@ -76,8 +113,12 @@ function MenuSkeleton() {
 }
 
 function PublicRestaurantMenuContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const restaurantId = String(searchParams.get("id") || "").trim();
+  const tableFromQr = String(searchParams.get("table") || "").trim();
+  const returnSessionId = String(searchParams.get("session_id") || "").trim();
+  const returnOutcome = String(searchParams.get("outcome") || "").trim().toLowerCase();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -86,9 +127,17 @@ function PublicRestaurantMenuContent() {
 
   const [cart, setCart] = useState({});
   const [openOrderModal, setOpenOrderModal] = useState(false);
-  const [placingOrder, setPlacingOrder] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderError, setOrderError] = useState("");
   const [orderSuccess, setOrderSuccess] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState("");
+  const [paymentTrackingId, setPaymentTrackingId] = useState("");
+  const [paymentBookingId, setPaymentBookingId] = useState("");
+  const [paymentFinalizeError, setPaymentFinalizeError] = useState("");
+  const [isFinalizing, setIsFinalizing] = useState(false);
+  const [finalizeAttempts, setFinalizeAttempts] = useState(0);
+  const [showPaymentResult, setShowPaymentResult] = useState(false);
+  const finalizeLockRef = useRef(false);
 
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -132,6 +181,19 @@ function PublicRestaurantMenuContent() {
     };
   }, [restaurantId]);
 
+  useEffect(() => {
+    if (!tableFromQr) return;
+    setTableNo(onlyDigits(tableFromQr));
+  }, [tableFromQr]);
+
+  useEffect(() => {
+    if (!returnSessionId && !returnOutcome) return;
+    setOpenOrderModal(false);
+    setShowPaymentResult(true);
+    setPaymentTrackingId(String(searchParams.get("tracking_id") || ""));
+    setPaymentStatus(returnOutcome ? returnOutcome.toUpperCase() : "PENDING");
+  }, [returnSessionId, returnOutcome, searchParams]);
+
   const visibleSections = useMemo(
     () =>
       (menu.sections || []).map((s) => ({
@@ -141,7 +203,6 @@ function PublicRestaurantMenuContent() {
     [menu]
   );
 
-  const fullMenuImages = useMemo(() => getMenuImageUrls(menu), [menu]);
   const cartItems = useMemo(() => Object.values(cart), [cart]);
 
   const cartCount = useMemo(
@@ -199,53 +260,178 @@ function PublicRestaurantMenuContent() {
     setOrderError("");
     setOrderSuccess("");
 
+    const trimmedRestaurantId = String(restaurantId || "").trim();
+    const parsedTableNo = Number(tableNo);
+    const roundedSubtotal = Number(subtotalAmount.toFixed(2));
+    const roundedTax = Number(taxAmount.toFixed(2));
+    const roundedTotal = Number(totalAmount.toFixed(2));
+    const recomputedSubtotal = Number(
+      cartItems.reduce((sum, it) => sum + Number(it.price || 0) * Number(it.qty || 0), 0).toFixed(2)
+    );
+    const trimmedName = customerName.trim();
+    const normalizedPhone = normalizeMauritiusPhone(customerPhone);
+
     if (cartItems.length === 0) {
       setOrderError("Your cart is empty.");
       return;
     }
-
-    setPlacingOrder(true);
-
-    const now = new Date();
-    const bookingDate = now.toISOString().slice(0, 10);
-    const bookingTime = now.toTimeString().slice(0, 8);
-    const itemsSummary = cartItems
-      .map((it) => `${it.name} x ${it.qty}`)
-      .join(", ");
-
-    const payload = {
-      restaurant_id: restaurantId,
-      customer_name: customerName.trim() || "Guest",
-      customer_phone: customerPhone.trim() || "N/A",
-      booking_date: bookingDate,
-      booking_time: bookingTime,
-      duration_minutes: 90,
-      party_size: 1,
-      status: "pending",
-      source: "app",
-      special_request: notes.trim() || null,
-      notes_internal: `Public menu request. Table: ${tableNo.trim() || "N/A"}. Items: ${itemsSummary}`,
-      payment_required: false,
-      payment_status: "pending",
-      payment_amount: Number(totalAmount.toFixed(2)),
-      booked_slot_label: tableNo.trim() ? `Table ${tableNo.trim()}` : null,
-    };
-
-    const { error: insErr } = await supabaseBrowser.from("restaurant_bookings").insert(payload);
-
-    setPlacingOrder(false);
-
-    if (insErr) {
-      setOrderError(insErr.message || "Unable to place order right now.");
+    if (!isUuidLike(trimmedRestaurantId)) {
+      setOrderError("Invalid restaurant id.");
+      return;
+    }
+    if (!Number.isInteger(parsedTableNo) || parsedTableNo <= 0) {
+      setOrderError("Table number is required.");
+      return;
+    }
+    if (!trimmedName) {
+      setOrderError("Name is required.");
+      return;
+    }
+    if (!normalizedPhone || normalizedPhone.length !== 8) {
+      setOrderError("Enter a valid 8-digit phone number.");
+      return;
+    }
+    if (Math.abs(recomputedSubtotal - roundedSubtotal) > 0.01) {
+      setOrderError("Cart total mismatch. Please refresh and try again.");
+      return;
+    }
+    if (Math.abs(roundedSubtotal + roundedTax - roundedTotal) > 0.01) {
+      setOrderError("Total mismatch. Please refresh and try again.");
       return;
     }
 
-    setCart({});
-    setOpenOrderModal(false);
-    setTableNo("");
-    setNotes("");
-    setOrderSuccess("Order placed successfully.");
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+
+    try {
+      const payload = {
+        restaurant_id: trimmedRestaurantId,
+        table_no: parsedTableNo,
+        customer_name: trimmedName,
+        customer_phone: normalizedPhone,
+        notes: notes.trim() || "",
+        items: cartItems.map((it) => ({
+          item_id: it.itemId,
+          name: it.name,
+          qty: Number(it.qty || 0),
+          unit_price: Number(Number(it.price || 0).toFixed(2)),
+        })),
+        subtotal_amount: roundedSubtotal,
+        tax_amount: roundedTax,
+        total_amount: roundedTotal,
+        currency_code: "MUR",
+      };
+
+      const data = await createPublicMenuSession(payload);
+      const sessionId = String(data?.payment_session_id || "");
+      const trackingId = String(data?.tracking_id || "");
+      const redirectUrl = String(data?.redirect_url || "");
+      const method = String(data?.payload?.method || "POST");
+      const fields = data?.payload?.fields || {};
+
+      if (!sessionId || !trackingId || !redirectUrl || typeof fields !== "object") {
+        throw new Error("Invalid payment gateway response.");
+      }
+
+      sessionStorage.setItem("public_menu_payment_session_id", sessionId);
+      sessionStorage.setItem("public_menu_tracking_id", trackingId);
+      sessionStorage.setItem("public_menu_restaurant_id", trimmedRestaurantId);
+      sessionStorage.setItem("public_menu_table_no", String(parsedTableNo));
+
+      submitGatewayFormToTarget(redirectUrl, method, fields, "_self");
+      setPaymentStatus("PENDING");
+      setPaymentFinalizeError("");
+    } catch (e) {
+      setOrderError(e?.message || "Unable to start payment. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  const finalizePayment = async ({ autoRetry = false } = {}) => {
+    if (finalizeLockRef.current) return;
+    finalizeLockRef.current = true;
+    setIsFinalizing(true);
+    setPaymentFinalizeError("");
+
+    const scheduleRetry = () => {
+      if (autoRetry && finalizeAttempts < MAX_FINALIZE_RETRIES) {
+        setFinalizeAttempts((n) => n + 1);
+        setTimeout(() => {
+          finalizeLockRef.current = false;
+          finalizePayment({ autoRetry: true });
+        }, FINALIZE_RETRY_INTERVAL_MS);
+      }
+    };
+
+    try {
+      const storedSessionId = getStored("public_menu_payment_session_id");
+      const storedTrackingId = getStored("public_menu_tracking_id");
+      const primaryPayload = returnSessionId || storedSessionId
+        ? { payment_session_id: returnSessionId || storedSessionId }
+        : { tracking_id: storedTrackingId };
+
+      let data = null;
+      try {
+        data = await finalizePublicMenuPayment(primaryPayload);
+      } catch (firstErr) {
+        const msg = String(firstErr?.message || "");
+        const canFallbackToTracking =
+          Boolean(storedTrackingId) &&
+          Object.prototype.hasOwnProperty.call(primaryPayload, "payment_session_id");
+        if (canFallbackToTracking) {
+          data = await finalizePublicMenuPayment({ tracking_id: storedTrackingId });
+        } else {
+          throw firstErr;
+        }
+        if (!data && msg) throw firstErr;
+      }
+      const nextStatus = String(data?.status || "").toUpperCase();
+      const nextTrackingId = String(data?.tracking_id || storedTrackingId || "");
+      const nextBookingId = String(data?.table_booking_id || "");
+
+      setPaymentStatus(nextStatus || "PENDING");
+      setPaymentTrackingId(nextTrackingId);
+      setPaymentBookingId(nextBookingId);
+
+      if (nextStatus === "FINALIZED" || nextStatus === "ALREADY_FINALIZED") {
+        setOrderSuccess(`Payment successful. Booking created${nextBookingId ? ` (${nextBookingId})` : ""}.`);
+        toast.success("Order confirmed");
+        setCart({});
+        setNotes("");
+        setOpenOrderModal(false);
+        setShowPaymentResult(true);
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete("session_id");
+        params.delete("outcome");
+        const qs = params.toString();
+        router.replace(qs ? `/public-menu?${qs}` : "/public-menu");
+        return;
+      }
+
+      scheduleRetry();
+    } catch (e) {
+      const msg = String(e?.message || "Unable to verify payment yet.");
+      if (msg.toUpperCase().includes("PENDING")) {
+        setPaymentStatus("PENDING");
+        setPaymentFinalizeError("Payment is still pending verification. Retrying...");
+        scheduleRetry();
+      } else {
+        setPaymentFinalizeError(msg);
+        scheduleRetry();
+      }
+    } finally {
+      setIsFinalizing(false);
+      finalizeLockRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    if (!returnSessionId && !returnOutcome) return;
+    const shouldAutoRetry = !["failed", "fail", "error"].includes(returnOutcome);
+    finalizePayment({ autoRetry: shouldAutoRetry });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [returnSessionId, returnOutcome]);
 
   if (loading) return <MenuSkeleton />;
 
@@ -272,6 +458,39 @@ function PublicRestaurantMenuContent() {
           {orderSuccess ? <p className="mt-2 text-sm font-medium text-emerald-700">{orderSuccess}</p> : null}
         </div>
 
+        {showPaymentResult ? (
+          <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+            <div className="text-sm font-semibold text-emerald-800">
+              {paymentStatus === "FINALIZED" || paymentStatus === "SUCCESS"
+                ? "Payment successful. Your order is placed."
+                : "We are verifying your payment."}
+            </div>
+            <div className="mt-1 text-xs text-emerald-900">
+              Tracking ID: {paymentTrackingId || "—"}{paymentBookingId ? ` • Booking ID: ${paymentBookingId}` : ""}
+            </div>
+            {paymentFinalizeError ? <div className="mt-2 text-xs text-rose-700">{paymentFinalizeError}</div> : null}
+            <div className="mt-3 flex items-center gap-2">
+              {paymentStatus !== "FINALIZED" ? (
+                <button
+                  type="button"
+                  onClick={() => finalizePayment({ autoRetry: true })}
+                  disabled={isFinalizing}
+                  className="rounded-lg bg-[#DA3224] text-white px-3 py-2 text-xs font-semibold disabled:opacity-60"
+                >
+                  {isFinalizing ? "Verifying..." : "Check Payment Status"}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setShowPaymentResult(false)}
+                className="rounded-lg border border-slate-300 bg-white text-slate-700 px-3 py-2 text-xs font-semibold"
+              >
+                Order More
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         {visibleSections.length > 0 ? (
           <div className="mt-4 overflow-x-auto no-scrollbar">
             <div className="flex gap-2 w-max pb-1">
@@ -288,22 +507,7 @@ function PublicRestaurantMenuContent() {
           </div>
         ) : null}
 
-        {fullMenuImages.length > 0 ? (
-          <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm">
-            <div className="text-sm sm:text-base font-semibold text-slate-900">Menu Images</div>
-            <div className="text-xs text-slate-500 mt-1">Swipe to view full menu photos.</div>
-            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-              {fullMenuImages.map((url) => (
-                <img
-                  key={url}
-                  src={url}
-                  alt="Full menu"
-                  className="h-40 w-28 sm:h-52 sm:w-36 rounded-xl border border-slate-200 object-cover bg-slate-100 shrink-0"
-                />
-              ))}
-            </div>
-          </div>
-        ) : null}
+        
 
         <div className="mt-4 space-y-4">
           {visibleSections.length === 0 ? (
@@ -440,14 +644,14 @@ function PublicRestaurantMenuContent() {
 
       {openOrderModal ? (
         <div className="fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/40" onClick={() => !placingOrder && setOpenOrderModal(false)} />
+          <div className="absolute inset-0 bg-black/40" onClick={() => !isSubmitting && setOpenOrderModal(false)} />
           <div className="absolute inset-x-0 bottom-0 sm:inset-0 sm:flex sm:items-center sm:justify-center p-2 sm:p-4">
             <div className="w-full sm:max-w-2xl max-h-[90vh] rounded-t-2xl sm:rounded-2xl bg-white border border-slate-200 shadow-xl flex flex-col overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
                 <div className="text-sm font-semibold text-slate-900">Your Order</div>
                 <button
                   type="button"
-                  onClick={() => !placingOrder && setOpenOrderModal(false)}
+                  onClick={() => !isSubmitting && setOpenOrderModal(false)}
                   className="h-8 w-8 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 inline-flex items-center justify-center"
                 >
                   <X className="h-4 w-4 text-slate-700" />
@@ -517,7 +721,7 @@ function PublicRestaurantMenuContent() {
 
                 <div className="rounded-lg border border-slate-200 p-3 space-y-2.5 bg-slate-50">
                   <div>
-                    <label className="text-[11px] text-slate-600">Name (optional)</label>
+                    <label className="text-[11px] text-slate-600">Name *</label>
                     <input
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
@@ -526,16 +730,16 @@ function PublicRestaurantMenuContent() {
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] text-slate-600">Phone (optional)</label>
+                    <label className="text-[11px] text-slate-600">Phone *</label>
                     <input
                       type="tel"
                       inputMode="numeric"
                       pattern="[0-9]*"
-                      maxLength={15}
+                      maxLength={11}
                       value={customerPhone}
                       onChange={(e) => setCustomerPhone(onlyDigits(e.target.value))}
                       className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none bg-white"
-                      placeholder="Phone number"
+                      placeholder="8-digit phone number"
                     />
                   </div>
                   <div>
@@ -547,9 +751,11 @@ function PublicRestaurantMenuContent() {
                       maxLength={6}
                       value={tableNo}
                       onChange={(e) => setTableNo(onlyDigits(e.target.value))}
+                      disabled={Boolean(tableFromQr)}
                       className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none bg-white"
                       placeholder="e.g. 12"
                     />
+                    {tableFromQr ? <p className="mt-1 text-[11px] text-slate-500">Auto-detected from table QR.</p> : null}
                   </div>
                   <div>
                     <label className="text-[11px] text-slate-600">Notes (optional)</label>
@@ -564,17 +770,35 @@ function PublicRestaurantMenuContent() {
                 </div>
 
                 {orderError ? <div className="text-sm text-rose-600">{orderError}</div> : null}
+                {paymentStatus ? (
+                  <div className="rounded-lg border border-slate-200 p-3 bg-white text-sm">
+                    <div className="font-semibold text-slate-900">Payment status: {paymentStatus}</div>
+                    <div className="mt-1 text-slate-600">Tracking ID: {paymentTrackingId || "—"}</div>
+                    <div className="text-slate-600">Booking ID: {paymentBookingId || "—"}</div>
+                    {paymentFinalizeError ? <div className="mt-2 text-rose-600">{paymentFinalizeError}</div> : null}
+                    {paymentStatus !== "FINALIZED" ? (
+                      <button
+                        type="button"
+                        onClick={() => finalizePayment({ autoRetry: false })}
+                        disabled={isFinalizing}
+                        className="mt-2 rounded-lg bg-[#DA3224] text-white px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+                      >
+                        {isFinalizing ? "Finalizing..." : "Retry Finalize"}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
 
               <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-between gap-2">
                 <div className="text-sm font-semibold text-slate-900">Total: {money(totalAmount)}</div>
                 <button
                   type="button"
-                  disabled={placingOrder || cartItems.length === 0}
+                  disabled={isSubmitting || cartItems.length === 0}
                   onClick={placeOrder}
                   className="rounded-lg bg-[#DA3224] text-white px-4 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-50"
                 >
-                  {placingOrder ? "Placing..." : "Place Order"}
+                  {isSubmitting ? "Redirecting to payment..." : "Pay Now"}
                 </button>
               </div>
             </div>

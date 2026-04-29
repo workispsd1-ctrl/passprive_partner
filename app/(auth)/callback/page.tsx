@@ -7,7 +7,7 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { verifyUser } from "@/store/features/admin/adminSlice";
 import { useAppDispatch } from "@/store/hooks";
 
-const ALLOWED_ROLES = new Set(["storepartner", "restaurantpartner", "corporateadmin", "storemanager"]);
+const ALLOWED_ROLES = new Set(["storepartner", "restaurantpartner", "corporateadmin", "storemanager", "cashier"]);
 
 const AuthCallbackPage = () => {
   const dispatch = useAppDispatch();
@@ -73,6 +73,11 @@ const AuthCallbackPage = () => {
 
         if (role === "restaurantpartner") {
           if (!cancelled) router.replace("/restaurant/dashboard");
+          return;
+        }
+
+        if (role === "cashier") {
+          if (!cancelled) router.replace("/cashier/dashboard");
           return;
         }
 

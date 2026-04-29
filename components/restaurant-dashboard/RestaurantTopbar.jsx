@@ -25,6 +25,9 @@ const TITLE_MAP = {
   "/restaurant/payouts": "Payouts",
   "/restaurant/settings": "Settings",
   "/restaurant/orders": "Orders",
+  "/restaurant/staff": "Staff",
+  "/restaurant/table-positioning": "Table Layout",
+  "/restaurant/table-layout": "Table Layout",
 };
 
 function getTitleFromPath(pathname) {

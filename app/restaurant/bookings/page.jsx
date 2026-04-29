@@ -4,11 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import {
   Search,
   Users,
-  CheckCircle,
   StickyNote,
   ChevronLeft,
   ChevronRight,
   X,
+  Eye,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
@@ -59,30 +59,20 @@ function getBookingStatusLabel(status) {
   return labels[normalized] || (status ? String(status) : "—");
 }
 
-function isPendingStatus(status) {
-  return normalizeBookingStatus(status) === "pending";
-}
-
 function needsRestaurantDecision(status) {
   const normalized = normalizeBookingStatus(status);
   return normalized === "pending" || normalized === "payment_successful" || normalized === "payment_successfull";
 }
 
-function isPaidStatus(status) {
-  const normalized = normalizeBookingStatus(status);
-  return normalized === "payment_successful" || normalized === "payment_successfull";
-}
-
-function canConfirmBooking(status, isRestaurantVisible) {
-  return Boolean(isRestaurantVisible) && isPaidStatus(status);
-}
-
 function formatBookingDate(value) {
   if (!value) return "—";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return String(value);
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat("en-CA", { dateStyle: "medium" }).format(date);
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(date);
 }
 
 function formatBookingTime(value) {
@@ -96,9 +86,12 @@ function formatBookingDateTime(value) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat("en-CA", {
-    dateStyle: "medium",
-    timeStyle: "medium",
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(date);
 }
 
@@ -111,7 +104,6 @@ export default function RestaurantBookingsPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [restaurantId, setRestaurantId] = useState(null);
-  const [isRestaurantVisible, setIsRestaurantVisible] = useState(true);
 
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [activeBooking, setActiveBooking] = useState(null);
@@ -157,7 +149,6 @@ export default function RestaurantBookingsPage() {
 
     if (restaurant?.id) {
       setRestaurantId(restaurant.id);
-      setIsRestaurantVisible(Boolean(restaurant.is_active));
     }
   };
 
@@ -245,40 +236,6 @@ export default function RestaurantBookingsPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restaurantId, status, page, search]);
-
-  const confirmBooking = async (bookingId) => {
-    const booking = bookings.find((b) => b.id === bookingId);
-    if (!booking || !canConfirmBooking(booking.status, isRestaurantVisible)) return;
-
-    const now = new Date().toISOString();
-
-    const { error } = await supabaseBrowser
-      .from("restaurant_bookings")
-      .update({
-        status: "confirmed",
-        read: true,
-        updated_at: now,
-      })
-      .eq("id", bookingId);
-
-    if (error) return;
-
-    setBookings((prev) =>
-      prev.map((b) =>
-        b.id === bookingId
-          ? { ...b, status: "confirmed", read: true, updated_at: now }
-          : b
-      )
-    );
-
-    if (activeBooking?.id === bookingId) {
-      setActiveBooking((prev) =>
-        prev ? { ...prev, status: "confirmed", read: true, updated_at: now } : prev
-      );
-    }
-
-    debouncedRefetch();
-  };
 
   const openDetailsModal = async (booking) => {
     setActiveBooking(booking);
@@ -385,10 +342,10 @@ export default function RestaurantBookingsPage() {
 
                   <td className="px-4 py-3">
                     <div className="font-medium text-gray-900">
-                      {b.booking_date}
+                      {formatBookingDate(b.booking_date)}
                     </div>
                     <div className="text-xs text-gray-500">
-                      {String(b.booking_time).slice(0, 5)} • {b.duration_minutes} mins
+                      {String(b.booking_time).slice(0, 5)} • {b.duration_minutes} mins • Received: {formatBookingDateTime(b.created_at)}
                     </div>
                   </td>
 
@@ -415,19 +372,18 @@ export default function RestaurantBookingsPage() {
                   </td>
 
                   <td className="px-4 py-3 text-right">
-                    <div
-                      className="flex justify-end gap-2"
-                      onClick={(e) => e.stopPropagation()}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openDetailsModal(b);
+                      }}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                      title="View booking details"
                     >
-                      {canConfirmBooking(b.status, isRestaurantVisible) && (
-                        <ActionButton
-                          icon={CheckCircle}
-                          label="Confirm"
-                          color="green"
-                          onClick={() => confirmBooking(b.id)}
-                        />
-                      )}
-                    </div>
+                      <Eye className="h-3.5 w-3.5" />
+                      View
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -498,7 +454,7 @@ export default function RestaurantBookingsPage() {
               <DetailRow label="Cancelled at" value={formatBookingDateTime(activeBooking.cancelled_at)} />
               <DetailRow label="Cancel reason" value={activeBooking.cancel_reason} />
               <DetailRow label="Total Visits" value={activeBooking.customer_booking_number} />
-              <DetailRow label="Created at" value={formatBookingDateTime(activeBooking.created_at)} />
+              <DetailRow label="Booking Received At" value={formatBookingDateTime(activeBooking.created_at)} />
               <DetailRow label="Updated at" value={formatBookingDateTime(activeBooking.updated_at)} />
             </div>
 
@@ -583,23 +539,5 @@ function StatusPill({ status }) {
     >
       {label}
     </span>
-  );
-}
-
-function ActionButton({ icon: Icon, label, color, onClick }) {
-  const styles =
-    color === "green"
-      ? "text-green-700 bg-green-50 border-green-200 hover:bg-green-100"
-      : "text-red-700 bg-red-50 border-red-200 hover:bg-red-100";
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-semibold ${styles}`}
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {label}
-    </button>
   );
 }

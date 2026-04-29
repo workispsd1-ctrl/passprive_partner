@@ -17,6 +17,8 @@ import {
   Soup,
   Megaphone,
   QrCode,
+  Table2,
+  UserRound,
   X,
   Crown,
 } from "lucide-react";
@@ -30,8 +32,11 @@ const THEME_ACCENT_SOLID = "#771FA8";
 const nav = [
   { label: "Dashboard", href: "/restaurant/dashboard", icon: LayoutDashboard },
   { label: "Bookings", href: "/restaurant/bookings", icon: CalendarCheck },
+    { label: "Staff", href: "/restaurant/staff", icon: UserRound },
   { label: "Table Orders", href: "/restaurant/table-orders", icon: QrCode, key: "table_orders", premium: true },
-  { label: "Pickup Orders", href: "/restaurant/orders", icon: Soup, key: "pickup_orders"},
+  { label: "Table Layout", href: "/restaurant/table-layout", icon: Table2, premium: true },
+
+  { label: "Pickup Orders", href: "/restaurant/orders", icon: Soup, key: "pickup_orders", premium: true },
   { label: "Menu", href: "/restaurant/menu", icon: UtensilsCrossed },
   { label: "Offers", href: "/restaurant/offers", icon: Tag, },
   { label: "Reviews", href: "/restaurant/reviews", icon: Star },
@@ -77,7 +82,7 @@ function ConfirmModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 p-4">
+    <div className="fixed inset-0 z-90 flex items-center justify-center bg-black/45 p-4">
       <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-2xl overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
@@ -147,7 +152,7 @@ export default function RestaurantSidebar({ collapsed = false }) {
 
   const filteredNav = useMemo(() => {
     return nav.filter((item) => {
-      if (item.key === "table_orders") return tablesSubscribed === true;
+      if (item.premium) return tablesSubscribed === true;
       return true;
     });
   }, [tablesSubscribed]);

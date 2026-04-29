@@ -28,13 +28,12 @@ import {
   activateRestaurantSubscription,
   fetchOwnedRestaurantOffersData,
   replaceRestaurantMediaUrls,
+  saveRestaurantMenuData,
 } from "@/lib/restaurantData";
 
 const BUCKET_NAME = "restaurants";
 const BUCKET_ROOT_FOLDER = "menu";
 const MENU_PREMIUM_PRICE = 3000;
-const STRUCTURED_MENU_SUPPORTED = false;
-
 const DEMO_CARD = {
   number: "4242 4242 4242 4242",
   expiry: "12/34",
@@ -206,6 +205,8 @@ export default function RestaurantMenuPage() {
   const [copied, setCopied] = useState(false);
 
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const [tableLayouts, setTableLayouts] = useState([]);
+  const [selectedQrTable, setSelectedQrTable] = useState("");
 
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [unlockingSubscription, setUnlockingSubscription] = useState(false);
@@ -337,6 +338,35 @@ export default function RestaurantMenuPage() {
     setMenuUrl(isSubscribed ? catalogUrl : menuCardImages[0] || "");
   }, [restaurantId, isSubscribed, menuCardImages]);
 
+  useEffect(() => {
+    if (!restaurantId) return;
+    let cancelled = false;
+
+    (async () => {
+      const { data, error } = await supabaseBrowser
+        .from("restaurant_table_layouts")
+        .select("id, table_no, label")
+        .eq("restaurant_id", restaurantId)
+        .order("table_no", { ascending: true });
+      if (cancelled) return;
+      if (error) {
+        setTableLayouts([]);
+        setSelectedQrTable("");
+        return;
+      }
+      const rows = data || [];
+      setTableLayouts(rows);
+      setSelectedQrTable((prev) => {
+        if (prev && rows.some((r) => String(r.table_no) === String(prev))) return prev;
+        return rows[0]?.table_no ? String(rows[0].table_no) : "";
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [restaurantId]);
+
   const saveMenu = async (nextMenu, forceRestaurantId) => {
     const rid = forceRestaurantId || restaurantId;
     if (!rid) {
@@ -360,8 +390,9 @@ export default function RestaurantMenuPage() {
         ...payload,
         full_menu_image_urls: savedUrls,
         full_menu_image_url: savedUrls[0] || null,
-        sections: [],
+        sections: payload.sections || [],
       });
+      await saveRestaurantMenuData(supabaseBrowser, rid, fresh);
       originalMenuRef.current = fresh;
       setMenu(fresh);
       setInfoMsg("Menu images saved.");
@@ -371,10 +402,7 @@ export default function RestaurantMenuPage() {
       setSaving(false);
     }
 
-    if ((payload.sections || []).length > 0) {
-      setInfoMsg("Menu images saved. Item catalogue is not stored in the current schema.");
-      return;
-    }
+    return;
   };
 
   const activateSubscriptionDemo = async () => {
@@ -731,22 +759,39 @@ export default function RestaurantMenuPage() {
   };
 
   const copyUrl = async () => {
-    if (!menuUrl) return;
+    if (!selectedTableUrl) return;
     try {
-      await navigator.clipboard.writeText(menuUrl);
+      await navigator.clipboard.writeText(selectedTableUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {}
   };
 
   const downloadQr = () => {
-    if (!qrSrc) return;
+    if (!selectedTableQrSrc) return;
     const a = document.createElement("a");
-    a.href = qrSrc;
-    a.download = `menu-qr-${restaurantId || "restaurant"}.png`;
+    a.href = selectedTableQrSrc;
+    a.download = `table-${selectedQrTable || "qr"}-${restaurantId || "restaurant"}.png`;
     a.target = "_blank";
     a.click();
   };
+
+  const getTableMenuUrl = (tableNo) => {
+    if (!restaurantId || typeof window === "undefined") return "";
+    return `${window.location.origin}/public-menu?id=${restaurantId}&table=${encodeURIComponent(String(tableNo))}`;
+  };
+
+  const qrForUrl = (url) => {
+    if (!url) return "";
+    return `https://api.qrserver.com/v1/create-qr-code/?size=340x340&data=${encodeURIComponent(url)}`;
+  };
+
+  const selectedTableUrl = useMemo(() => {
+    if (!selectedQrTable) return "";
+    return getTableMenuUrl(selectedQrTable);
+  }, [selectedQrTable, restaurantId]);
+
+  const selectedTableQrSrc = useMemo(() => qrForUrl(selectedTableUrl), [selectedTableUrl]);
 
   if (loading) {
     return (
@@ -819,7 +864,7 @@ export default function RestaurantMenuPage() {
             </div>
             <div className="mt-2 text-sm text-gray-600">
               {isSubscribed
-                ? "Premium is active. With the current schema, QR and menu images are supported."
+                ? "Premium is active. QR, sections, and items are enabled."
                 : "Unlock premium to use QR with menu images."}
             </div>
           </div>
@@ -847,14 +892,14 @@ export default function RestaurantMenuPage() {
           <div className="text-2xl font-bold text-gray-900">Menu</div>
           <div className="text-sm text-gray-500 mt-1">
             {isSubscribed
-              ? "Menu images are stored and shown through QR. Structured section/item catalogue is not available in the current schema."
+              ? "Build and manage your sections, items, and menu images."
               : "Catalogue editing is hidden until premium is active."}
           </div>
 
           <div className="mt-4 flex items-center gap-2">
             <button
               type="button"
-              disabled={!isSubscribed || !STRUCTURED_MENU_SUPPORTED}
+              disabled={!isSubscribed}
               onClick={openNewSection}
               className="h-10 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 px-3 text-sm font-semibold flex items-center gap-2"
             >
@@ -871,31 +916,45 @@ export default function RestaurantMenuPage() {
           </div>
 
           <div className="mt-2 text-xs text-gray-500">
-            {isSubscribed ? "Scan the QR code to open your uploaded menu images." : "QR opens first uploaded menu image."}
+            {isSubscribed
+              ? "Select table and share the QR. Orders will be tagged to that table."
+              : "QR opens first uploaded menu image."}
           </div>
 
-          <div className="mt-3">
-            <label className="text-xs font-semibold text-gray-600">QR destination URL</label>
-            <input
-              value={menuUrl}
-              readOnly
-              className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none bg-gray-50 text-gray-700"
-            />
-          </div>
+          <label className="mt-3 block">
+            <span className="text-xs font-semibold text-gray-600">Select table</span>
+            <select
+              value={selectedQrTable}
+              onChange={(e) => setSelectedQrTable(e.target.value)}
+              className="mt-1 h-10 w-full rounded-xl border border-gray-200 px-3 text-sm"
+              disabled={tableLayouts.length === 0}
+            >
+              {tableLayouts.length === 0 ? <option value="">No tables configured</option> : null}
+              {tableLayouts.map((t) => (
+                <option key={t.id} value={String(t.table_no)}>
+                  {t.label || `Table ${t.table_no}`} (#{t.table_no})
+                </option>
+              ))}
+            </select>
+          </label>
 
-          {qrSrc ? (
+          {selectedTableQrSrc ? (
             <div className="mt-3 rounded-xl border border-gray-200 p-3 bg-gray-50">
-              <img src={qrSrc} alt="Menu QR" className="w-full rounded-lg bg-white p-2" />
+              <img
+                src={selectedTableQrSrc}
+                alt={`Table ${selectedQrTable || ""} QR`}
+                className="w-full rounded-lg bg-white p-2"
+              />
             </div>
           ) : (
-            <div className="mt-3 text-xs text-gray-500">Upload at least one menu image first to generate QR.</div>
+            <div className="mt-3 text-xs text-gray-500">Configure table layout first to generate table QR.</div>
           )}
 
           <div className="mt-3 grid grid-cols-3 gap-2">
             <button
               type="button"
               onClick={copyUrl}
-              disabled={!menuUrl}
+              disabled={!selectedTableUrl}
               className="h-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 text-xs font-semibold inline-flex items-center justify-center gap-1"
             >
               <Copy className="h-3.5 w-3.5" />
@@ -904,7 +963,7 @@ export default function RestaurantMenuPage() {
             <button
               type="button"
               onClick={downloadQr}
-              disabled={!qrSrc}
+              disabled={!selectedTableQrSrc}
               className="h-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 text-xs font-semibold inline-flex items-center justify-center gap-1"
             >
               <Download className="h-3.5 w-3.5" />
@@ -912,8 +971,8 @@ export default function RestaurantMenuPage() {
             </button>
             <button
               type="button"
-              onClick={() => menuUrl && window.open(menuUrl, "_blank")}
-              disabled={!menuUrl}
+              onClick={() => selectedTableUrl && window.open(selectedTableUrl, "_blank")}
+              disabled={!selectedTableUrl}
               className="h-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 text-xs font-semibold inline-flex items-center justify-center gap-1"
             >
               <ExternalLink className="h-3.5 w-3.5" />
@@ -930,20 +989,7 @@ export default function RestaurantMenuPage() {
             Catalogue Hidden (Dish Discounts Premium Required)
           </div>
           <div className="mt-2 text-xs text-gray-500">
-            Premium controls QR/menu-image access. Structured section and item storage is not part of the current schema.
-          </div>
-        </div>
-      ) : !STRUCTURED_MENU_SUPPORTED ? (
-        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
-          <div className="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">
-            <Lock className="h-4 w-4" />
-            Structured Catalogue Unavailable
-          </div>
-          <div className="mt-2 text-xs text-gray-500">
-            Your current restaurant schema stores menu images in <b>restaurant_media_assets</b> but does not include a table for menu sections, dishes, or dish images.
-          </div>
-          <div className="mt-2 text-xs text-gray-500">
-            Image uploads, QR generation, offers, bookings, and pickup orders remain available. Section/item add or edit has been disabled so the UI matches what can actually be saved.
+            Premium controls QR/menu-image access and catalogue editing.
           </div>
         </div>
       ) : (

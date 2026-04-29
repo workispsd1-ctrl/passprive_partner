@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import RestaurantSidebar from "./RestaurantSidebar";
 import RestaurantTopbar from "./RestaurantTopbar";
+import BookingAlertNotifier from "./BookingAlertNotifier";
+import TableOrderAlertNotifier from "./TableOrderAlertNotifier";
 
 export default function RestaurantShell({ children }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -19,6 +21,8 @@ export default function RestaurantShell({ children }) {
       className="min-h-screen bg-white text-gray-900"
       style={{ ["--accent"]: "#C59D5F" }} // gold accent
     >
+      <BookingAlertNotifier />
+      <TableOrderAlertNotifier />
       <div className="flex">
         <RestaurantSidebar collapsed={sidebarCollapsed} />
 
