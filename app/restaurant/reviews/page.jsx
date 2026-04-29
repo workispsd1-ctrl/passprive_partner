@@ -136,10 +136,10 @@ function Skeleton() {
 export default function Page() {
   const [loading, setLoading] = useState(true);
   const [lastError, setLastError] = useState("");
-  const [repliesUnsupported, setRepliesUnsupported] = useState(true);
+  const [repliesUnsupported, setRepliesUnsupported] = useState(false);
   const saving = false;
+  const [currentUserId, setCurrentUserId] = useState(null);
 
-  const [restaurantId, setRestaurantId] = useState(null);
   const [reviews, setReviews] = useState([]);
 
   // UI controls
@@ -176,12 +176,11 @@ export default function Page() {
       setLoading(false);
       return;
     }
+    setCurrentUserId(user.id);
 
     try {
       const data = await fetchOwnedRestaurantReviews(supabaseBrowser, user.id);
-      setRepliesUnsupported(true);
-      setRestaurantId(data.restaurantId);
-
+      setRepliesUnsupported(false);
       const normalized = normalizeReviews(data.reviews)
         .map(ensureId)
         .map((r) => {
@@ -194,10 +193,15 @@ export default function Page() {
                   r.reply.createdAt ?? r.reply.created_at ?? new Date().toISOString()
                 ),
               }
-            : r.reply_text
+            : r.owner_reply_text || r.reply_text
             ? {
-                text: String(r.reply_text),
-                createdAt: String(r.reply_createdAt ?? new Date().toISOString()),
+                text: String(r.owner_reply_text ?? r.reply_text ?? ""),
+                createdAt: String(
+                  r.owner_reply_updated_at ??
+                    r.owner_reply_at ??
+                    r.reply_createdAt ??
+                    new Date().toISOString()
+                ),
               }
             : null;
 
@@ -207,7 +211,15 @@ export default function Page() {
           food_rating: clamp01to5(toNumber(r.food_rating)),
           service_rating: clamp01to5(toNumber(r.service_rating)),
           ambience_rating: clamp01to5(toNumber(r.ambience_rating)),
-          comment: typeof r.comment === "string" ? r.comment : r.comment?.text || "",
+          comment:
+            typeof r.review_text === "string"
+              ? r.review_text
+              : typeof r.comment === "string"
+              ? r.comment
+              : r.comment?.text || "",
+          userName: r.username_snapshot || r.userName || r.user_name || "Anonymous",
+          userAvatar: r.avatar_snapshot || r.userAvatar || "",
+          images: Array.isArray(r.photo_urls) ? r.photo_urls : Array.isArray(r.images) ? r.images : [],
           createdAt: typeof createdAt === "string" ? createdAt : undefined,
           reply: replyObj,
         };
@@ -223,15 +235,6 @@ export default function Page() {
     } finally {
       setLoading(false);
     }
-  }
-
-  async function saveReviews() {
-    if (!restaurantId) return false;
-    if (repliesUnsupported) {
-      setLastError("Reply saving is not available in the current review schema.");
-      return false;
-    }
-    return false;
   }
 
   async function upsertReply(reviewId) {
@@ -251,8 +254,22 @@ export default function Page() {
     );
 
     setReviews(next);
-    const ok = await saveReviews(next);
-    if (ok) setReplyOpenId(null);
+    setLastError("");
+    const { error } = await supabaseBrowser
+      .from("restaurant_reviews")
+      .update({
+        owner_reply_text: text,
+        owner_reply_by: currentUserId,
+        owner_reply_at: new Date().toISOString(),
+        owner_reply_updated_at: new Date().toISOString(),
+      })
+      .eq("id", reviewId);
+
+    if (error) {
+      setLastError(error.message || "Failed to save reply.");
+      return;
+    }
+    setReplyOpenId(null);
   }
 
   async function deleteReply(reviewId) {
@@ -262,7 +279,17 @@ export default function Page() {
     const next = reviews.map((r) => (r.id === reviewId ? { ...r, reply: null } : r));
     setReviews(next);
     setReplyDraft((d) => ({ ...d, [reviewId]: "" }));
-    await saveReviews(next);
+    setLastError("");
+    const { error } = await supabaseBrowser
+      .from("restaurant_reviews")
+      .update({
+        owner_reply_text: null,
+        owner_reply_by: null,
+        owner_reply_at: null,
+        owner_reply_updated_at: new Date().toISOString(),
+      })
+      .eq("id", reviewId);
+    if (error) setLastError(error.message || "Failed to delete reply.");
   }
 
   const stats = useMemo(() => {
@@ -562,9 +589,7 @@ export default function Page() {
                         />
 
                         <div className="mt-3 flex items-center justify-between gap-3">
-                          <p className="text-xs text-slate-500">
-                            Replies are not yet mapped in the new review schema.
-                          </p>
+                          <p className="text-xs text-slate-500">Reply will be visible to customers on the review.</p>
 
                           <button
                             disabled={saving || repliesUnsupported}
