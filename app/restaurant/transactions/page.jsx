@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { ReceiptText, Search, SlidersHorizontal, Wallet, CheckCircle2, CircleDollarSign } from "lucide-react";
+import { SkeletonBlock } from "@/components/ui/PageSkeletons";
 
 function CardShell({ title, right, children }) {
   return (
@@ -51,18 +52,18 @@ function Amount({ value }) {
   );
 }
 
-function StatusPill({ status }) {
-  const s = String(status || "").toLowerCase();
-  const cls =
-    s === "paid" || s === "approved" || s === "verified"
-      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-      : s === "processing" || s === "scheduled" || s === "requested" || s === "pending"
-      ? "bg-amber-50 text-amber-700 border-amber-200"
-      : s === "failed" || s === "rejected" || s === "on_hold" || s === "cancelled"
-      ? "bg-red-50 text-red-700 border-red-200"
-      : "bg-gray-50 text-gray-700 border-gray-200";
-
-  return <span className={`px-2 py-1 rounded-lg border text-xs font-medium ${cls}`}>{status}</span>;
+function TransactionsSkeleton() {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: 6 }).map((_, idx) => (
+        <div key={idx} className="grid gap-3 md:grid-cols-6">
+          {Array.from({ length: 6 }).map((__, colIdx) => (
+            <SkeletonBlock key={colIdx} className="h-12 w-full rounded-2xl border-gray-200 bg-gray-100" />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function formatMoney(v) {
@@ -76,100 +77,14 @@ function formatDateTime(v) {
   return d.toLocaleString();
 }
 
-function isSchemaError(error) {
-  const msg = String(error?.message || "").toLowerCase();
-  return msg.includes("does not exist") || msg.includes("relation") || msg.includes("column");
+function isOnlineSession(row) {
+  const s = String(row?.payment_status || "").toUpperCase();
+  return s !== "CANCELLED";
 }
 
-function isCashMethod(paymentMethod) {
-  const p = String(paymentMethod || "").toUpperCase();
-  return p === "COD" || p === "CASH";
-}
-
-function isValidOrderForSettlement(order) {
-  const status = String(order?.status || "").toUpperCase();
-  const paymentStatus = String(order?.payment_status || "").toUpperCase();
-
-  if (status === "CANCELLED" || status === "REJECTED") return false;
-  if (paymentStatus === "FAILED" || paymentStatus === "REFUNDED") return false;
-  return true;
-}
-
-async function loadRestaurantTransactions(restaurantIds) {
-  const ids = (restaurantIds || []).map((id) => String(id));
-  if (!ids.length) return [];
-
-  const [tablePrimary, pickupPrimary] = await Promise.all([
-    supabaseBrowser
-      .from("restaurant_bookings")
-      .select("id,restaurant_id,payment_amount,payment_method,payment_status,status,created_at,updated_at")
-      .in("restaurant_id", ids)
-      .order("created_at", { ascending: false })
-      .limit(3000),
-    supabaseBrowser
-      .from("restaurant_orders")
-      .select("id,restaurant_id,total_amount,payment_status,order_status,created_at,updated_at")
-      .in("restaurant_id", ids)
-      .order("created_at", { ascending: false })
-      .limit(3000),
-  ]);
-
-  let tableRows = [];
-  if (!tablePrimary.error) {
-    tableRows = tablePrimary.data || [];
-  } else if (isSchemaError(tablePrimary.error)) {
-    const fallback = await supabaseBrowser
-      .from("restaurant_bookings")
-      .select("id,restaurant_id,payment_amount,status,created_at,updated_at")
-      .in("restaurant_id", ids)
-      .order("created_at", { ascending: false })
-      .limit(3000);
-
-    if (fallback.error) throw fallback.error;
-
-    tableRows = (fallback.data || []).map((r) => ({
-      ...r,
-      payment_method: "ONLINE",
-      payment_status: "PAID",
-    }));
-  } else {
-    throw tablePrimary.error;
-  }
-
-  let pickupRows = [];
-  if (!pickupPrimary.error) {
-    pickupRows = pickupPrimary.data || [];
-  } else if (!isSchemaError(pickupPrimary.error)) {
-    throw pickupPrimary.error;
-  }
-
-  const normalizedTable = tableRows.map((r) => ({
-    id: `table_${r.id}`,
-    restaurant_id: r.restaurant_id,
-    total_amount: Number(r.payment_amount || 0),
-    payment_method: r.payment_method || "ONLINE",
-    payment_status: String(r.payment_status || "pending").toUpperCase(),
-    status: String(r.status || "pending").toUpperCase(),
-    created_at: r.created_at,
-    updated_at: r.updated_at,
-    source: "Booking",
-  }));
-
-  const normalizedPickup = pickupRows.map((r) => ({
-    id: `pickup_${r.id}`,
-    restaurant_id: r.restaurant_id,
-    total_amount: Number(r.total_amount || 0),
-    payment_method: String(r.payment_status || "").toUpperCase() === "PAID" ? "ONLINE" : "COD",
-    payment_status: r.payment_status || "PENDING",
-    status: r.order_status || "NEW",
-    created_at: r.created_at,
-    updated_at: r.updated_at,
-    source: "Pickup",
-  }));
-
-  return [...normalizedTable, ...normalizedPickup].sort(
-    (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
-  );
+function isValidSession(row) {
+  const status = String(row?.payment_status || "").toUpperCase();
+  return !["VERIFIED_FAILED", "CANCELLED", "ERROR"].includes(status);
 }
 
 export default function RestaurantTransactionsPage() {
@@ -194,24 +109,18 @@ export default function RestaurantTransactionsPage() {
 
         const { data: sess, error: sessErr } = await supabaseBrowser.auth.getSession();
         if (sessErr) throw sessErr;
-        const userId = sess?.session?.user?.id;
-        if (!userId) throw new Error("Please sign in to view transactions.");
+        const token = sess?.session?.access_token;
+        if (!token) throw new Error("Please sign in to view transactions.");
 
-        const restaurantRes = await supabaseBrowser
-          .from("restaurants")
-          .select("id,name")
-          .eq("owner_user_id", userId)
-          .order("name", { ascending: true });
-
-        if (restaurantRes.error) throw restaurantRes.error;
-
-        const myRestaurants = restaurantRes.data || [];
-        const ids = myRestaurants.map((r) => r.id);
-        const rows = await loadRestaurantTransactions(ids);
+        const res = await fetch("/api/restaurant/transactions", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const json = await res.json();
+        if (!res.ok || !json?.ok) throw new Error(json?.error || "Failed to load transactions.");
 
         if (!cancelled) {
-          setRestaurants(myRestaurants);
-          setTransactions(rows);
+          setRestaurants(json.restaurants || []);
+          setTransactions(json.transactions || []);
         }
       } catch (e) {
         if (!cancelled) {
@@ -238,7 +147,7 @@ export default function RestaurantTransactionsPage() {
   }, [restaurants]);
 
   const validTransactions = useMemo(
-    () => transactions.filter(isValidOrderForSettlement),
+    () => transactions.filter(isValidSession),
     [transactions]
   );
 
@@ -254,8 +163,8 @@ export default function RestaurantTransactionsPage() {
       const amount = Number(t.total_amount || 0);
       out.businessMade += amount;
       out.totalTransactions += 1;
-      if (isCashMethod(t.payment_method)) out.cashReceived += amount;
-      else out.onlineCollected += amount;
+      if (isOnlineSession(t)) out.onlineCollected += amount;
+      else out.cashReceived += amount;
     });
 
     return out;
@@ -270,7 +179,7 @@ export default function RestaurantTransactionsPage() {
 
       if (restaurantFilter !== "all" && rid !== restaurantFilter) return false;
       if (sourceFilter !== "all" && String(t.source).toLowerCase() !== sourceFilter) return false;
-      if (paymentFilter !== "all" && String(t.payment_method || "").toLowerCase() !== paymentFilter) return false;
+      if (paymentFilter !== "all" && String(t.payment_status || "").toLowerCase() !== paymentFilter) return false;
 
       if (!q) return true;
       const hay = `${t.id} ${name} ${t.source} ${t.payment_method} ${t.payment_status} ${t.status}`.toLowerCase();
@@ -336,8 +245,9 @@ export default function RestaurantTransactionsPage() {
                 onChange={(e) => setSourceFilter(e.target.value)}
               >
                 <option value="all">All Sources</option>
-                <option value="table">Table</option>
-                <option value="pickup">Pickup</option>
+                <option value="table_orders">TABLE_ORDERS</option>
+                <option value="booking">BOOKING</option>
+                <option value="bill_payment">BILL_PAYMENT</option>
               </select>
             </div>
 
@@ -348,15 +258,16 @@ export default function RestaurantTransactionsPage() {
                 onChange={(e) => setPaymentFilter(e.target.value)}
               >
                 <option value="all">All Methods</option>
-                <option value="online">ONLINE</option>
-                <option value="cod">COD</option>
-                <option value="cash">CASH</option>
+                <option value="finalized">FINALIZED</option>
+                <option value="verified_success">VERIFIED_SUCCESS</option>
+                <option value="pending">PENDING</option>
+                <option value="returned">RETURNED</option>
               </select>
             </div>
           </div>
 
           {loading ? (
-            <div className="text-sm text-gray-500">Loading transactions...</div>
+            <TransactionsSkeleton />
           ) : filteredTransactions.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center">
               <div className="mx-auto h-12 w-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
@@ -375,7 +286,6 @@ export default function RestaurantTransactionsPage() {
                     <th className="py-2 pr-4 font-medium">Source</th>
                     <th className="py-2 pr-4 font-medium">Amount</th>
                     <th className="py-2 pr-4 font-medium">Payment</th>
-                    <th className="py-2 pr-4 font-medium">Order</th>
                     <th className="py-2 pr-0 font-medium">Time</th>
                   </tr>
                 </thead>
@@ -386,16 +296,11 @@ export default function RestaurantTransactionsPage() {
                       <tr key={t.id} className="border-t border-gray-100 hover:bg-gray-50/60 transition-colors">
                         <td className="py-3 pr-4 font-semibold text-gray-900">{t.id}</td>
                         <td className="py-3 pr-4 text-gray-700">{restaurantNameById[rid] || "Restaurant"}</td>
-                        <td className="py-3 pr-4 text-gray-700">{t.source}</td>
+                        <td className="py-3 pr-4 text-gray-700">{String(t.source || "").replaceAll("_", " ")}</td>
                         <td className="py-3 pr-4"><Amount value={t.total_amount} /></td>
                         <td className="py-3 pr-4">
-                          <div className="text-gray-700">{t.payment_method}</div>
-                          <div className="mt-1">
-                            <StatusPill status={t.payment_status} />
-                          </div>
-                        </td>
-                        <td className="py-3 pr-4">
-                          <StatusPill status={t.status} />
+                          <div className="text-gray-900 font-medium">{t.payment_method || "IVERI"}</div>
+                          <div className="text-xs text-gray-600 mt-1">{t.payment_status}</div>
                         </td>
                         <td className="py-3 pr-0 text-xs text-gray-600">{formatDateTime(t.created_at)}</td>
                       </tr>

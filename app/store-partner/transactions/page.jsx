@@ -73,20 +73,6 @@ function TransactionsSkeleton() {
   );
 }
 
-function StatusPill({ status }) {
-  const s = String(status || "").toLowerCase();
-  const cls =
-    s === "paid" || s === "approved" || s === "verified"
-      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-      : s === "processing" || s === "scheduled" || s === "requested" || s === "pending"
-      ? "bg-amber-50 text-amber-700 border-amber-200"
-      : s === "failed" || s === "rejected" || s === "on_hold" || s === "cancelled"
-      ? "bg-red-50 text-red-700 border-red-200"
-      : "bg-gray-50 text-gray-700 border-gray-200";
-
-  return <span className={`px-2 py-1 rounded-lg border text-xs font-medium ${cls}`}>{status}</span>;
-}
-
 function formatMoney(v) {
   return Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -98,18 +84,14 @@ function formatDateTime(v) {
   return d.toLocaleString();
 }
 
-function isCashMethod(paymentMethod) {
-  const p = String(paymentMethod || "").toUpperCase();
-  return p === "COD" || p === "CASH";
+function isOnlineSession(row) {
+  const s = String(row?.payment_status || "").toUpperCase();
+  return s !== "CANCELLED";
 }
 
-function isValidOrderForSettlement(order) {
-  const status = String(order?.status || "").toUpperCase();
-  const paymentStatus = String(order?.payment_status || "").toUpperCase();
-
-  if (status === "CANCELLED" || status === "REJECTED") return false;
-  if (paymentStatus === "FAILED" || paymentStatus === "REFUNDED") return false;
-  return true;
+function isValidSession(row) {
+  const status = String(row?.payment_status || "").toUpperCase();
+  return !["VERIFIED_FAILED", "CANCELLED", "ERROR"].includes(status);
 }
 
 export default function StoreTransactionsPage() {
@@ -181,17 +163,32 @@ export default function StoreTransactionsPage() {
         }
 
         const ordersRes = await supabaseBrowser
-          .from("store_orders")
-          .select("id,store_id,total_amount,payment_method,payment_status,status,created_at,updated_at")
+          .from("payment_sessions")
+          .select(
+            "id,tracking_id,store_id,payment_provider,payment_context,amount_major,currency_code,status,gateway_status,created_at,updated_at"
+          )
           .in("store_id", storeIds)
           .order("created_at", { ascending: false })
-          .limit(2000);
+          .limit(3000);
 
         if (ordersRes.error) throw ordersRes.error;
 
         if (!cancelled) {
           setStores(myStores);
-          setTransactions(ordersRes.data || []);
+          setTransactions(
+            (ordersRes.data || []).map((r) => ({
+              id: r.tracking_id || String(r.id),
+              store_id: r.store_id,
+              total_amount: Number(r.amount_major || 0),
+              payment_method: String(r.payment_provider || "ONLINE").toUpperCase(),
+              payment_status: String(r.status || "PENDING").toUpperCase(),
+              status: String(r.gateway_status || r.status || "PENDING").toUpperCase(),
+              payment_context: String(r.payment_context || ""),
+              currency_code: r.currency_code || "MUR",
+              created_at: r.created_at,
+              updated_at: r.updated_at,
+            }))
+          );
         }
       } catch (e) {
         if (!cancelled) {
@@ -218,7 +215,7 @@ export default function StoreTransactionsPage() {
   }, [stores]);
 
   const validTransactions = useMemo(
-    () => transactions.filter(isValidOrderForSettlement),
+    () => transactions.filter(isValidSession),
     [transactions]
   );
 
@@ -234,8 +231,8 @@ export default function StoreTransactionsPage() {
       const amount = Number(t.total_amount || 0);
       out.businessMade += amount;
       out.totalTransactions += 1;
-      if (isCashMethod(t.payment_method)) out.cashReceived += amount;
-      else out.onlineCollected += amount;
+      if (isOnlineSession(t)) out.onlineCollected += amount;
+      else out.cashReceived += amount;
     });
 
     return out;
@@ -249,10 +246,10 @@ export default function StoreTransactionsPage() {
       const name = storeNameById[sid] || "Store";
 
       if (storeFilter !== "all" && sid !== storeFilter) return false;
-      if (paymentFilter !== "all" && String(t.payment_method || "").toLowerCase() !== paymentFilter) return false;
+      if (paymentFilter !== "all" && String(t.payment_status || "").toLowerCase() !== paymentFilter) return false;
 
       if (!q) return true;
-      const hay = `${t.id} ${name} ${t.payment_method} ${t.payment_status} ${t.status}`.toLowerCase();
+      const hay = `${t.id} ${name} ${t.payment_context} ${t.payment_method} ${t.payment_status} ${t.status}`.toLowerCase();
       return hay.includes(q);
     });
   }, [validTransactions, search, storeFilter, paymentFilter, storeNameById]);
@@ -315,9 +312,10 @@ export default function StoreTransactionsPage() {
                 onChange={(e) => setPaymentFilter(e.target.value)}
               >
                 <option value="all">All Methods</option>
-                <option value="online">ONLINE</option>
-                <option value="cod">COD</option>
-                <option value="cash">CASH</option>
+                <option value="finalized">FINALIZED</option>
+                <option value="verified_success">VERIFIED_SUCCESS</option>
+                <option value="pending">PENDING</option>
+                <option value="returned">RETURNED</option>
               </select>
             </div>
           </div>
@@ -339,9 +337,9 @@ export default function StoreTransactionsPage() {
                   <tr className="text-left text-gray-500">
                     <th className="py-2 pr-4 font-medium">Transaction</th>
                     <th className="py-2 pr-4 font-medium">Store</th>
+                    <th className="py-2 pr-4 font-medium">Context</th>
                     <th className="py-2 pr-4 font-medium">Amount</th>
                     <th className="py-2 pr-4 font-medium">Payment</th>
-                    <th className="py-2 pr-4 font-medium">Order</th>
                     <th className="py-2 pr-0 font-medium">Time</th>
                   </tr>
                 </thead>
@@ -352,15 +350,11 @@ export default function StoreTransactionsPage() {
                       <tr key={t.id} className="border-t border-gray-100 hover:bg-gray-50/60 transition-colors">
                         <td className="py-3 pr-4 font-semibold text-gray-900">{t.id}</td>
                         <td className="py-3 pr-4 text-gray-700">{storeNameById[sid] || "Store"}</td>
+                        <td className="py-3 pr-4 text-gray-700">{String(t.payment_context || "—").replaceAll("_", " ")}</td>
                         <td className="py-3 pr-4"><Amount value={t.total_amount} /></td>
                         <td className="py-3 pr-4">
-                          <div className="text-gray-700">{t.payment_method || "ONLINE"}</div>
-                          <div className="mt-1">
-                            <StatusPill status={t.payment_status || "PENDING"} />
-                          </div>
-                        </td>
-                        <td className="py-3 pr-4">
-                          <StatusPill status={t.status || "NEW"} />
+                          <div className="text-gray-900 font-medium">{t.payment_method || "IVERI"}</div>
+                          <div className="text-xs text-gray-600 mt-1">{t.payment_status || "PENDING"}</div>
                         </td>
                         <td className="py-3 pr-0 text-xs text-gray-600">{formatDateTime(t.created_at || t.updated_at)}</td>
                       </tr>

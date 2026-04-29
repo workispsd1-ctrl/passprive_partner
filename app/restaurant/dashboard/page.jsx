@@ -18,7 +18,13 @@ export default function RestaurantDashboardPage() {
   const [reviews, setReviews] = useState([]);
 
   const [orders, setOrders] = useState([]);
+  const [tableOrders, setTableOrders] = useState([]);
   const [bookings, setBookings] = useState([]);
+
+  const isPendingBooking = (status) => {
+    const s = String(status || "").toLowerCase();
+    return s === "pending" || s === "payment_successful" || s === "payment_successfull";
+  };
 
   const getRangeDates = () => {
     const now = new Date();
@@ -76,14 +82,37 @@ export default function RestaurantDashboardPage() {
       }
 
       const restaurant = await fetchOwnedRestaurantDashboard(supabaseBrowser, user.id);
+      let restaurantId = restaurant?.restaurantId || null;
+      let reviewsSeed = Array.isArray(restaurant?.reviews) ? restaurant.reviews : [];
 
-      if (!restaurant?.restaurantId) {
+      if (!restaurantId) {
+        const staffRes = await supabaseBrowser
+          .from("restaurant_staff")
+          .select("restaurant_id")
+          .eq("user_id", user.id)
+          .limit(1)
+          .maybeSingle();
+        if (staffRes.error) throw staffRes.error;
+        restaurantId = staffRes.data?.restaurant_id || null;
+      }
+
+      if (!restaurantId) {
         setError("No restaurant found for this account.");
         setLoading(false);
         return;
       }
 
-      setReviews(Array.isArray(restaurant.reviews) ? restaurant.reviews : []);
+      if (!reviewsSeed.length) {
+        const rv = await supabaseBrowser
+          .from("restaurant_reviews")
+          .select("id,rating,comment,created_at")
+          .eq("restaurant_id", restaurantId)
+          .order("created_at", { ascending: false })
+          .limit(200);
+        if (!rv.error) reviewsSeed = rv.data || [];
+      }
+
+      setReviews(reviewsSeed);
       const dates = rangeDates;
 
       let ordersQuery = supabaseBrowser
@@ -91,7 +120,14 @@ export default function RestaurantDashboardPage() {
         .select(
           "id,order_number,customer_name,customer_phone,total_amount,payment_status,order_status,pickup_code,pickup_eta,created_at,items"
         )
-        .eq("restaurant_id", restaurant.restaurantId)
+        .eq("restaurant_id", restaurantId)
+        .order("created_at", { ascending: false })
+        .limit(200);
+
+      let tableOrdersQuery = supabaseBrowser
+        .from("restaurant_table_bookings")
+        .select("id,customer_name,customer_phone,total_amount,payment_status,booking_status,table_no,created_at,updated_at")
+        .eq("restaurant_id", restaurantId)
         .order("created_at", { ascending: false })
         .limit(200);
 
@@ -100,7 +136,7 @@ export default function RestaurantDashboardPage() {
         .select(
           "id,customer_name,customer_phone,booking_date,booking_time,party_size,status,read,created_at,booking_code"
         )
-        .eq("restaurant_id", restaurant.restaurantId)
+        .eq("restaurant_id", restaurantId)
         .order("created_at", { ascending: false })
         .limit(200);
 
@@ -112,15 +148,21 @@ export default function RestaurantDashboardPage() {
         bookingsQuery = bookingsQuery
           .gte("created_at", dates.from.toISOString())
           .lte("created_at", dates.to.toISOString());
+
+        tableOrdersQuery = tableOrdersQuery
+          .gte("created_at", dates.from.toISOString())
+          .lte("created_at", dates.to.toISOString());
       }
 
-      const [ordersRes, bookingsRes] = await Promise.all([ordersQuery, bookingsQuery]);
+      const [ordersRes, bookingsRes, tableOrdersRes] = await Promise.all([ordersQuery, bookingsQuery, tableOrdersQuery]);
 
       if (ordersRes.error) throw ordersRes.error;
       if (bookingsRes.error) throw bookingsRes.error;
+      if (tableOrdersRes.error) throw tableOrdersRes.error;
 
       setOrders(ordersRes.data || []);
       setBookings(bookingsRes.data || []);
+      setTableOrders(tableOrdersRes.data || []);
     } catch (e) {
       setError(e?.message || "Failed to load dashboard.");
     } finally {
@@ -153,8 +195,11 @@ export default function RestaurantDashboardPage() {
       bookings.filter((b) => b.status === "cancelled").length;
     const currentRating = averageRatingForRange(reviews, rangeDates);
 
-    const newOrders = orders.filter((o) => o.order_status === "NEW").length;
+    const newOrders =
+      orders.filter((o) => o.order_status === "NEW").length +
+      tableOrders.filter((o) => String(o.booking_status || "").toUpperCase() === "PLACED").length;
     const readyPickups = orders.filter((o) => o.order_status === "READY_FOR_PICKUP").length;
+    const pendingBookings = bookings.filter((b) => isPendingBooking(b.status)).length;
 
     return {
       revenue,
@@ -164,8 +209,9 @@ export default function RestaurantDashboardPage() {
       rating: currentRating,
       newOrders,
       readyPickups,
+      pendingBookings,
     };
-  }, [orders, bookings, reviews, rangeDates]);
+  }, [orders, tableOrders, bookings, reviews, rangeDates]);
 
   const upcomingBookings = useMemo(() => {
     const now = new Date();
@@ -388,7 +434,7 @@ export default function RestaurantDashboardPage() {
               chip="Pickup"
             />
             <ActionCard
-              title={`${bookings.filter((b) => b.status === "pending").length} pending bookings`}
+              title={`${kpis.pendingBookings} pending bookings`}
               subtitle="Confirm or decline reservation requests"
               chip="Bookings"
             />
