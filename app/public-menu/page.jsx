@@ -129,7 +129,6 @@ function PublicRestaurantMenuContent() {
   const [openOrderModal, setOpenOrderModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderError, setOrderError] = useState("");
-  const [orderSuccess, setOrderSuccess] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("");
   const [paymentTrackingId, setPaymentTrackingId] = useState("");
   const [paymentBookingId, setPaymentBookingId] = useState("");
@@ -219,7 +218,6 @@ function PublicRestaurantMenuContent() {
   const totalAmount = useMemo(() => subtotalAmount + taxAmount, [subtotalAmount, taxAmount]);
 
   const addToCart = (section, item) => {
-    setOrderSuccess("");
     setCart((prev) => {
       const existing = prev[item.id];
       const qty = Number(existing?.qty || 0) + 1;
@@ -258,7 +256,6 @@ function PublicRestaurantMenuContent() {
 
   const placeOrder = async () => {
     setOrderError("");
-    setOrderSuccess("");
 
     const trimmedRestaurantId = String(restaurantId || "").trim();
     const parsedTableNo = Number(tableNo);
@@ -395,7 +392,6 @@ function PublicRestaurantMenuContent() {
       setPaymentBookingId(nextBookingId);
 
       if (nextStatus === "FINALIZED" || nextStatus === "ALREADY_FINALIZED") {
-        setOrderSuccess(`Payment successful. Booking created${nextBookingId ? ` (${nextBookingId})` : ""}.`);
         toast.success("Order confirmed");
         setCart({});
         setNotes("");
@@ -432,6 +428,18 @@ function PublicRestaurantMenuContent() {
     finalizePayment({ autoRetry: shouldAutoRetry });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [returnSessionId, returnOutcome]);
+
+  useEffect(() => {
+    if (!returnSessionId && !returnOutcome) return;
+    const base = `/public-menu?id=${encodeURIComponent(restaurantId)}&table=${encodeURIComponent(tableFromQr || tableNo || "")}`;
+    window.history.pushState({ publicMenuSafe: true }, "", window.location.href);
+    const onPop = () => {
+      window.history.replaceState({ publicMenuSafe: true }, "", base);
+      router.replace(base);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [returnSessionId, returnOutcome, restaurantId, tableFromQr, tableNo, router]);
 
   if (loading) return <MenuSkeleton />;
 
@@ -639,15 +647,16 @@ function PublicRestaurantMenuContent() {
         <div className="fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/40" onClick={() => !isSubmitting && setOpenOrderModal(false)} />
           <div className="absolute inset-x-0 bottom-0 sm:inset-0 sm:flex sm:items-center sm:justify-center p-2 sm:p-4">
-            <div className="w-full sm:max-w-2xl max-h-[90vh] rounded-t-2xl sm:rounded-2xl bg-white border border-slate-200 shadow-xl flex flex-col overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+            <div className="w-full sm:max-w-2xl max-h-[78vh] sm:max-h-[90vh] rounded-t-2xl sm:rounded-2xl bg-white border border-slate-200 shadow-xl flex flex-col overflow-hidden">
+              <div className="px-4 py-3 pr-12 border-b border-slate-100 flex items-center justify-between relative sticky top-0 bg-white z-20">
                 <div className="text-sm font-semibold text-slate-900">Your Order</div>
                 <button
                   type="button"
                   onClick={() => !isSubmitting && setOpenOrderModal(false)}
-                  className="h-8 w-8 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 inline-flex items-center justify-center"
+                  aria-label="Close order modal"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 z-20 h-9 w-9 rounded-full border border-slate-300 bg-white shadow-sm hover:bg-slate-50 inline-flex items-center justify-center"
                 >
-                  <X className="h-4 w-4 text-slate-700" />
+                  <X className="h-5 w-5 text-slate-800" />
                 </button>
               </div>
 
