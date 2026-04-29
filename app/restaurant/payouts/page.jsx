@@ -14,7 +14,6 @@ import {
   CircleDollarSign,
   Store,
   X,
-  ReceiptText,
 } from "lucide-react";
 
 function isMissingRestaurantPaymentDetailsTable(error) {
@@ -621,28 +620,6 @@ export default function RestaurantPartnerPayoutsPage() {
     return recentPayouts.find((r) => String(r.status || "").toUpperCase() === "PAID") || null;
   }, [recentPayouts]);
 
-  const recentTransactions = useMemo(() => {
-    const nameById = {};
-    restaurants.forEach((r) => {
-      nameById[String(r.id)] = r.name;
-    });
-
-    return orders
-      .filter(isValidOrderForSettlement)
-      .map((o) => ({
-        id: o.id,
-        restaurantName: nameById[String(o.restaurant_id)] || "Restaurant",
-        source: o.order_source === "PICKUP" ? "Pickup" : "Table",
-        amount: Number(o.total_amount || 0),
-        paymentMethod: o.payment_method || "ONLINE",
-        paymentStatus: o.payment_status || "PENDING",
-        status: o.status || "NEW",
-        createdAt: o.created_at || o.updated_at || "",
-      }))
-      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
-      .slice(0, 12);
-  }, [orders, restaurants]);
-
   const canRequestPayout =
     !!selectedRestaurant &&
     selectedPayoutAmount > 0 &&
@@ -726,12 +703,6 @@ export default function RestaurantPartnerPayoutsPage() {
 
     filteredRecentPayouts.forEach((p) => {
       rows.push([p.id, p.restaurantName, p.amount, p.method, p.status, p.requestedAt, p.processedAt, p.reference]);
-    });
-
-    rows.push([]);
-    rows.push(["Transaction ID", "Restaurant", "Source", "Amount", "Payment Method", "Payment Status", "Order Status", "Created At"]);
-    recentTransactions.forEach((t) => {
-      rows.push([t.id, t.restaurantName, t.source, t.amount, t.paymentMethod, t.paymentStatus, t.status, t.createdAt]);
     });
 
     const csv = rows.map((r) => r.map(toCsvCell).join(",")).join("\n");
@@ -903,75 +874,6 @@ export default function RestaurantPartnerPayoutsPage() {
                   {latestPaid ? `MUR ${formatMoney(latestPaid.amount)}` : "No paid payouts yet"}
                 </div>
               </div>
-            </div>
-          )}
-        </CardShell>
-
-        <CardShell
-          title="Recent Transactions"
-          right={
-            <div className="text-xs text-gray-500 inline-flex items-center gap-2">
-              <ReceiptText className="h-3.5 w-3.5" />
-              Payment activity
-            </div>
-          }
-        >
-          {loading ? (
-            <div className="space-y-2 animate-pulse">
-              <SkeletonRow />
-              <SkeletonRow />
-              <SkeletonRow />
-            </div>
-          ) : recentTransactions.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center">
-              <div className="mx-auto h-12 w-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center">
-                <ReceiptText className="h-6 w-6 text-gray-800" />
-              </div>
-              <div className="mt-3 text-lg font-semibold text-gray-900">No transactions found</div>
-              <div className="mt-1 text-sm text-gray-600">Recent paid/cash transactions will appear here.</div>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-gray-500">
-                    <th className="py-2 pr-4 font-medium">Transaction</th>
-                    <th className="py-2 pr-4 font-medium">Restaurant</th>
-                    <th className="py-2 pr-4 font-medium">Source</th>
-                    <th className="py-2 pr-4 font-medium">Amount</th>
-                    <th className="py-2 pr-4 font-medium">Payment</th>
-                    <th className="py-2 pr-4 font-medium">Order</th>
-                    <th className="py-2 pr-0 font-medium">Time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentTransactions.map((t) => (
-                    <tr key={t.id} className="border-t border-gray-100 hover:bg-gray-50/60 transition-colors">
-                      <td className="py-3 pr-4 font-semibold text-gray-900">{t.id}</td>
-                      <td className="py-3 pr-4 text-gray-700">{t.restaurantName}</td>
-                      <td className="py-3 pr-4 text-gray-700">{t.source}</td>
-                      <td className="py-3 pr-4">
-                        <Amount
-                          value={t.amount}
-                          className="inline-flex items-baseline gap-1"
-                          currencyClassName="text-[10px] font-semibold uppercase tracking-wide text-gray-500"
-                          valueClassName="font-semibold text-gray-900"
-                        />
-                      </td>
-                      <td className="py-3 pr-4">
-                        <div className="text-gray-700">{t.paymentMethod}</div>
-                        <div className="mt-1">
-                          <StatusPill status={t.paymentStatus} />
-                        </div>
-                      </td>
-                      <td className="py-3 pr-4">
-                        <StatusPill status={t.status} />
-                      </td>
-                      <td className="py-3 pr-0 text-gray-600 text-xs">{formatDateTime(t.createdAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           )}
         </CardShell>

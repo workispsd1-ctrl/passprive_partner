@@ -345,6 +345,8 @@ export default function Page() {
   const [restaurantRow, setRestaurantRow] = useState(null);
 
   const [bookings, setBookings] = useState([]);
+  const [tableBookings, setTableBookings] = useState([]);
+  const [paymentSessions, setPaymentSessions] = useState([]);
   const [userMap, setUserMap] = useState({});
   const [paymentDetails, setPaymentDetails] = useState(null);
 
@@ -425,21 +427,49 @@ export default function Page() {
 
     setPaymentDetails(pData || null);
 
-    const { data: bData, error: bErr } = await supabaseBrowser
-      .from("restaurant_bookings")
-      .select("id, customer_user_id, customer_name, customer_phone, customer_email, booking_date, booking_time, duration_minutes, party_size, status, source, cancelled_at, cancel_reason, created_at, updated_at, read")
-      .eq("restaurant_id", rid)
-      .order("created_at", { ascending: false })
-      .limit(2000);
+    const [bookingsRes, tableBookingsRes, paymentSessionsRes] = await Promise.all([
+      supabaseBrowser
+        .from("restaurant_bookings")
+        .select("id, customer_user_id, customer_name, customer_phone, customer_email, booking_date, booking_time, duration_minutes, party_size, status, source, cancelled_at, cancel_reason, created_at, updated_at, read")
+        .eq("restaurant_id", rid)
+        .order("created_at", { ascending: false })
+        .limit(2000),
+      supabaseBrowser
+        .from("restaurant_table_bookings")
+        .select("id, customer_name, customer_phone, booking_status, payment_status, total_amount, created_at, table_no")
+        .eq("restaurant_id", rid)
+        .order("created_at", { ascending: false })
+        .limit(2000),
+      supabaseBrowser
+        .from("payment_sessions")
+        .select("id, payment_context, amount_major, currency_code, status, created_at, tracking_id")
+        .eq("restaurant_id", rid)
+        .order("created_at", { ascending: false })
+        .limit(2000),
+    ]);
 
-    if (bErr) {
-      setError(bErr.message || "Failed to load bookings");
+    if (bookingsRes.error) {
+      setError(bookingsRes.error.message || "Failed to load bookings");
       setLoading(false);
       return;
     }
 
-    const rows = Array.isArray(bData) ? bData : [];
+    if (tableBookingsRes.error) {
+      setError(tableBookingsRes.error.message || "Failed to load table bookings");
+      setLoading(false);
+      return;
+    }
+
+    if (paymentSessionsRes.error) {
+      setError(paymentSessionsRes.error.message || "Failed to load payment sessions");
+      setLoading(false);
+      return;
+    }
+
+    const rows = Array.isArray(bookingsRes.data) ? bookingsRes.data : [];
     setBookings(rows);
+    setTableBookings(Array.isArray(tableBookingsRes.data) ? tableBookingsRes.data : []);
+    setPaymentSessions(Array.isArray(paymentSessionsRes.data) ? paymentSessionsRes.data : []);
 
     const ids = Array.from(new Set(rows.map((x) => x.customer_user_id).filter(Boolean)));
     if (ids.length) {
@@ -636,7 +666,14 @@ export default function Page() {
       }
     }
 
-    const currency = paymentDetails?.currency || "MUR";
+    const paidTableBookings = tableBookings.filter((x) => String(x.payment_status || "").toUpperCase() === "PAID");
+    const tableOrderRevenue = paidTableBookings.reduce((sum, x) => sum + Number(x.total_amount || 0), 0);
+    const finalizedPayments = paymentSessions.filter((x) => {
+      const status = String(x.status || "").toUpperCase();
+      return status === "FINALIZED" || status === "VERIFIED_SUCCESS";
+    });
+    const finalizedPaymentRevenue = finalizedPayments.reduce((sum, x) => sum + Number(x.amount_major || 0), 0);
+    const currency = paymentDetails?.currency || paymentSessions[0]?.currency_code || "MUR";
     const kyc = paymentDetails?.kyc_status || "NOT_STARTED";
     const commissionPct =
       paymentDetails?.commission_percent != null ? Number(paymentDetails.commission_percent) : null;
@@ -648,6 +685,12 @@ export default function Page() {
       statusCounts,
       sourceCounts,
       totalGuests,
+      tableBookingsTotal: tableBookings.length,
+      paidTableBookingsTotal: paidTableBookings.length,
+      tableOrderRevenue,
+      paymentSessionsTotal: paymentSessions.length,
+      finalizedPaymentsTotal: finalizedPayments.length,
+      finalizedPaymentRevenue,
       dist,
       sentimentCounts,
       replied,
@@ -667,7 +710,7 @@ export default function Page() {
       settlement_cycle: paymentDetails?.settlement_cycle || "—",
       updated_at: paymentDetails?.updated_at || null,
     };
-  }, [restaurantRow, filtered, range, paymentDetails]);
+  }, [restaurantRow, filtered, range, paymentDetails, paymentSessions, tableBookings]);
 
   if (loading) {
     return (
@@ -742,13 +785,17 @@ export default function Page() {
                 <Chip tone="indigo">
                   Dish discounts {a.dishActive}/{a.dishTotal}
                 </Chip>
-                <Chip tone="violet">KYC: {a.kyc}</Chip>
-                <Chip tone="slate">
-                  Payout: {a.payout_method} • {a.settlement_cycle}
+              
+                
+                <Chip tone="emerald">
+                  Table bookings: {fmtNum(a.paidTableBookingsTotal)}/{fmtNum(a.tableBookingsTotal)}
                 </Chip>
-                {a.commissionPct != null ? (
-                  <Chip tone="slate">Commission: {a.commissionPct}%</Chip>
-                ) : null}
+                
+                <Chip tone="slate">
+                  Table revenue: {a.currency} {fmtNum(a.tableOrderRevenue.toFixed(2))}
+                </Chip>
+                
+                
               </div>
             </div>
 

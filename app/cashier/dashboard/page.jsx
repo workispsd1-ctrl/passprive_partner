@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarCheck, QrCode, Package, IndianRupee, Receipt } from "lucide-react";
+import { CalendarCheck, QrCode, Package, DollarSign, Receipt } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 const ROWS_PER_PAGE = 10;
@@ -9,7 +9,7 @@ const ROWS_PER_PAGE = 10;
 function money(n) {
   const num = Number(n);
   if (!Number.isFinite(num)) return "—";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "MUR", maximumFractionDigits: 2 }).format(num);
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(num);
 }
 
 function fmtDateTime(v) {
@@ -98,7 +98,7 @@ export default function CashierDashboardPage() {
       { key: "table_orders", view: "table_orders", title: "Table Orders", value: k.table_orders_total ?? 0, subtitle: `${k.table_orders_active ?? 0} active`, icon: QrCode },
       { key: "pickup_orders", view: "pickup_orders", title: "Pickup Orders", value: k.pickup_active ?? 0, subtitle: "currently active", icon: Package },
       { key: "bill_payments", view: "bill_payments", title: "Bill Payments", value: k.bill_payments_pending ?? 0, subtitle: "pending collections", icon: Receipt },
-      { key: "revenue_today", view: "payment_sessions", title: "Revenue Today", value: money(k.revenue_today ?? 0), subtitle: "from payment sessions", icon: IndianRupee },
+      { key: "revenue_today", view: "payment_sessions", title: "Revenue Today", value: money(k.revenue_today ?? 0), subtitle: "from payment sessions", icon: DollarSign },
     ],
     [k]
   );
@@ -303,7 +303,7 @@ export default function CashierDashboardPage() {
                     : isTable
                     ? `Table ${r.table_no || "—"}`
                     : isPayment
-                    ? `${r.payment_context || "PAYMENT"} • ${r.currency_code || "MUR"}${r.table_no ? ` • Table ${r.table_no}` : ""}`
+                    ? `${r.payment_context || "PAYMENT"} • ${r.currency_code || "USD"}${r.table_no ? ` • Table ${r.table_no}` : ""}`
                     : `Code ${r.pickup_code || "—"}`;
                   const amount = isTable || activeView === "pickup_orders"
                     ? money(r.total_amount)

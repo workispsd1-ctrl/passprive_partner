@@ -14,9 +14,33 @@ function clamp(v, min, max) {
 }
 
 function sizeForShape(shape) {
-  if (shape === "circle") return { w: 72, h: 72 };
-  if (shape === "rectangle") return { w: 110, h: 68 };
-  return { w: 80, h: 80 };
+  if (shape === "circle") return { w: 110, h: 110 };
+  if (shape === "rectangle") return { w: 156, h: 96 };
+  return { w: 124, h: 124 };
+}
+
+function chairPositions(shape, capacity) {
+  const n = Math.max(2, Number(capacity) || 2);
+  if (shape === "rectangle") {
+    const top = Math.ceil(n / 2);
+    const bottom = n - top;
+    const points = [];
+    for (let i = 0; i < top; i += 1) {
+      points.push({ x: ((i + 1) / (top + 1)) * 100, y: -10 });
+    }
+    for (let i = 0; i < bottom; i += 1) {
+      points.push({ x: ((i + 1) / (bottom + 1)) * 100, y: 110 });
+    }
+    return points;
+  }
+
+  return Array.from({ length: n }).map((_, i) => {
+    const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+    const r = 62;
+    const x = 50 + Math.cos(angle) * r;
+    const y = 50 + Math.sin(angle) * r;
+    return { x, y };
+  });
 }
 
 function toRow(restaurantId, table) {
@@ -364,11 +388,12 @@ export default function RestaurantTableLayoutPage() {
           <div
             ref={canvasRef}
             className="relative w-full overflow-hidden rounded-2xl border border-dashed border-gray-300 bg-[radial-gradient(circle,_#f3f4f6_1px,_transparent_1px)]"
-            style={{ minHeight: 520, backgroundSize: "18px 18px" }}
+            style={{ minHeight: 620, backgroundSize: "18px 18px" }}
           >
             {tables.map((t) => {
               const size = sizeForShape(t.shape);
               const selectedCls = selectedId === t.id ? "ring-2 ring-[#771FA8]" : "ring-1 ring-gray-200";
+              const chairs = chairPositions(t.shape, t.capacity);
               return (
                 <button
                   key={t.id}
@@ -385,6 +410,13 @@ export default function RestaurantTableLayoutPage() {
                     cursor: dragId === t.id ? "grabbing" : "grab",
                   }}
                 >
+                  {chairs.map((c, idx) => (
+                    <span
+                      key={`${t.id}-chair-${idx}`}
+                      className="absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-gray-300 bg-[#F4E7D1]"
+                      style={{ left: `${c.x}%`, top: `${c.y}%` }}
+                    />
+                  ))}
                   <div className="text-xs font-bold">{t.label}</div>
                   <div className="text-[11px] text-gray-600">{t.capacity} seats</div>
                 </button>
