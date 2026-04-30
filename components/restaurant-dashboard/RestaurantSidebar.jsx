@@ -33,7 +33,7 @@ const nav = [
   { label: "Dashboard", href: "/restaurant/dashboard", icon: LayoutDashboard },
   { label: "Bookings", href: "/restaurant/bookings", icon: CalendarCheck },
     { label: "Staff", href: "/restaurant/staff", icon: UserRound },
-  { label: "Table Orders", href: "/restaurant/table-orders", icon: QrCode, key: "table_orders", premium: true },
+  { label: "QR Orders", href: "/restaurant/table-orders", icon: QrCode, key: "table_orders", premium: true },
   { label: "Table Layout", href: "/restaurant/table-layout", icon: Table2, premium: true },
 
   { label: "Pickup Orders", href: "/restaurant/orders", icon: Soup, key: "pickup_orders", premium: true },
