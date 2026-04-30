@@ -908,17 +908,17 @@ export default function OffersPage() {
     const locked = premium && !hasPremiumForKind(kind);
 
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+      <div className="rounded-3xl border border-slate-200 bg-white overflow-hidden shadow-[0_8px_30px_-20px_rgba(15,23,42,0.25)]">
+        <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-slate-900">{title}</p>
-            <p className="text-xs text-slate-500">{hint}</p>
+            <p className="text-base font-semibold text-slate-900">{title}</p>
+            <p className="text-sm text-slate-500 mt-0.5">{hint}</p>
           </div>
 
           {locked ? (
             <button
               onClick={() => openPayment(planForKind(kind))}
-              className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100 cursor-pointer"
+              className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-100 cursor-pointer"
             >
               Unlock {formatInr(PREMIUM_PLANS.find((p) => p.key === planForKind(kind))?.price || 0)}/mo
             </button>
@@ -928,14 +928,14 @@ export default function OffersPage() {
                 if (sectionOffers?.length) openEdit(sectionOffers[0].id);
                 else openCreate(OFFER_KIND.VISIT);
               }}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
             >
               {sectionOffers?.length ? "Edit Program" : "+ Setup Program"}
             </button>
           ) : (
             <button
               onClick={() => openCreate(kind)}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
             >
               + Add
             </button>
@@ -943,20 +943,26 @@ export default function OffersPage() {
         </div>
 
         {locked ? (
-          <div className="px-6 py-8 text-sm text-slate-500">This section is available for Premium partners only.</div>
+          <div className="px-6 py-10 text-sm text-slate-500">This section is available for Premium partners only.</div>
         ) : sectionOffers.length === 0 ? (
-          <div className="px-6 py-8 text-sm text-slate-500">No {title.toLowerCase()} yet.</div>
+          <div className="px-6 py-10 text-sm text-slate-500">No {title.toLowerCase()} yet.</div>
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div>
+            <div className="hidden md:grid grid-cols-12 gap-3 px-6 py-3 border-b border-slate-100 text-[11px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-50/70">
+              <div className="col-span-5">Offer</div>
+              <div className="col-span-4">Details</div>
+              <div className="col-span-3 text-right">Actions</div>
+            </div>
+            <div className="divide-y divide-slate-100">
             {sectionOffers.map((o) => {
               const k = o.offerKind || inferKind(o);
               const isVisit = k === OFFER_KIND.VISIT;
 
               return (
-                <div key={o.id} className="px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                  <div className="min-w-0">
+                <div key={o.id} className="px-6 py-5 grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-3">
+                  <div className="min-w-0 md:col-span-5">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-slate-900 truncate">
+                      <span className="text-sm md:text-base font-semibold text-slate-900 truncate">
                         {isVisit ? "Repeat Rewards Program" : o.title}
                       </span>
 
@@ -981,7 +987,13 @@ export default function OffersPage() {
                     {!isVisit && o.description ? <p className="text-xs text-slate-600 mt-1">{o.description}</p> : null}
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="md:col-span-4 flex items-center">
+                    <div className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-2 text-xs text-slate-700 w-full">
+                      {isVisit ? "Milestone based reward program" : formatOfferLine(o)}
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-3 flex items-center gap-2 md:justify-end flex-wrap">
                     {isVisit ? (
                       <>
                         <button onClick={() => openEdit(o.id)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">Edit</button>
@@ -1000,6 +1012,7 @@ export default function OffersPage() {
                 </div>
               );
             })}
+            </div>
           </div>
         )}
       </div>
@@ -1021,10 +1034,10 @@ export default function OffersPage() {
       ) : null}
 
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6">
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_8px_30px_-20px_rgba(15,23,42,0.25)]">
           <p className="text-xs text-slate-500">Partner Offer Center</p>
-          <p className="text-2xl font-semibold text-slate-900 mt-1">{activeOffers.length} active campaigns</p>
-          <p className="text-sm text-slate-600 mt-1">
+          <p className="text-3xl font-semibold text-slate-900 mt-1">{activeOffers.length} active campaigns</p>
+          <p className="text-sm text-slate-600 mt-2">
             Time Slot Offers ({formatInr(PREMIUM_PRICING.timeSlotOffers)}/month), Repeat Rewards ({formatInr(PREMIUM_PRICING.repeatRewards)}/month), Dish Discounts ({formatInr(PREMIUM_PRICING.discounts)}/month). Unlock all at{" "}
             <span className="line-through text-slate-400">{formatInr(PREMIUM_PRICING.unlockAllOriginal)}/month</span>{" "}
             <span className="font-semibold text-emerald-700">{formatInr(PREMIUM_PRICING.unlockAllOffer)}/month</span>{" "}

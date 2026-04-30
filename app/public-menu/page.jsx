@@ -13,9 +13,7 @@ import {
   ShoppingCart,
   Minus,
   Plus,
-  X,
   MapPin,
-  Trash2,
 } from "lucide-react";
 
 const TAX_PERCENT = 15;
@@ -75,6 +73,11 @@ function isUuidLike(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
 }
 
+function makeSessionId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return `sess_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
 function submitGatewayFormToTarget(redirectUrl, method, fields, target) {
   const form = document.createElement("form");
   form.method = String(method || "POST").toUpperCase();
@@ -95,6 +98,12 @@ function submitGatewayFormToTarget(redirectUrl, method, fields, target) {
 function getStored(key) {
   if (typeof window === "undefined") return "";
   return String(sessionStorage.getItem(key) || "");
+}
+
+function storageKey(base, restaurantId, tableNo) {
+  const rid = String(restaurantId || "").trim() || "unknown";
+  const tbl = String(tableNo || "").trim() || "unknown";
+  return `${base}:${rid}:${tbl}`;
 }
 
 function MenuSkeleton() {
@@ -126,8 +135,6 @@ function PublicRestaurantMenuContent() {
   const [menu, setMenu] = useState({ sections: [], full_menu_image_url: null, full_menu_image_urls: [] });
 
   const [cart, setCart] = useState({});
-  const [openOrderModal, setOpenOrderModal] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderError, setOrderError] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("");
   const [paymentTrackingId, setPaymentTrackingId] = useState("");
@@ -142,6 +149,14 @@ function PublicRestaurantMenuContent() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [tableNo, setTableNo] = useState("");
   const [notes, setNotes] = useState("");
+  const [enrollLoyalty, setEnrollLoyalty] = useState(false);
+  const [orderSessionId, setOrderSessionId] = useState("");
+  const [paymentChoice, setPaymentChoice] = useState("ONLINE");
+  const [appliedPromo, setAppliedPromo] = useState(null);
+  const [promoError, setPromoError] = useState("");
+  const [orderRecordId, setOrderRecordId] = useState("");
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [billReady, setBillReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -186,8 +201,89 @@ function PublicRestaurantMenuContent() {
   }, [tableFromQr]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const tableForKey = tableFromQr || tableNo || "";
+    const sessionKey = storageKey("public_menu_order_session_id", restaurantId, tableForKey);
+    const recordKey = storageKey("public_menu_order_record_id", restaurantId, tableForKey);
+    const cartKey = storageKey("public_menu_order_cart", restaurantId, tableForKey);
+    const notesKey = storageKey("public_menu_order_notes", restaurantId, tableForKey);
+    const savedSessionId = String(sessionStorage.getItem(sessionKey) || "");
+    const savedOrderRecordId = String(sessionStorage.getItem(recordKey) || "");
+    const savedCart = String(sessionStorage.getItem(cartKey) || "");
+    const savedNotes = String(sessionStorage.getItem(notesKey) || "");
+    if (savedSessionId) setOrderSessionId(savedSessionId);
+    if (savedOrderRecordId) setOrderRecordId(savedOrderRecordId);
+    if (savedNotes) setNotes(savedNotes);
+    if (savedCart) {
+      try {
+        const parsed = JSON.parse(savedCart);
+        if (parsed && typeof parsed === "object") setCart(parsed);
+      } catch {}
+    }
+  }, [restaurantId, tableFromQr, tableNo]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const tableForKey = tableFromQr || tableNo || "";
+    const sessionKey = storageKey("public_menu_order_session_id", restaurantId, tableForKey);
+    const recordKey = storageKey("public_menu_order_record_id", restaurantId, tableForKey);
+    const cartKey = storageKey("public_menu_order_cart", restaurantId, tableForKey);
+    const notesKey = storageKey("public_menu_order_notes", restaurantId, tableForKey);
+    if (orderSessionId) sessionStorage.setItem(sessionKey, orderSessionId);
+    if (orderRecordId) sessionStorage.setItem(recordKey, orderRecordId);
+    sessionStorage.setItem(cartKey, JSON.stringify(cart || {}));
+    sessionStorage.setItem(notesKey, notes || "");
+  }, [orderSessionId, orderRecordId, cart, notes, restaurantId, tableFromQr, tableNo]);
+
+  useEffect(() => {
+    if (!orderRecordId) return;
+    let cancelled = false;
+    const clearPersistedOrder = () => {
+      const tableForKey = tableFromQr || tableNo || "";
+      const sessionKey = storageKey("public_menu_order_session_id", restaurantId, tableForKey);
+      const recordKey = storageKey("public_menu_order_record_id", restaurantId, tableForKey);
+      const cartKey = storageKey("public_menu_order_cart", restaurantId, tableForKey);
+      const notesKey = storageKey("public_menu_order_notes", restaurantId, tableForKey);
+      sessionStorage.removeItem(sessionKey);
+      sessionStorage.removeItem(recordKey);
+      sessionStorage.removeItem(cartKey);
+      sessionStorage.removeItem(notesKey);
+      setOrderSessionId("");
+      setOrderRecordId("");
+      setCart({});
+      setNotes("");
+      setBillReady(false);
+    };
+    const poll = async () => {
+      const { data, error } = await supabaseBrowser
+        .from("restaurant_table_bookings")
+        .select("id, booking_status, payment_status")
+        .eq("id", orderRecordId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error || !data?.id) return;
+      const status = String(data?.booking_status || "").toUpperCase();
+      const paymentStatus = String(data?.payment_status || "").toUpperCase();
+      if (["CANCELLED", "COMPLETED"].includes(status) && ["PAID", "COMPLETED"].includes(paymentStatus)) {
+        clearPersistedOrder();
+        return;
+      }
+      if (["CANCELLED"].includes(status)) {
+        clearPersistedOrder();
+        return;
+      }
+      setBillReady(status === "COMPLETED");
+    };
+    poll();
+    const timer = setInterval(poll, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [orderRecordId, restaurantId, tableFromQr, tableNo]);
+
+  useEffect(() => {
     if (!returnSessionId && !returnOutcome) return;
-    setOpenOrderModal(false);
     setShowPaymentResult(true);
     setPaymentTrackingId(String(searchParams.get("tracking_id") || ""));
     setPaymentStatus(returnOutcome ? returnOutcome.toUpperCase() : "PENDING");
@@ -214,10 +310,78 @@ function PublicRestaurantMenuContent() {
     [cartItems]
   );
 
-  const taxAmount = useMemo(() => (subtotalAmount * TAX_PERCENT) / 100, [subtotalAmount]);
-  const totalAmount = useMemo(() => subtotalAmount + taxAmount, [subtotalAmount, taxAmount]);
+  const eligibleDishOffers = useMemo(() => {
+    const now = Date.now();
+    const offers = Array.isArray(restaurant?.offers) ? restaurant.offers : [];
+    return offers.filter((offer) => {
+      if (String(offer?.offerKind || "").toUpperCase() !== "DISH") return false;
+      if (!offer?.isActive) return false;
+      const code = String(offer?.promoCode || "").trim();
+      if (!code) return false;
+      const startMs = offer?.startDate ? Date.parse(`${offer.startDate}T00:00:00`) : NaN;
+      const endMs = offer?.endDate ? Date.parse(`${offer.endDate}T23:59:59`) : NaN;
+      if (Number.isFinite(startMs) && now < startMs) return false;
+      if (Number.isFinite(endMs) && now > endMs) return false;
+      return true;
+    });
+  }, [restaurant]);
+
+  const promoDiscountAmount = useMemo(() => {
+    if (!appliedPromo || !appliedPromo.offerId) return 0;
+    const offer = eligibleDishOffers.find((o) => o.id === appliedPromo.offerId);
+    if (!offer) return 0;
+    const dishId = String(offer?.dishDiscount?.dishId || "");
+    const target = cartItems.find((it) => String(it.itemId) === dishId);
+    if (!target) return 0;
+    const lineTotal = Number(target.price || 0) * Number(target.qty || 0);
+    const kind = String(offer.discountType || "").toUpperCase();
+    const val = Number(offer.discountValue || 0);
+    if (!Number.isFinite(lineTotal) || lineTotal <= 0 || !Number.isFinite(val) || val <= 0) return 0;
+    if (kind === "PERCENT") return Number(Math.min(lineTotal, (lineTotal * val) / 100).toFixed(2));
+    return Number(Math.min(lineTotal, val).toFixed(2));
+  }, [appliedPromo, eligibleDishOffers, cartItems]);
+
+  const eligibleDishOfferOptions = useMemo(() => {
+    return eligibleDishOffers
+      .map((offer) => {
+        const dishId = String(offer?.dishDiscount?.dishId || "");
+        const cartLine = cartItems.find((it) => String(it.itemId) === dishId);
+        if (!cartLine) return null;
+        const lineTotal = Number(cartLine.price || 0) * Number(cartLine.qty || 0);
+        const kind = String(offer.discountType || "").toUpperCase();
+        const val = Number(offer.discountValue || 0);
+        if (!Number.isFinite(lineTotal) || lineTotal <= 0 || !Number.isFinite(val) || val <= 0) return null;
+        const discount = kind === "PERCENT" ? Math.min(lineTotal, (lineTotal * val) / 100) : Math.min(lineTotal, val);
+        return {
+          offerId: offer.id,
+          code: String(offer.promoCode || "").toUpperCase(),
+          title: offer.title || "Dish Discount",
+          dishName: offer?.dishDiscount?.dishName || cartLine.name || "Dish",
+          discount: Number(discount.toFixed(2)),
+        };
+      })
+      .filter(Boolean);
+  }, [eligibleDishOffers, cartItems]);
+
+  const discountedSubtotalAmount = useMemo(
+    () => Number(Math.max(0, subtotalAmount - promoDiscountAmount).toFixed(2)),
+    [subtotalAmount, promoDiscountAmount]
+  );
+
+  const taxAmount = useMemo(() => (discountedSubtotalAmount * TAX_PERCENT) / 100, [discountedSubtotalAmount]);
+  const totalAmount = useMemo(() => discountedSubtotalAmount + taxAmount, [discountedSubtotalAmount, taxAmount]);
+
+  useEffect(() => {
+    if (!appliedPromo?.offerId) return;
+    const stillValid = promoDiscountAmount > 0;
+    if (!stillValid) {
+      setAppliedPromo(null);
+      setPromoError("Applied promo is no longer eligible for your cart.");
+    }
+  }, [appliedPromo, promoDiscountAmount]);
 
   const addToCart = (section, item) => {
+    if (!orderSessionId) setOrderSessionId(makeSessionId());
     setCart((prev) => {
       const existing = prev[item.id];
       const qty = Number(existing?.qty || 0) + 1;
@@ -252,6 +416,8 @@ function PublicRestaurantMenuContent() {
   const clearCart = () => {
     setCart({});
     setOrderError("");
+    setAppliedPromo(null);
+    setPromoError("");
   };
 
   const placeOrder = async () => {
@@ -259,11 +425,11 @@ function PublicRestaurantMenuContent() {
 
     const trimmedRestaurantId = String(restaurantId || "").trim();
     const parsedTableNo = Number(tableNo);
-    const roundedSubtotal = Number(subtotalAmount.toFixed(2));
+    const roundedSubtotal = Number(discountedSubtotalAmount.toFixed(2));
     const roundedTax = Number(taxAmount.toFixed(2));
     const roundedTotal = Number(totalAmount.toFixed(2));
     const recomputedSubtotal = Number(
-      cartItems.reduce((sum, it) => sum + Number(it.price || 0) * Number(it.qty || 0), 0).toFixed(2)
+      (cartItems.reduce((sum, it) => sum + Number(it.price || 0) * Number(it.qty || 0), 0) - promoDiscountAmount).toFixed(2)
     );
     const trimmedName = customerName.trim();
     const normalizedPhone = normalizeMauritiusPhone(customerPhone);
@@ -280,13 +446,15 @@ function PublicRestaurantMenuContent() {
       setOrderError("Table number is required.");
       return;
     }
-    if (!trimmedName) {
-      setOrderError("Name is required.");
-      return;
-    }
-    if (!normalizedPhone || normalizedPhone.length !== 8) {
-      setOrderError("Enter your phone number.");
-      return;
+    if (enrollLoyalty) {
+      if (!trimmedName) {
+        setOrderError("Name is required for loyalty enrollment.");
+        return;
+      }
+      if (!normalizedPhone || normalizedPhone.length !== 8) {
+        setOrderError("Enter phone number for loyalty enrollment.");
+        return;
+      }
     }
     if (Math.abs(recomputedSubtotal - roundedSubtotal) > 0.01) {
       setOrderError("Cart total mismatch. Please refresh and try again.");
@@ -297,15 +465,96 @@ function PublicRestaurantMenuContent() {
       return;
     }
 
-    if (isSubmitting) return;
-    setIsSubmitting(true);
+    if (paymentChoice === "TABLE") {
+      setPaymentStatus("PAY_AT_TABLE");
+      setPaymentFinalizeError("");
+      setShowPaymentResult(true);
+      toast.success("Order sent. Please pay at the table.");
+      setCart({});
+      setNotes("");
+      setOrderSessionId("");
+      sessionStorage.removeItem("public_menu_order_cart");
+      sessionStorage.removeItem("public_menu_order_notes");
+      sessionStorage.removeItem("public_menu_order_session_id");
+      return;
+    }
+
+    if (isPlacingOrder) return;
+    setIsPlacingOrder(true);
 
     try {
+      const sessionIdForOrder = orderSessionId || makeSessionId();
+      if (!orderSessionId) setOrderSessionId(sessionIdForOrder);
+      const commonPayload = {
+        restaurant_id: trimmedRestaurantId,
+        table_no: parsedTableNo,
+        customer_name: enrollLoyalty ? trimmedName : "Guest",
+        customer_phone: enrollLoyalty ? normalizedPhone : "",
+        order_items: cartItems.map((it) => ({
+          item_id: it.itemId,
+          name: it.name,
+          qty: Number(it.qty || 0),
+          unit_price: Number(Number(it.price || 0).toFixed(2)),
+          line_total: Number((Number(it.price || 0) * Number(it.qty || 0)).toFixed(2)),
+        })),
+        order_details: {
+          session_id: sessionIdForOrder,
+          promo_code: appliedPromo?.code || null,
+          loyalty_enrolled: Boolean(enrollLoyalty),
+        },
+        subtotal_amount: roundedSubtotal,
+        tax_amount: roundedTax,
+        total_amount: roundedTotal,
+        notes: notes.trim() || null,
+        payment_method: paymentChoice === "TABLE" ? "CASH" : "IVERI",
+        payment_status: "PENDING",
+        source: "public_menu",
+      };
+
+      if (!orderRecordId) {
+        const { data: inserted, error: insertErr } = await supabaseBrowser
+          .from("restaurant_table_bookings")
+          .insert({ ...commonPayload, booking_status: "PLACED" })
+          .select("id")
+          .single();
+        if (insertErr) throw insertErr;
+        setOrderRecordId(String(inserted?.id || ""));
+      } else {
+        const updatePayload = billReady
+          ? { ...commonPayload, updated_at: new Date().toISOString() }
+          : { ...commonPayload, booking_status: "PLACED", updated_at: new Date().toISOString() };
+        const { error: updateErr } = await supabaseBrowser
+          .from("restaurant_table_bookings")
+          .update(updatePayload)
+          .eq("id", orderRecordId);
+        if (updateErr) throw updateErr;
+      }
+
+      toast.success("Order updated. You can keep adding items.");
+
+      if (!billReady) {
+      return;
+      }
+
+      if (paymentChoice === "TABLE") {
+        if (orderRecordId) {
+          await supabaseBrowser
+            .from("restaurant_table_bookings")
+            .update({ payment_method: "CASH", payment_status: "PENDING", updated_at: new Date().toISOString() })
+            .eq("id", orderRecordId);
+        }
+        setPaymentStatus("PAY_AT_TABLE");
+        setPaymentFinalizeError("");
+        setShowPaymentResult(true);
+        toast.success("Order sent. Please pay at the table.");
+        return;
+      }
+
       const payload = {
         restaurant_id: trimmedRestaurantId,
         table_no: parsedTableNo,
-        customer_name: trimmedName,
-        customer_phone: normalizedPhone,
+        customer_name: enrollLoyalty ? trimmedName : "Guest",
+        customer_phone: enrollLoyalty ? normalizedPhone : "",
         notes: notes.trim() || "",
         items: cartItems.map((it) => ({
           item_id: it.itemId,
@@ -318,6 +567,12 @@ function PublicRestaurantMenuContent() {
         total_amount: roundedTotal,
         currency_code: "MUR",
       };
+      if (appliedPromo?.code) {
+        payload.notes = [payload.notes, `Promo: ${appliedPromo.code}`].filter(Boolean).join(" | ");
+      }
+      payload.notes = [payload.notes, `OrderSession:${sessionIdForOrder}`, orderRecordId ? `OrderRecord:${orderRecordId}` : ""]
+        .filter(Boolean)
+        .join(" | ");
 
       const data = await createPublicMenuSession(payload);
       const sessionId = String(data?.payment_session_id || "");
@@ -341,7 +596,7 @@ function PublicRestaurantMenuContent() {
     } catch (e) {
       setOrderError(e?.message || "Unable to start payment. Please try again.");
     } finally {
-      setIsSubmitting(false);
+      setIsPlacingOrder(false);
     }
   };
 
@@ -395,8 +650,11 @@ function PublicRestaurantMenuContent() {
         toast.success("Order confirmed");
         setCart({});
         setNotes("");
-        setOpenOrderModal(false);
+        setOrderSessionId("");
         setShowPaymentResult(true);
+        sessionStorage.removeItem("public_menu_order_cart");
+        sessionStorage.removeItem("public_menu_order_notes");
+        sessionStorage.removeItem("public_menu_order_session_id");
         const params = new URLSearchParams(searchParams.toString());
         params.delete("session_id");
         params.delete("outcome");
@@ -468,7 +726,9 @@ function PublicRestaurantMenuContent() {
         {showPaymentResult ? (
           <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sticky top-2 z-30 sm:static sm:z-auto">
             <div className="text-sm sm:text-base font-semibold text-emerald-800">
-              {paymentStatus === "FINALIZED" || paymentStatus === "SUCCESS"
+              {paymentStatus === "PAY_AT_TABLE"
+                ? "Order sent. Please pay at your table."
+                : paymentStatus === "FINALIZED" || paymentStatus === "SUCCESS"
                 ? "Payment successful. Your order is placed."
                 : "We are verifying your payment."}
             </div>
@@ -489,6 +749,11 @@ function PublicRestaurantMenuContent() {
                 </button>
               ) : null}
             </div>
+          </div>
+        ) : null}
+        {orderError ? (
+          <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            {orderError}
           </div>
         ) : null}
 
@@ -621,189 +886,22 @@ function PublicRestaurantMenuContent() {
         <div className="fixed bottom-0 inset-x-0 z-40 border-t border-slate-200 bg-white">
           <div className="mx-auto max-w-5xl px-3 sm:px-5 py-2.5 flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-slate-900">
-                {cartCount} item{cartCount > 1 ? "s" : ""} • {money(totalAmount)}
+                <div className="text-sm font-semibold text-slate-900">
+                  {cartCount} item{cartCount > 1 ? "s" : ""} • {money(totalAmount)}
+                </div>
+                <div className="text-[11px] text-slate-500">
+                Subtotal {money(discountedSubtotalAmount)} + Tax {money(taxAmount)}
+                </div>
               </div>
-              <div className="text-[11px] text-slate-500">
-                Subtotal {money(subtotalAmount)} + Tax {money(taxAmount)}
-              </div>
-            </div>
             <button
               type="button"
-              onClick={() => {
-                setOrderError("");
-                setOpenOrderModal(true);
-              }}
+              onClick={placeOrder}
+              disabled={isPlacingOrder || cartItems.length === 0}
               className="rounded-lg bg-[#DA3224] text-white px-3.5 py-2 text-sm font-semibold hover:opacity-90 inline-flex items-center gap-1.5"
             >
               <ShoppingCart className="h-4 w-4" />
-              View Cart
+              {isPlacingOrder ? "Ordering..." : "Order"}
             </button>
-          </div>
-        </div>
-      ) : null}
-
-      {openOrderModal ? (
-        <div className="fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/40" onClick={() => !isSubmitting && setOpenOrderModal(false)} />
-          <div className="absolute inset-x-0 bottom-0 sm:inset-0 sm:flex sm:items-center sm:justify-center p-2 sm:p-4">
-            <div className="w-full sm:max-w-2xl max-h-[78vh] sm:max-h-[90vh] rounded-t-2xl sm:rounded-2xl bg-white border border-slate-200 shadow-xl flex flex-col overflow-hidden">
-              <div className="px-4 py-3 pr-12 border-b border-slate-100 flex items-center justify-between relative sticky top-0 bg-white z-20">
-                <div className="text-sm font-semibold text-slate-900">Your Order</div>
-                <button
-                  type="button"
-                  onClick={() => !isSubmitting && setOpenOrderModal(false)}
-                  aria-label="Close order modal"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 z-20 h-9 w-9 rounded-full border border-slate-300 bg-white shadow-sm hover:bg-slate-50 inline-flex items-center justify-center"
-                >
-                  <X className="h-5 w-5 text-slate-800" />
-                </button>
-              </div>
-
-              <div className="p-4 overflow-y-auto space-y-3">
-                {cartItems.map((it) => (
-                  <div key={it.itemId} className="rounded-lg border border-slate-200 p-2.5 flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-slate-900 truncate">{it.name}</div>
-                      <div className="text-[11px] text-slate-500">{it.sectionName}</div>
-                      <div className="text-xs text-slate-700 mt-1">
-                        {money(it.price)} x {it.qty} = {money(it.price * it.qty)}
-                      </div>
-                    </div>
-                    <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-1.5 py-1">
-                      <button
-                        type="button"
-                        onClick={() => removeOneFromCart(it.itemId)}
-                        className="h-7 w-7 rounded-md border border-slate-200 hover:bg-slate-50 inline-flex items-center justify-center"
-                      >
-                        <Minus className="h-3.5 w-3.5" />
-                      </button>
-                      <span className="min-w-[14px] text-center text-sm font-semibold">{it.qty}</span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          addToCart(
-                            { id: it.sectionId, name: it.sectionName },
-                            { id: it.itemId, name: it.name, price: it.price }
-                          )
-                        }
-                        className="h-7 w-7 rounded-md border border-slate-200 hover:bg-slate-50 inline-flex items-center justify-center"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-
-                {cartItems.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={clearCart}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-rose-700"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Clear cart
-                  </button>
-                ) : null}
-
-                <div className="rounded-lg border border-slate-200 p-3 bg-slate-50 text-xs space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Subtotal</span>
-                    <span className="font-medium text-slate-900">{money(subtotalAmount)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Tax ({TAX_PERCENT}%)</span>
-                    <span className="font-medium text-slate-900">{money(taxAmount)}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-slate-200 pt-1.5 mt-1.5">
-                    <span className="font-semibold text-slate-900">Total</span>
-                    <span className="font-semibold text-slate-900">{money(totalAmount)}</span>
-                  </div>
-                </div>
-
-                <div className="rounded-lg border border-slate-200 p-3 space-y-2.5 bg-slate-50">
-                  <div>
-                    <label className="text-[11px] text-slate-600">Name *</label>
-                    <input
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none bg-white"
-                      placeholder="Your name"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] text-slate-600">Phone *</label>
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={11}
-                      value={customerPhone}
-                      onChange={(e) => setCustomerPhone(onlyDigits(e.target.value))}
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none bg-white"
-                      placeholder="Your phone number"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] text-slate-600">Table No</label>
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={6}
-                      value={tableNo}
-                      onChange={(e) => setTableNo(onlyDigits(e.target.value))}
-                      disabled={Boolean(tableFromQr)}
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none bg-white"
-                      placeholder="e.g. 12"
-                    />
-                    {tableFromQr ? <p className="mt-1 text-[11px] text-slate-500">Auto-detected from table QR.</p> : null}
-                  </div>
-                  <div>
-                    <label className="text-[11px] text-slate-600">Notes (optional)</label>
-                    <textarea
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      rows={3}
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none bg-white"
-                      placeholder="No onion, less spicy..."
-                    />
-                  </div>
-                </div>
-
-                {orderError ? <div className="text-sm text-rose-600">{orderError}</div> : null}
-                {paymentStatus ? (
-                  <div className="rounded-lg border border-slate-200 p-3 bg-white text-sm">
-                    <div className="font-semibold text-slate-900">Payment status: {paymentStatus}</div>
-                    <div className="mt-1 text-slate-600">Tracking ID: {paymentTrackingId || "—"}</div>
-                    <div className="text-slate-600">Booking ID: {paymentBookingId || "—"}</div>
-                    {paymentFinalizeError ? <div className="mt-2 text-rose-600">{paymentFinalizeError}</div> : null}
-                    {paymentStatus !== "FINALIZED" ? (
-                      <button
-                        type="button"
-                        onClick={() => finalizePayment({ autoRetry: false })}
-                        disabled={isFinalizing}
-                        className="mt-2 rounded-lg bg-[#DA3224] text-white px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
-                      >
-                        {isFinalizing ? "Finalizing..." : "Retry Finalize"}
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                <div className="text-sm font-semibold text-slate-900">Total: {money(totalAmount)}</div>
-                <button
-                  type="button"
-                  disabled={isSubmitting || cartItems.length === 0}
-                  onClick={placeOrder}
-                  className="rounded-lg bg-[#DA3224] text-white px-4 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-50"
-                >
-                  {isSubmitting ? "Redirecting to payment..." : "Pay Now"}
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       ) : null}

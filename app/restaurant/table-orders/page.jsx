@@ -313,7 +313,7 @@ export default function TableOrdersPage() {
 
       {orderedList.length === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
-          No orders found for selected filter.
+          No orders found.
         </div>
       ) : (
         <>
