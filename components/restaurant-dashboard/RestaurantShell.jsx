@@ -1,18 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import RestaurantSidebar from "./RestaurantSidebar";
 import RestaurantTopbar from "./RestaurantTopbar";
 import BookingAlertNotifier from "./BookingAlertNotifier";
 import TableOrderAlertNotifier from "./TableOrderAlertNotifier";
 
 export default function RestaurantShell({ children }) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem("restaurant_sidebar_collapsed") === "true";
-  });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const sidebarPrefLoadedRef = useRef(false);
 
   useEffect(() => {
+    const stored = window.localStorage.getItem("restaurant_sidebar_collapsed");
+    const next = stored === "true";
+    const rafId = window.requestAnimationFrame(() => {
+      setSidebarCollapsed(next);
+      sidebarPrefLoadedRef.current = true;
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, []);
+
+  useEffect(() => {
+    if (!sidebarPrefLoadedRef.current) return;
     window.localStorage.setItem("restaurant_sidebar_collapsed", String(sidebarCollapsed));
   }, [sidebarCollapsed]);
 

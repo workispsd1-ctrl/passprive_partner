@@ -151,12 +151,13 @@ function PublicRestaurantMenuContent() {
   const [notes, setNotes] = useState("");
   const [enrollLoyalty, setEnrollLoyalty] = useState(false);
   const [orderSessionId, setOrderSessionId] = useState("");
-  const [paymentChoice, setPaymentChoice] = useState("ONLINE");
   const [appliedPromo, setAppliedPromo] = useState(null);
   const [promoError, setPromoError] = useState("");
   const [orderRecordId, setOrderRecordId] = useState("");
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [isStartingBillPayment, setIsStartingBillPayment] = useState(false);
   const [billReady, setBillReady] = useState(false);
+  const [activeOrderSnapshot, setActiveOrderSnapshot] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -253,29 +254,38 @@ function PublicRestaurantMenuContent() {
       setCart({});
       setNotes("");
       setBillReady(false);
+      setActiveOrderSnapshot(null);
     };
     const poll = async () => {
-      const { data, error } = await supabaseBrowser
-        .from("restaurant_table_bookings")
-        .select("id, booking_status, payment_status")
-        .eq("id", orderRecordId)
-        .maybeSingle();
+      const res = await fetch("/api/public-menu/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "get_status", order_id: orderRecordId }),
+      });
+      const json = await res.json();
       if (cancelled) return;
-      if (error || !data?.id) return;
-      const status = String(data?.booking_status || "").toUpperCase();
-      const paymentStatus = String(data?.payment_status || "").toUpperCase();
-      if (["CANCELLED", "COMPLETED"].includes(status) && ["PAID", "COMPLETED"].includes(paymentStatus)) {
-        clearPersistedOrder();
+      if (!res.ok || !json?.ok) return;
+      if (!json?.order?.id) {
+        // stale local pointer; allow next order click to create a fresh row
+        setOrderRecordId("");
+        setBillReady(false);
+        setActiveOrderSnapshot(null);
         return;
       }
+      const data = json.order;
+      setActiveOrderSnapshot(data || null);
+      const status = String(data?.booking_status || "").toUpperCase();
       if (["CANCELLED"].includes(status)) {
         clearPersistedOrder();
         return;
       }
-      setBillReady(status === "COMPLETED");
+      setBillReady(status === "COMPLETED" || status === "PAID");
     };
     poll();
-    const timer = setInterval(poll, 5000);
+    const timer = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      poll();
+    }, 15000);
     return () => {
       cancelled = true;
       clearInterval(timer);
@@ -381,6 +391,10 @@ function PublicRestaurantMenuContent() {
   }, [appliedPromo, promoDiscountAmount]);
 
   const addToCart = (section, item) => {
+    if (billReady) {
+      toast.error("Order is completed. Please proceed to bill payment.");
+      return;
+    }
     if (!orderSessionId) setOrderSessionId(makeSessionId());
     setCart((prev) => {
       const existing = prev[item.id];
@@ -400,6 +414,7 @@ function PublicRestaurantMenuContent() {
   };
 
   const removeOneFromCart = (itemId) => {
+    if (billReady) return;
     setCart((prev) => {
       const existing = prev[itemId];
       if (!existing) return prev;
@@ -465,20 +480,6 @@ function PublicRestaurantMenuContent() {
       return;
     }
 
-    if (paymentChoice === "TABLE") {
-      setPaymentStatus("PAY_AT_TABLE");
-      setPaymentFinalizeError("");
-      setShowPaymentResult(true);
-      toast.success("Order sent. Please pay at the table.");
-      setCart({});
-      setNotes("");
-      setOrderSessionId("");
-      sessionStorage.removeItem("public_menu_order_cart");
-      sessionStorage.removeItem("public_menu_order_notes");
-      sessionStorage.removeItem("public_menu_order_session_id");
-      return;
-    }
-
     if (isPlacingOrder) return;
     setIsPlacingOrder(true);
 
@@ -486,6 +487,7 @@ function PublicRestaurantMenuContent() {
       const sessionIdForOrder = orderSessionId || makeSessionId();
       if (!orderSessionId) setOrderSessionId(sessionIdForOrder);
       const commonPayload = {
+        session_id: sessionIdForOrder,
         restaurant_id: trimmedRestaurantId,
         table_no: parsedTableNo,
         customer_name: enrollLoyalty ? trimmedName : "Guest",
@@ -506,73 +508,126 @@ function PublicRestaurantMenuContent() {
         tax_amount: roundedTax,
         total_amount: roundedTotal,
         notes: notes.trim() || null,
-        payment_method: paymentChoice === "TABLE" ? "CASH" : "IVERI",
+        payment_method: "IVERI",
         payment_status: "PENDING",
         source: "public_menu",
       };
 
-      if (!orderRecordId) {
-        const { data: inserted, error: insertErr } = await supabaseBrowser
-          .from("restaurant_table_bookings")
-          .insert({ ...commonPayload, booking_status: "PLACED" })
-          .select("id")
-          .single();
-        if (insertErr) throw insertErr;
-        setOrderRecordId(String(inserted?.id || ""));
-      } else {
-        const updatePayload = billReady
-          ? { ...commonPayload, updated_at: new Date().toISOString() }
-          : { ...commonPayload, booking_status: "PLACED", updated_at: new Date().toISOString() };
-        const { error: updateErr } = await supabaseBrowser
-          .from("restaurant_table_bookings")
-          .update(updatePayload)
-          .eq("id", orderRecordId);
-        if (updateErr) throw updateErr;
-      }
-
-      toast.success("Order updated. You can keep adding items.");
-
-      if (!billReady) {
-      return;
-      }
-
-      if (paymentChoice === "TABLE") {
-        if (orderRecordId) {
-          await supabaseBrowser
-            .from("restaurant_table_bookings")
-            .update({ payment_method: "CASH", payment_status: "PENDING", updated_at: new Date().toISOString() })
-            .eq("id", orderRecordId);
-        }
-        setPaymentStatus("PAY_AT_TABLE");
-        setPaymentFinalizeError("");
-        setShowPaymentResult(true);
-        toast.success("Order sent. Please pay at the table.");
-        return;
-      }
-
-      const payload = {
-        restaurant_id: trimmedRestaurantId,
-        table_no: parsedTableNo,
-        customer_name: enrollLoyalty ? trimmedName : "Guest",
-        customer_phone: enrollLoyalty ? normalizedPhone : "",
-        notes: notes.trim() || "",
-        items: cartItems.map((it) => ({
+      const upsertRes = await fetch("/api/public-menu/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "upsert",
+          target_order_id: orderRecordId || null,
+          payload: commonPayload,
+          bill_ready: billReady,
+        }),
+      });
+      const upsertJson = await upsertRes.json();
+      if (!upsertRes.ok || !upsertJson?.ok) throw new Error(upsertJson?.error || "Failed to save order.");
+      const savedOrderId = String(upsertJson?.order_id || orderRecordId || "");
+      if (savedOrderId && savedOrderId !== orderRecordId) setOrderRecordId(savedOrderId);
+      setActiveOrderSnapshot((prev) => {
+        const prevItems = Array.isArray(prev?.order_items) ? prev.order_items : [];
+        const nextItems = cartItems.map((it) => ({
           item_id: it.itemId,
           name: it.name,
           qty: Number(it.qty || 0),
           unit_price: Number(Number(it.price || 0).toFixed(2)),
+          line_total: Number((Number(it.price || 0) * Number(it.qty || 0)).toFixed(2)),
+        }));
+        return {
+          ...(prev && typeof prev === "object" ? prev : {}),
+          id: savedOrderId || prev?.id || null,
+          order_items: [...prevItems, ...nextItems],
+          subtotal_amount: Number((Number(prev?.subtotal_amount || 0) + roundedSubtotal).toFixed(2)),
+          tax_amount: Number((Number(prev?.tax_amount || 0) + roundedTax).toFixed(2)),
+          total_amount: Number((Number(prev?.total_amount || 0) + roundedTotal).toFixed(2)),
+          booking_status: billReady ? prev?.booking_status || "COMPLETED" : "PLACED",
+          payment_status: prev?.payment_status || "PENDING",
+        };
+      });
+
+      toast.success("Order updated. You can keep adding items.");
+
+      // Reset local batch after successful submit so next additions are continuation deltas.
+      setCart({});
+      setAppliedPromo(null);
+      setPromoError("");
+    } catch (e) {
+      setOrderError(e?.message || "Unable to save order. Please try again.");
+    } finally {
+      setIsPlacingOrder(false);
+    }
+  };
+
+  const startBillPayment = async (mode) => {
+    if (!billReady) {
+      setOrderError("Payment is available once partner marks order as completed.");
+      return;
+    }
+    if (isStartingBillPayment) return;
+
+    const orderId = String(activeOrderSnapshot?.id || orderRecordId || "").trim();
+    const parsedTableNo = Number(tableNo);
+    const trimmedRestaurantId = String(restaurantId || "").trim();
+    const orderItems = Array.isArray(activeOrderSnapshot?.order_items) ? activeOrderSnapshot.order_items : [];
+
+    if (!orderId || !trimmedRestaurantId || !Number.isInteger(parsedTableNo) || parsedTableNo <= 0) {
+      setOrderError("Unable to start payment. Missing order details.");
+      return;
+    }
+
+    setIsStartingBillPayment(true);
+    setOrderError("");
+
+    try {
+      if (mode === "TABLE") {
+        const markCashRes = await fetch("/api/public-menu/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "mark_cash", order_id: orderId }),
+        });
+        const markCashJson = await markCashRes.json();
+        if (!markCashRes.ok || !markCashJson?.ok) {
+          throw new Error(markCashJson?.error || "Failed to mark counter payment.");
+        }
+        setPaymentStatus("PAY_AT_COUNTER");
+        setPaymentFinalizeError("");
+        setShowPaymentResult(true);
+        setActiveOrderSnapshot((prev) =>
+          prev && typeof prev === "object"
+            ? { ...prev, payment_method: "CASH", payment_status: "PENDING" }
+            : prev
+        );
+        toast.success("Counter payment selected. Partner will mark this as paid.");
+        return;
+      }
+
+      const subtotal = Number(activeOrderSnapshot?.subtotal_amount || 0);
+      const tax = Number(activeOrderSnapshot?.tax_amount || 0);
+      const total = Number(activeOrderSnapshot?.total_amount || 0);
+      const customerName = String(activeOrderSnapshot?.customer_name || "Guest");
+      const customerPhone = String(activeOrderSnapshot?.customer_phone || "");
+      const orderNotes = String(activeOrderSnapshot?.notes || notes || "");
+
+      const payload = {
+        restaurant_id: trimmedRestaurantId,
+        table_no: parsedTableNo,
+        customer_name: customerName,
+        customer_phone: customerPhone,
+        notes: [orderNotes, `OrderRecord:${orderId}`].filter(Boolean).join(" | "),
+        items: orderItems.map((it) => ({
+          item_id: String(it?.item_id || it?.id || it?.name || ""),
+          name: String(it?.name || "Item"),
+          qty: Number(it?.qty || 0),
+          unit_price: Number(Number(it?.unit_price || 0).toFixed(2)),
         })),
-        subtotal_amount: roundedSubtotal,
-        tax_amount: roundedTax,
-        total_amount: roundedTotal,
+        subtotal_amount: Number(subtotal.toFixed(2)),
+        tax_amount: Number(tax.toFixed(2)),
+        total_amount: Number(total.toFixed(2)),
         currency_code: "MUR",
       };
-      if (appliedPromo?.code) {
-        payload.notes = [payload.notes, `Promo: ${appliedPromo.code}`].filter(Boolean).join(" | ");
-      }
-      payload.notes = [payload.notes, `OrderSession:${sessionIdForOrder}`, orderRecordId ? `OrderRecord:${orderRecordId}` : ""]
-        .filter(Boolean)
-        .join(" | ");
 
       const data = await createPublicMenuSession(payload);
       const sessionId = String(data?.payment_session_id || "");
@@ -590,13 +645,13 @@ function PublicRestaurantMenuContent() {
       sessionStorage.setItem("public_menu_restaurant_id", trimmedRestaurantId);
       sessionStorage.setItem("public_menu_table_no", String(parsedTableNo));
 
-      submitGatewayFormToTarget(redirectUrl, method, fields, "_self");
       setPaymentStatus("PENDING");
       setPaymentFinalizeError("");
+      submitGatewayFormToTarget(redirectUrl, method, fields, "_self");
     } catch (e) {
       setOrderError(e?.message || "Unable to start payment. Please try again.");
     } finally {
-      setIsPlacingOrder(false);
+      setIsStartingBillPayment(false);
     }
   };
 
@@ -726,8 +781,8 @@ function PublicRestaurantMenuContent() {
         {showPaymentResult ? (
           <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sticky top-2 z-30 sm:static sm:z-auto">
             <div className="text-sm sm:text-base font-semibold text-emerald-800">
-              {paymentStatus === "PAY_AT_TABLE"
-                ? "Order sent. Please pay at your table."
+              {paymentStatus === "PAY_AT_TABLE" || paymentStatus === "PAY_AT_COUNTER"
+                ? "Order completed. Please pay at the counter."
                 : paymentStatus === "FINALIZED" || paymentStatus === "SUCCESS"
                 ? "Payment successful. Your order is placed."
                 : "We are verifying your payment."}
@@ -754,6 +809,51 @@ function PublicRestaurantMenuContent() {
         {orderError ? (
           <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
             {orderError}
+          </div>
+        ) : null}
+        {activeOrderSnapshot?.id ? (
+          <div className="mt-3 rounded-2xl border border-sky-200 bg-sky-50 p-4">
+            <div className="text-sm font-semibold text-sky-900">Your current order</div>
+            <div className="mt-2 space-y-1">
+              {(Array.isArray(activeOrderSnapshot.order_items) ? activeOrderSnapshot.order_items : []).map((it, idx) => (
+                <div key={`${it?.item_id || it?.name || "item"}-${idx}`} className="flex items-center justify-between gap-2 text-xs text-sky-900">
+                  <span className="truncate">{it?.name || "Item"} x {Number(it?.qty || 0)}</span>
+                  <span>{money(Number(it?.line_total || Number(it?.qty || 0) * Number(it?.unit_price || 0)))}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-2 text-xs font-semibold text-sky-900">
+              Running total: {money(activeOrderSnapshot?.total_amount || 0)}
+            </div>
+            <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-1 text-xs text-sky-900">
+              <div>Subtotal: {money(activeOrderSnapshot?.subtotal_amount || 0)}</div>
+              <div>Tax: {money(activeOrderSnapshot?.tax_amount || 0)}</div>
+              <div className="font-semibold">Total: {money(activeOrderSnapshot?.total_amount || 0)}</div>
+            </div>
+            {billReady ? (
+              <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+                <div className="text-sm font-semibold text-slate-900">Bill summary</div>
+                <div className="mt-1 text-xs text-slate-600">Your order is completed. Choose payment mode.</div>
+                
+                {["PAID", "COMPLETED"].includes(String(activeOrderSnapshot?.payment_status || "").toUpperCase()) ? (
+                  <div className="mt-3 text-xs font-semibold text-emerald-700">Payment already completed for this order.</div>
+                ) : (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => startBillPayment("ONLINE")}
+                      disabled={isStartingBillPayment}
+                      className="rounded-lg bg-[#DA3224] px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                    >
+                      {isStartingBillPayment ? "Processing..." : "Pay"}
+                    </button>
+                    <span className="inline-flex items-center rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">
+                      Pay in Counter (Partner marks paid)
+                    </span>
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -882,7 +982,7 @@ function PublicRestaurantMenuContent() {
         </div>
       </div>
 
-      {cartCount > 0 ? (
+      {cartCount > 0 && !billReady ? (
         <div className="fixed bottom-0 inset-x-0 z-40 border-t border-slate-200 bg-white">
           <div className="mx-auto max-w-5xl px-3 sm:px-5 py-2.5 flex items-center justify-between gap-2">
             <div className="min-w-0">
