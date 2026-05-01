@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 function fmtDateTime(v) {
@@ -18,6 +19,7 @@ function money(n) {
 }
 
 export default function CashierAlertNotifier() {
+  const router = useRouter();
   const [queue, setQueue] = useState([]);
   const [active, setActive] = useState(null);
   const [visible, setVisible] = useState(false);
@@ -115,6 +117,13 @@ export default function CashierAlertNotifier() {
     setVisible(false);
     setActive(null);
     window.setTimeout(showNext, 120);
+  };
+
+  const openTarget = () => {
+    if (!active) return;
+    const target = active.type === "BOOKING" ? "/cashier/bookings" : "/cashier/orders";
+    acknowledge();
+    router.push(target);
   };
 
   const notifyHidden = (item) => {
@@ -226,6 +235,22 @@ export default function CashierAlertNotifier() {
             </>
           )}
           <div><span className="font-semibold">Received:</span> {fmtDateTime(active.created_at)}</div>
+        </div>
+        <div className="px-4 pb-4 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={acknowledge}
+            className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700"
+          >
+            Dismiss
+          </button>
+          <button
+            type="button"
+            onClick={openTarget}
+            className="h-9 rounded-lg border border-violet-700 bg-violet-600 px-3 text-sm font-semibold text-white hover:bg-violet-700"
+          >
+            Open
+          </button>
         </div>
       </div>
     </div>

@@ -17,7 +17,19 @@ export async function resolveCashierRestaurant(token) {
   const admin = adminClient();
   if (!admin) return { error: "SUPABASE_SERVICE_ROLE_KEY is missing.", status: 500 };
 
-  const { data: userRes, error: userErr } = await supabase.auth.getUser(token);
+  let userRes;
+  let userErr;
+  try {
+    const out = await supabase.auth.getUser(token);
+    userRes = out?.data;
+    userErr = out?.error;
+  } catch (error) {
+    const msg = String(error?.message || "");
+    if (msg.includes("ENOTFOUND") || msg.includes("fetch failed") || msg.includes("getaddrinfo")) {
+      return { error: "Supabase host is unreachable right now. Check DNS/network and Supabase URL.", status: 503 };
+    }
+    return { error: "Authentication service unavailable.", status: 503 };
+  }
   if (userErr || !userRes?.user?.id) return { error: "Unauthorized", status: 401 };
 
   const userId = userRes.user.id;

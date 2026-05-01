@@ -64,6 +64,7 @@ export default function CashierTableLayoutPage() {
   const [detailTableNo, setDetailTableNo] = useState(null);
   const [dragTableNo, setDragTableNo] = useState(null);
   const [dragOverTableNo, setDragOverTableNo] = useState(null);
+  const [updatingOrderKey, setUpdatingOrderKey] = useState("");
   const dragDropHandledRef = useRef(false);
   const lastCanvasPointRef = useRef(null);
 
@@ -181,7 +182,10 @@ export default function CashierTableLayoutPage() {
     setBlocked((prev) => ({ ...prev, [String(tableNo)]: Boolean(value) }));
   };
 
-  const updateOrderState = async (orderId, patch) => {
+  const updateOrderState = async (orderId, patch, actionKey) => {
+    const lockKey = `${orderId}:${actionKey || "update"}`;
+    if (updatingOrderKey) return;
+    setUpdatingOrderKey(lockKey);
     try {
       const { data: sess } = await supabaseBrowser.auth.getSession();
       const token = sess?.session?.access_token;
@@ -197,6 +201,8 @@ export default function CashierTableLayoutPage() {
       await loadAll();
     } catch (e) {
       toast.error(e?.message || "Failed to update order.");
+    } finally {
+      setUpdatingOrderKey("");
     }
   };
 
@@ -432,7 +438,7 @@ export default function CashierTableLayoutPage() {
     <div className="space-y-5">
       
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-3">
+      <div className="rounded-xl border border-slate-200 bg-white p-3">
           <div className="mb-2 text-sm font-semibold text-slate-700">Floor Map</div>
           <div
             className="relative w-full rounded-2xl border border-dashed border-slate-300 bg-slate-50"
@@ -516,11 +522,11 @@ export default function CashierTableLayoutPage() {
                     background: blockedNow
                       ? "#e2e8f0"
                       : active
-                        ? "linear-gradient(180deg, #86efac 0%, #4ade80 100%)"
+                        ? "linear-gradient(180deg, #dcfce7 0%, #bbf7d0 100%)"
                         : "#ffffff",
-                    borderColor: blockedNow ? "#64748b" : active ? "#16a34a" : "#d1d5db",
+                    borderColor: blockedNow ? "#64748b" : active ? "#86efac" : "#d1d5db",
                     boxShadow: active
-                      ? "0 0 0 4px rgba(22,163,74,0.28)"
+                      ? "0 0 0 4px rgba(34,197,94,0.14)"
                       : isJoinHost
                         ? "0 0 0 4px rgba(119,31,168,0.18)"
                         : undefined,
@@ -532,7 +538,7 @@ export default function CashierTableLayoutPage() {
                     {active ? `${activeByTable.get(tableNo)?.count || 0} active` : blockedNow ? "Blocked" : "Available"}
                   </div>
                   {active ? (
-                    <div className="mt-1 inline-flex rounded-full bg-emerald-900 px-2 py-0.5 text-[10px] font-semibold text-white">
+                    <div className="mt-1 inline-flex rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white">
                       Active
                     </div>
                   ) : null}
@@ -553,7 +559,7 @@ export default function CashierTableLayoutPage() {
       {detailTableNo ? (
         <div className="fixed inset-0 z-50 pointer-events-none">
           <div className="absolute inset-0 bg-black/20 pointer-events-auto" onClick={() => setDetailTableNo(null)} />
-          <div className="absolute right-0 top-0 h-full w-full lg:w-[calc(100%-16rem)] bg-white border-l border-slate-200 shadow-2xl pointer-events-auto overflow-auto">
+          <div className="absolute right-0 top-0 h-full w-full lg:w-[50%] bg-white border-l border-slate-200 shadow-2xl pointer-events-auto overflow-auto">
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sticky top-0 bg-white z-10">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">Table T{detailTableNo}</h2>
@@ -591,6 +597,15 @@ export default function CashierTableLayoutPage() {
                   {detailActiveOrders.map((o) => {
                     const items = extractOrderItems(o);
                     const customer = extractCustomer(o);
+                    const booking = String(o?.booking_status || "").toUpperCase();
+                    const payment = String(o?.payment_status || "").toUpperCase();
+                    const isPaid = payment === "PAID" || payment === "COMPLETED";
+                    const orderClosed = booking === "CANCELLED" || isPaid;
+                    const confirmedDone = ["CONFIRMED", "PREPARING", "SERVED", "COMPLETED"].includes(booking) || isPaid;
+                    const servedDone = ["SERVED", "COMPLETED"].includes(booking) || isPaid;
+                    const completedDone = booking === "COMPLETED" || isPaid;
+                    const paidDone = isPaid;
+                    const busyOnOrder = updatingOrderKey.startsWith(`${o.id}:`);
                     return (
                       <div key={o.id} className="rounded-xl border border-slate-200 p-4">
                         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -616,29 +631,33 @@ export default function CashierTableLayoutPage() {
                         <div className="mt-3 flex flex-wrap gap-2">
                           <button
                             type="button"
-                            onClick={() => updateOrderState(o.id, { booking_status: "CONFIRMED" })}
-                            className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-800 shadow-sm hover:bg-sky-100 active:scale-[0.99]"
+                            disabled={orderClosed || confirmedDone || busyOnOrder}
+                            onClick={() => updateOrderState(o.id, { booking_status: "CONFIRMED" }, "confirmed")}
+                            className="rounded-lg border border-sky-700 bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
                           >
                             Mark Confirmed
                           </button>
                           <button
                             type="button"
-                            onClick={() => updateOrderState(o.id, { booking_status: "SERVED" })}
-                            className="rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-800 shadow-sm hover:bg-indigo-100 active:scale-[0.99]"
+                            disabled={orderClosed || servedDone || busyOnOrder}
+                            onClick={() => updateOrderState(o.id, { booking_status: "SERVED" }, "served")}
+                            className="rounded-lg border border-indigo-700 bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
                           >
                             Mark Served
                           </button>
                           <button
                             type="button"
-                            onClick={() => updateOrderState(o.id, { booking_status: "COMPLETED", payment_status: "PENDING" })}
-                            className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 shadow-sm hover:bg-amber-100 active:scale-[0.99]"
+                            disabled={orderClosed || completedDone || busyOnOrder}
+                            onClick={() => updateOrderState(o.id, { booking_status: "COMPLETED", payment_status: "PENDING" }, "completed")}
+                            className="rounded-lg border border-amber-700 bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-amber-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
                           >
                             Mark Completed
                           </button>
                           <button
                             type="button"
-                            onClick={() => updateOrderState(o.id, { payment_status: "PAID" })}
-                            className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900 shadow-sm hover:bg-emerald-100 active:scale-[0.99]"
+                            disabled={paidDone || busyOnOrder}
+                            onClick={() => updateOrderState(o.id, { payment_status: "PAID" }, "paid")}
+                            className="rounded-lg border border-emerald-700 bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
                           >
                             Mark Paid
                           </button>
