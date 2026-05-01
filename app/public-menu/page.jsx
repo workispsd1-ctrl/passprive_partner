@@ -58,6 +58,24 @@ function money(n) {
   }).format(num);
 }
 
+function getOrderTimeline(bookingStatusRaw, paymentStatusRaw) {
+  const booking = String(bookingStatusRaw || "").toUpperCase();
+  const payment = String(paymentStatusRaw || "").toUpperCase();
+  const paid = payment === "PAID" || payment === "COMPLETED";
+  const orderCompletedByKitchen = booking === "COMPLETED" || paid;
+  const served = booking === "SERVED" || orderCompletedByKitchen;
+  const preparing = booking === "PREPARING" || served;
+  const confirmed = booking === "CONFIRMED" || preparing || booking === "PLACED";
+  const placed = Boolean(booking);
+  return [
+    { key: "PLACED", label: "Order Placed", done: placed },
+    { key: "CONFIRMED", label: "Order Confirmed", done: confirmed },
+    { key: "PREPARING", label: "Preparing", done: preparing },
+    { key: "SERVED", label: "Served", done: served },
+    { key: "COMPLETED", label: "Completed", done: paid },
+  ];
+}
+
 function onlyDigits(v) {
   return String(v || "").replace(/\D/g, "");
 }
@@ -356,7 +374,7 @@ function PublicRestaurantMenuContent() {
       setActiveOrderSnapshot(data || null);
       const status = String(data?.booking_status || "").toUpperCase();
       const paymentStatus = String(data?.payment_status || "").toUpperCase();
-      if (status === "PAID" || paymentStatus === "PAID" || paymentStatus === "COMPLETED") {
+      if (paymentStatus === "PAID" || paymentStatus === "COMPLETED") {
         clearPersistedOrder();
         return;
       }
@@ -785,10 +803,19 @@ function PublicRestaurantMenuContent() {
         setCart({});
         setNotes("");
         setOrderSessionId("");
+        setOrderRecordId("");
+        setBillReady(false);
+        setActiveOrderSnapshot(null);
         setShowPaymentResult(true);
-        sessionStorage.removeItem("public_menu_order_cart");
-        sessionStorage.removeItem("public_menu_order_notes");
-        sessionStorage.removeItem("public_menu_order_session_id");
+        const tableForKey = tableFromQr || tableNo || "";
+        const sessionKey = storageKey("public_menu_order_session_id", restaurantId, tableForKey);
+        const recordKey = storageKey("public_menu_order_record_id", restaurantId, tableForKey);
+        const cartKey = storageKey("public_menu_order_cart", restaurantId, tableForKey);
+        const notesKey = storageKey("public_menu_order_notes", restaurantId, tableForKey);
+        sessionStorage.removeItem(sessionKey);
+        sessionStorage.removeItem(recordKey);
+        sessionStorage.removeItem(cartKey);
+        sessionStorage.removeItem(notesKey);
         const params = new URLSearchParams(searchParams.toString());
         params.delete("session_id");
         params.delete("outcome");
@@ -893,6 +920,38 @@ function PublicRestaurantMenuContent() {
         {activeOrderSnapshot?.id ? (
           <div className="mt-3 rounded-2xl border border-sky-200 bg-sky-50 p-4">
             <div className="text-sm font-semibold text-sky-900">Your current order</div>
+            <div className="mt-3 rounded-xl border border-emerald-200 bg-white p-3">
+              <div className="overflow-x-auto">
+                <div className="min-w-[680px]">
+                  <div className="relative flex items-start justify-between">
+                    {getOrderTimeline(activeOrderSnapshot?.booking_status, activeOrderSnapshot?.payment_status).map((step, idx, arr) => (
+                      <div key={step.key} className="relative flex flex-1 flex-col items-center">
+                        <div
+                          className={`z-10 grid h-8 w-8 place-items-center rounded-full border-2 text-[11px] font-bold ${
+                            step.done
+                              ? "border-emerald-600 bg-emerald-500 text-white"
+                              : "border-slate-300 bg-white text-slate-500"
+                          }`}
+                        >
+                          {idx + 1}
+                        </div>
+                        <div className={`mt-2 text-center text-[11px] font-semibold ${step.done ? "text-emerald-800" : "text-slate-500"}`}>
+                          {step.label}
+                        </div>
+                        {idx < arr.length - 1 ? (
+                          <div
+                            className={`absolute top-4 left-1/2 h-[3px] w-full ${
+                              step.done ? "bg-emerald-400" : "bg-slate-200"
+                            }`}
+                            style={{ transform: "translateX(16px)" }}
+                          />
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
             <div className="mt-2 space-y-1">
               {(Array.isArray(activeOrderSnapshot.order_items) ? activeOrderSnapshot.order_items : []).map((it, idx) => (
                 <div key={`${it?.item_id || it?.name || "item"}-${idx}`} className="flex items-center justify-between gap-2 text-xs text-sky-900">

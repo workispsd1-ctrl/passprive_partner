@@ -11,9 +11,18 @@ function adminClient() {
 function isOpen(row) {
   const booking = String(row?.booking_status || "").toUpperCase();
   const payment = String(row?.payment_status || "").toUpperCase();
-  const bookingClosed = booking === "COMPLETED" || booking === "CANCELLED";
+  const bookingClosed = booking === "CANCELLED";
   const paymentClosed = payment === "PAID" || payment === "COMPLETED";
   return !bookingClosed && !paymentClosed;
+}
+
+function canAppendItems(row) {
+  const booking = String(row?.booking_status || "").toUpperCase();
+  const payment = String(row?.payment_status || "").toUpperCase();
+  if (booking === "CANCELLED") return false;
+  if (payment === "PAID" || payment === "COMPLETED") return false;
+  if (booking === "COMPLETED") return false;
+  return true;
 }
 
 function mergeOrderItems(existingItems, incomingItems) {
@@ -136,7 +145,7 @@ export async function POST(request) {
           .eq("id", targetOrderId)
           .maybeSingle();
         if (targetErr) throw targetErr;
-        if (!targetRow || !isOpen(targetRow)) {
+        if (!targetRow || !canAppendItems(targetRow)) {
           targetOrderId = "";
         }
       }
@@ -149,7 +158,7 @@ export async function POST(request) {
           .order("updated_at", { ascending: false })
           .limit(1)
           .maybeSingle();
-        if (bySession && isOpen(bySession)) {
+        if (bySession && canAppendItems(bySession)) {
           targetOrderId = String(bySession.id);
         }
       }
@@ -162,7 +171,7 @@ export async function POST(request) {
           .eq("table_no", payloadTableNo)
           .order("updated_at", { ascending: false })
           .limit(10);
-        const openByTable = (Array.isArray(byTable) ? byTable : []).find(isOpen) || null;
+        const openByTable = (Array.isArray(byTable) ? byTable : []).find(canAppendItems) || null;
         if (openByTable?.id) targetOrderId = String(openByTable.id);
       }
 
