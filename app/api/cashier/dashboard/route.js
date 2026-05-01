@@ -76,6 +76,7 @@ export async function GET(request) {
         user_name: ctx.userName,
         restaurant_name: ctx.restaurantName,
         restaurant_logo: ctx.restaurantLogo || "",
+        restaurant_id: ctx.restaurantId,
       },
       rows: {
         bookings: bookingsRes.data || [],

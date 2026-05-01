@@ -13,6 +13,7 @@ export async function GET(request) {
       .from("restaurant_table_bookings")
       .select("id,table_no,customer_name,customer_phone,order_items,order_details,total_amount,payment_status,booking_status,notes,created_at")
       .eq("restaurant_id", ctx.restaurantId)
+      .eq("source", "public_menu")
       .order("created_at", { ascending: false })
       .limit(200);
 

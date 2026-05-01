@@ -8,9 +8,10 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 const tabs = [
   { href: "/cashier/dashboard", label: "Dashboard", icon: LayoutGrid },
+  { href: "/cashier/orders", label: "Orders", icon: Package2 },
   { href: "/cashier/bookings", label: "Bookings", icon: CalendarCheck },
   { href: "/cashier/table-orders", label: "Table Orders", icon: QrCode },
-  { href: "/restaurant/orders", label: "Pickup", icon: Package2 },
+  { href: "/cashier/pickup-orders", label: "Pickup", icon: Package2 },
 ];
 
 export default function CashierTopNav() {
