@@ -7,6 +7,12 @@ function serverClient() {
   });
 }
 
+function adminClient() {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) return null;
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, key, { auth: { persistSession: false } });
+}
+
 function normalizeRole(role) {
   const value = String(role || "").toLowerCase();
   if (value === "cashier") return "restaurant_cashier";
@@ -29,9 +35,11 @@ export async function POST(request) {
     }
 
     const supabase = serverClient();
+    const admin = adminClient();
+    if (!admin) return NextResponse.json({ ok: false, error: "SUPABASE_SERVICE_ROLE_KEY is missing." }, { status: 500 });
 
     if (deviceId) {
-      const { data: paired, error: pairErr } = await supabase
+      const { data: paired, error: pairErr } = await admin
         .from("restaurant_staff_devices")
         .select("device_id")
         .eq("device_id", deviceId)
@@ -45,7 +53,7 @@ export async function POST(request) {
       }
     }
 
-    const { data: members, error: staffErr } = await supabase
+    const { data: members, error: staffErr } = await admin
       .from("restaurant_staff")
       .select("user_id, role")
       .eq("restaurant_id", restaurantId);
@@ -57,7 +65,7 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: "No staff users found for this restaurant." }, { status: 404 });
     }
 
-    const { data: usersRows, error: usersErr } = await supabase
+    const { data: usersRows, error: usersErr } = await admin
       .from("users")
       .select("id, email, role")
       .in("id", userIds);
