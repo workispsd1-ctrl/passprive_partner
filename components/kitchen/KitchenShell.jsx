@@ -19,25 +19,22 @@ export default function KitchenShell({ children }) {
 
   useEffect(() => {
     if (!prefLoadedRef.current) return;
-    window.localStorage.setItem("kitchen_sidebar_collapsed", String(sidebarCollapsed));
+    window.localStorage.setItem(
+      "kitchen_sidebar_collapsed",
+      String(sidebarCollapsed)
+    );
   }, [sidebarCollapsed]);
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
-      <div className="flex h-screen flex-col">
+    <main className="min-h-screen bg-[#f6f7fb] text-slate-900 lg:flex">
+      <KitchenSidebar
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed((v) => !v)}
+      />
+      <div className="flex-1 min-w-0 p-4 sm:p-6">
         <KitchenTopbar />
-        <div className="flex flex-1 overflow-hidden">
-          <KitchenSidebar
-            collapsed={sidebarCollapsed}
-            onToggle={() => setSidebarCollapsed((v) => !v)}
-          />
-          <main className="flex-1 overflow-auto">
-            <div className="px-4 sm:px-6 lg:px-8 py-6">
-              {children}
-            </div>
-          </main>
-        </div>
+        <section>{children}</section>
       </div>
-    </div>
+    </main>
   );
 }
