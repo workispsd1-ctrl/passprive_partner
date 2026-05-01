@@ -7,7 +7,16 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { verifyUser } from "@/store/features/admin/adminSlice";
 import { useAppDispatch } from "@/store/hooks";
 
-const ALLOWED_ROLES = new Set(["storepartner", "restaurantpartner", "corporateadmin", "storemanager", "cashier"]);
+const ALLOWED_ROLES = new Set([
+  "storepartner",
+  "restaurantpartner",
+  "corporateadmin",
+  "storemanager",
+  "cashier",
+  "restaurant_cashier",
+  "restaurant_kitchen",
+  "restaurant_bearer",
+]);
 
 const AuthCallbackPage = () => {
   const dispatch = useAppDispatch();
@@ -76,8 +85,18 @@ const AuthCallbackPage = () => {
           return;
         }
 
-        if (role === "cashier") {
+        if (role === "cashier" || role === "restaurant_cashier") {
           if (!cancelled) router.replace("/cashier/dashboard");
+          return;
+        }
+
+        if (role === "restaurant_kitchen") {
+          if (!cancelled) router.replace("/restaurant/kitchen/dashboard");
+          return;
+        }
+
+        if (role === "restaurant_bearer") {
+          if (!cancelled) router.replace("/restaurant/bearer/dashboard");
           return;
         }
 

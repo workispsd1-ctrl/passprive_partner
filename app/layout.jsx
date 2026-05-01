@@ -2,6 +2,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { ToastProvider } from "../components/toastProvider";
+import SessionTimeoutGuard from "@/components/auth/SessionTimeoutGuard";
 import "react-phone-input-2/lib/style.css";
 import "react-datepicker/dist/react-datepicker.css";
 
@@ -26,6 +27,7 @@ export default function RootLayout({ children }) {
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
           <Providers>
+        <SessionTimeoutGuard />
         {children}
         </Providers>
         <ToastProvider/>

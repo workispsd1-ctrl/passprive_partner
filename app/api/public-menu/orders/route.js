@@ -128,6 +128,19 @@ export async function POST(request) {
       const payloadRestaurantId = String(payload?.restaurant_id || "").trim();
       const payloadTableNo = Number(payload?.table_no || 0);
 
+      // Guard against stale client pointers: never append into a closed/paid order.
+      if (targetOrderId) {
+        const { data: targetRow, error: targetErr } = await admin
+          .from("restaurant_table_bookings")
+          .select("id, booking_status, payment_status, updated_at")
+          .eq("id", targetOrderId)
+          .maybeSingle();
+        if (targetErr) throw targetErr;
+        if (!targetRow || !isOpen(targetRow)) {
+          targetOrderId = "";
+        }
+      }
+
       if (!targetOrderId && payloadSessionId) {
         const { data: bySession } = await admin
           .from("restaurant_table_bookings")

@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { Bell, Phone, Hash, ArrowLeft } from "lucide-react";
-import { toast } from "sonner";
 
 const STATUS = {
   PLACED: "PLACED",
@@ -58,6 +57,27 @@ function blinkAccent(tableNo) {
   return TABLE_BLINK_COLORS[(n - 1) % TABLE_BLINK_COLORS.length];
 }
 
+function orderContentSignature(row) {
+  const items = Array.isArray(row?.order_items)
+    ? [...row.order_items]
+        .map((it) => ({
+          id: String(it?.item_id || it?.id || it?.name || ""),
+          qty: Number(it?.qty || 0),
+          unit: Number(it?.unit_price || 0),
+          line: Number(it?.line_total || 0),
+        }))
+        .sort((a, b) => String(a.id).localeCompare(String(b.id)))
+    : [];
+
+  return JSON.stringify({
+    items,
+    notes: String(row?.notes || ""),
+    subtotal: Number(row?.subtotal_amount || 0),
+    tax: Number(row?.tax_amount || 0),
+    total: Number(row?.total_amount || 0),
+  });
+}
+
 export default function TableOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -72,6 +92,7 @@ export default function TableOrdersPage() {
   const [openItemsPopoverId, setOpenItemsPopoverId] = useState("");
   const [draftStatusById, setDraftStatusById] = useState({});
   const [lastStatusById, setLastStatusById] = useState({});
+  const [orderAlert, setOrderAlert] = useState(null);
   const knownOrderIdsRef = useRef(new Set());
   const knownOrderSnapshotRef = useRef(new Map());
   const lastNotifyKeyRef = useRef("");
@@ -302,34 +323,39 @@ export default function TableOrdersPage() {
     if (!firstLoad) {
       const currentIds = knownOrderIdsRef.current;
       const prevSnapshot = knownOrderSnapshotRef.current;
-      let newestNew = null;
-      let latestAddon = null;
-      let latestAnyUpdate = null;
+      const newOrders = [];
+      const contentUpdatedOrders = [];
+
       for (const o of next) {
         if (!currentIds.has(o.id)) {
-          if (!newestNew) newestNew = o;
+          newOrders.push(o);
         }
         const prev = prevSnapshot.get(o.id);
         if (prev) {
-          const prevTotal = Number(prev.total_amount || 0);
-          const nextTotal = Number(o.total_amount || 0);
-          const prevQty = Array.isArray(prev.order_items)
-            ? prev.order_items.reduce((sum, i) => sum + Number(i?.qty || 0), 0)
-            : 0;
-          const nextQty = Array.isArray(o.order_items)
-            ? o.order_items.reduce((sum, i) => sum + Number(i?.qty || 0), 0)
-            : 0;
-          if (nextTotal > prevTotal + 0.001 || nextQty > prevQty) {
-            latestAddon = o;
-          }
-          if (String(prev.updated_at || "") !== String(o.updated_at || "")) {
-            latestAnyUpdate = o;
+          if (orderContentSignature(prev) !== orderContentSignature(o)) {
+            contentUpdatedOrders.push(o);
           }
         }
       }
 
-      const notifyTarget = latestAddon || newestNew || latestAnyUpdate;
-      if (notifyTarget?.id) {
+      const blinkByTable = new Set(
+        [...newOrders, ...contentUpdatedOrders]
+          .map((row) => Number(row?.table_no || 0))
+          .filter((n) => Number.isInteger(n) && n > 0)
+      );
+      if (blinkByTable.size > 0) {
+        setBlinkingTables((prev) => {
+          const nextBlink = { ...prev };
+          for (const tableNo of blinkByTable) {
+            nextBlink[String(tableNo)] = true;
+          }
+          return nextBlink;
+        });
+      }
+
+      const newestNew = newOrders.length > 0 ? newOrders[0] : null;
+      if (newestNew?.id) {
+        const notifyTarget = newestNew;
         const qtySum = Array.isArray(notifyTarget.order_items)
           ? notifyTarget.order_items.reduce((sum, i) => sum + Number(i?.qty || 0), 0)
           : 0;
@@ -346,24 +372,14 @@ export default function TableOrdersPage() {
           lastNotifyKeyRef.current = notifyKey;
           lastNotifyAtRef.current = now;
           playOrderSound();
-          const msg = latestAddon?.id
-            ? `Table ${notifyTarget.table_no || "?"} added items`
-            : newestNew?.id
-            ? `New order received for table ${notifyTarget.table_no || "?"}`
-            : `Table ${notifyTarget.table_no || "?"} order updated`;
-          toast(msg, {
-            duration: 3200,
-            style: {
-              background: "#F4E7D1",
-              border: "1px solid rgba(119,31,168,0.35)",
-              color: "#2f1b42",
-            },
+          const msg = `New order received for table ${notifyTarget.table_no || "?"}`;
+          setOrderAlert({
+            id: String(notifyTarget.id),
+            message: msg,
+            tableNo: Number(notifyTarget.table_no || 0) || "—",
+            customerName: notifyTarget.customer_name || "Guest",
+            totalAmount: Number(notifyTarget.total_amount || 0),
           });
-          const tableNo = Number(notifyTarget?.table_no || 0);
-          if (Number.isInteger(tableNo) && tableNo > 0) {
-            const key = String(tableNo);
-            setBlinkingTables((prev) => ({ ...prev, [key]: true }));
-          }
         }
       }
     }
@@ -656,19 +672,33 @@ export default function TableOrdersPage() {
     setUpdatingId(orderId);
     setError("");
 
+    const nextIsPaid = String(nextStatus || "").toUpperCase() === "PAID";
+
     setOrders((prev) =>
       prev.map((o) =>
-        o.id === orderId ? { ...o, booking_status: nextStatus, updated_at: new Date().toISOString() } : o
+        o.id === orderId
+          ? {
+              ...o,
+              booking_status: nextStatus,
+              payment_status: nextIsPaid ? "PAID" : o.payment_status,
+              updated_at: new Date().toISOString(),
+            }
+          : o
       )
     );
     setDraftStatusById((prev) => ({ ...prev, [orderId]: nextStatus }));
 
+    const updatePayload = {
+      booking_status: nextStatus,
+      updated_at: new Date().toISOString(),
+    };
+    if (nextIsPaid) {
+      updatePayload.payment_status = "PAID";
+    }
+
     const { error: upErr } = await supabaseBrowser
       .from("restaurant_table_bookings")
-      .update({
-        booking_status: nextStatus,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq("id", orderId);
 
     setUpdatingId("");
@@ -785,6 +815,23 @@ export default function TableOrdersPage() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
+      {orderAlert ? (
+        <div className="fixed right-4 top-4 z-[95] w-[320px] max-w-[92vw] rounded-2xl border border-[rgba(119,31,168,.35)] bg-[#F4E7D1] p-4 shadow-2xl">
+          <div className="text-sm font-semibold text-slate-900">{orderAlert.message}</div>
+          <div className="mt-2 text-xs text-slate-700 space-y-1">
+            <div>Table: {orderAlert.tableNo}</div>
+            <div>Customer: {orderAlert.customerName}</div>
+            <div>Amount: MUR {money(orderAlert.totalAmount)}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOrderAlert(null)}
+            className="mt-3 h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
       <div className="rounded-2xl border border-[rgba(119,31,168,.18)] bg-[#F4E7D1] p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>

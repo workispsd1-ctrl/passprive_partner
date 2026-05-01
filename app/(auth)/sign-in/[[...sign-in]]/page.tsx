@@ -7,7 +7,16 @@ import Image from "next/image";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { Eye, EyeOff } from "lucide-react";
 
-const ALLOWED_ROLES = new Set(["storepartner", "restaurantpartner", "corporateadmin", "storemanager", "cashier"]);
+const ALLOWED_ROLES = new Set([
+  "storepartner",
+  "restaurantpartner",
+  "corporateadmin",
+  "storemanager",
+  "cashier",
+  "restaurant_cashier",
+  "restaurant_kitchen",
+  "restaurant_bearer",
+]);
 
 const SignInPage = () => {
   const [step, setStep] = useState<
@@ -183,6 +192,9 @@ const SignInPage = () => {
               <p className="text-gray-600">
                 Sign in to access your partner dashboard (Store Partner / Restaurant Partner only).
               </p>
+              <a href="/staff-pin" className="mt-2 inline-block text-sm font-semibold text-[#771FA8] underline underline-offset-2">
+                Staff PIN Login
+              </a>
             </div>
 
             {error && (

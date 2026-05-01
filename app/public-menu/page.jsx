@@ -158,6 +158,7 @@ function PublicRestaurantMenuContent() {
   const [isStartingBillPayment, setIsStartingBillPayment] = useState(false);
   const [billReady, setBillReady] = useState(false);
   const [activeOrderSnapshot, setActiveOrderSnapshot] = useState(null);
+  const reconcileRanRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,6 +238,85 @@ function PublicRestaurantMenuContent() {
   }, [orderSessionId, orderRecordId, cart, notes, restaurantId, tableFromQr, tableNo]);
 
   useEffect(() => {
+    reconcileRanRef.current = false;
+  }, [restaurantId, tableFromQr, tableNo]);
+
+  useEffect(() => {
+    if (!restaurantId) return;
+    const parsedTableNo = Number(tableFromQr || tableNo);
+    if (!Number.isInteger(parsedTableNo) || parsedTableNo <= 0) return;
+    if (reconcileRanRef.current) return;
+    reconcileRanRef.current = true;
+
+    let cancelled = false;
+    const run = async () => {
+      try {
+        let openOrder = null;
+        if (orderSessionId) {
+          const bySessionRes = await fetch("/api/public-menu/orders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "find_open_by_session", session_id: orderSessionId }),
+          });
+          const bySessionJson = await bySessionRes.json();
+          if (bySessionRes.ok && bySessionJson?.ok && bySessionJson?.order?.id) {
+            openOrder = bySessionJson.order;
+          }
+        }
+
+        if (!openOrder) {
+          const byTableRes = await fetch("/api/public-menu/orders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "find_open_by_table",
+              restaurant_id: restaurantId,
+              table_no: parsedTableNo,
+            }),
+          });
+          const byTableJson = await byTableRes.json();
+          if (byTableRes.ok && byTableJson?.ok && byTableJson?.order?.id) {
+            openOrder = byTableJson.order;
+          }
+        }
+
+        if (cancelled) return;
+
+        if (openOrder?.id) {
+          const nextId = String(openOrder.id || "");
+          const nextSession = String(openOrder.session_id || orderSessionId || "");
+          if (nextId && nextId !== orderRecordId) setOrderRecordId(nextId);
+          if (nextSession && nextSession !== orderSessionId) setOrderSessionId(nextSession);
+          return;
+        }
+
+        if (orderRecordId || orderSessionId) {
+          const tableForKey = tableFromQr || tableNo || "";
+          const sessionKey = storageKey("public_menu_order_session_id", restaurantId, tableForKey);
+          const recordKey = storageKey("public_menu_order_record_id", restaurantId, tableForKey);
+          const cartKey = storageKey("public_menu_order_cart", restaurantId, tableForKey);
+          const notesKey = storageKey("public_menu_order_notes", restaurantId, tableForKey);
+          sessionStorage.removeItem(sessionKey);
+          sessionStorage.removeItem(recordKey);
+          sessionStorage.removeItem(cartKey);
+          sessionStorage.removeItem(notesKey);
+          setOrderSessionId("");
+          setOrderRecordId("");
+          setCart({});
+          setNotes("");
+          setBillReady(false);
+          setActiveOrderSnapshot(null);
+        }
+      } catch {}
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [restaurantId, tableFromQr, tableNo, orderSessionId, orderRecordId]);
+
+  useEffect(() => {
     if (!orderRecordId) return;
     let cancelled = false;
     const clearPersistedOrder = () => {
@@ -275,6 +355,11 @@ function PublicRestaurantMenuContent() {
       const data = json.order;
       setActiveOrderSnapshot(data || null);
       const status = String(data?.booking_status || "").toUpperCase();
+      const paymentStatus = String(data?.payment_status || "").toUpperCase();
+      if (status === "PAID" || paymentStatus === "PAID" || paymentStatus === "COMPLETED") {
+        clearPersistedOrder();
+        return;
+      }
       if (["CANCELLED"].includes(status)) {
         clearPersistedOrder();
         return;
@@ -527,26 +612,20 @@ function PublicRestaurantMenuContent() {
       if (!upsertRes.ok || !upsertJson?.ok) throw new Error(upsertJson?.error || "Failed to save order.");
       const savedOrderId = String(upsertJson?.order_id || orderRecordId || "");
       if (savedOrderId && savedOrderId !== orderRecordId) setOrderRecordId(savedOrderId);
-      setActiveOrderSnapshot((prev) => {
-        const prevItems = Array.isArray(prev?.order_items) ? prev.order_items : [];
-        const nextItems = cartItems.map((it) => ({
-          item_id: it.itemId,
-          name: it.name,
-          qty: Number(it.qty || 0),
-          unit_price: Number(Number(it.price || 0).toFixed(2)),
-          line_total: Number((Number(it.price || 0) * Number(it.qty || 0)).toFixed(2)),
-        }));
-        return {
-          ...(prev && typeof prev === "object" ? prev : {}),
-          id: savedOrderId || prev?.id || null,
-          order_items: [...prevItems, ...nextItems],
-          subtotal_amount: Number((Number(prev?.subtotal_amount || 0) + roundedSubtotal).toFixed(2)),
-          tax_amount: Number((Number(prev?.tax_amount || 0) + roundedTax).toFixed(2)),
-          total_amount: Number((Number(prev?.total_amount || 0) + roundedTotal).toFixed(2)),
-          booking_status: billReady ? prev?.booking_status || "COMPLETED" : "PLACED",
-          payment_status: prev?.payment_status || "PENDING",
-        };
-      });
+      if (savedOrderId) {
+        const statusRes = await fetch("/api/public-menu/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "get_status", order_id: savedOrderId }),
+        });
+        const statusJson = await statusRes.json();
+        if (statusRes.ok && statusJson?.ok && statusJson?.order?.id) {
+          const latestOrder = statusJson.order;
+          setActiveOrderSnapshot(latestOrder);
+          const latestStatus = String(latestOrder?.booking_status || "").toUpperCase();
+          setBillReady(latestStatus === "COMPLETED" || latestStatus === "PAID");
+        }
+      }
 
       toast.success("Order updated. You can keep adding items.");
 
@@ -848,7 +927,7 @@ function PublicRestaurantMenuContent() {
                       {isStartingBillPayment ? "Processing..." : "Pay"}
                     </button>
                     <span className="inline-flex items-center rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">
-                      Pay in Counter (Partner marks paid)
+                      Pay in Counter
                     </span>
                   </div>
                 )}

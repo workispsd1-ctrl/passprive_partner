@@ -194,17 +194,20 @@ export default function CashierDashboardPage() {
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {tiles.map((t) => (
-          <Tile
-            key={t.key}
-            {...t}
-            active={activeTile === t.key}
-            onClick={() => {
-              setActiveTile(t.key);
-              setActiveView(t.view);
-            }}
-          />
-        ))}
+        {tiles.map((t) => {
+          const { key: tileKey, ...tileProps } = t;
+          return (
+            <Tile
+              key={tileKey}
+              {...tileProps}
+              active={activeTile === tileKey}
+              onClick={() => {
+                setActiveTile(tileKey);
+                setActiveView(t.view);
+              }}
+            />
+          );
+        })}
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
