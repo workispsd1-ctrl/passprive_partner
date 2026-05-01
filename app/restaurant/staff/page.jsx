@@ -294,6 +294,29 @@ export default function RestaurantStaffPage() {
             <>
               <img alt="Staff setup QR" className="mt-3 h-40 w-40 rounded-xl border border-gray-200" src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(setupUrl)}`} />
               <p className="mt-2 text-[11px] break-all text-gray-500">{setupUrl}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.open(setupUrl, "_blank", "noopener,noreferrer")}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  Open Link
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(setupUrl);
+                      toast.success("Setup link copied.");
+                    } catch {
+                      toast.error("Unable to copy link.");
+                    }
+                  }}
+                  className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+                >
+                  Copy Link
+                </button>
+              </div>
             </>
           ) : (
             <div className="mt-3 h-40 w-40 rounded-xl bg-gray-100 animate-pulse" />
