@@ -301,6 +301,31 @@ function PublicRestaurantMenuContent() {
         if (cancelled) return;
 
         if (openOrder?.id) {
+          const openBooking = String(openOrder.booking_status || "").toUpperCase();
+          const openPayment = String(openOrder.payment_status || "").toUpperCase();
+          const isClosedOrder =
+            ["PAID", "COMPLETED"].includes(openPayment) ||
+            ["CANCELLED"].includes(openBooking);
+
+          if (isClosedOrder) {
+            const tableForKey = tableFromQr || tableNo || "";
+            const sessionKey = storageKey("public_menu_order_session_id", restaurantId, tableForKey);
+            const recordKey = storageKey("public_menu_order_record_id", restaurantId, tableForKey);
+            const cartKey = storageKey("public_menu_order_cart", restaurantId, tableForKey);
+            const notesKey = storageKey("public_menu_order_notes", restaurantId, tableForKey);
+            sessionStorage.removeItem(sessionKey);
+            sessionStorage.removeItem(recordKey);
+            sessionStorage.removeItem(cartKey);
+            sessionStorage.removeItem(notesKey);
+            setOrderSessionId("");
+            setOrderRecordId("");
+            setCart({});
+            setNotes("");
+            setBillReady(false);
+            setActiveOrderSnapshot(null);
+            return;
+          }
+
           const nextId = String(openOrder.id || "");
           const nextSession = String(openOrder.session_id || orderSessionId || "");
           if (nextId && nextId !== orderRecordId) setOrderRecordId(nextId);

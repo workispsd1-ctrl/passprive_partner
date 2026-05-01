@@ -152,11 +152,7 @@ export default function StaffPinPage() {
           </div>
         ) : null}
 
-        {!pairing && isPaired ? (
-          <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800 break-all">
-            Paired Restaurant: {restaurantId}
-          </div>
-        ) : null}
+       
 
         <form className="mt-5 space-y-4" onSubmit={onLogin}>
           <label className="block space-y-1.5">

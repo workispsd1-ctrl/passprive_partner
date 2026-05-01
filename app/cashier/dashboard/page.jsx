@@ -254,7 +254,9 @@ export default function CashierDashboardPage() {
   );
   const visibleTableNumbers = useMemo(() => {
     if (showAllTimelines) return tableNumbers;
-    return activeTableNumbers.slice(0, 2);
+    if (!tableNumbers.length) return [];
+    const prioritized = [...activeTableNumbers, ...tableNumbers.filter((n) => !activeTableNumbers.includes(n))];
+    return prioritized.slice(0, 2);
   }, [showAllTimelines, tableNumbers, activeTableNumbers]);
   const timelineBookingsByTable = useMemo(() => {
     const map = new Map();
