@@ -431,164 +431,121 @@ export default function KitchenDashboard() {
     );
   };
 
-  const renderOrderCard = (order, orderType) => (
-    <div
-      key={order.id}
-      className={`rounded-lg border ${ORDER_STATUS_COLORS[order.status] || ORDER_STATUS_COLORS.received}`}
-    >
-      {/* Order Header */}
-      <button
-        onClick={() =>
-          setExpandedOrderId(expandedOrderId === order.id ? null : order.id)
-        }
-        className="w-full px-4 py-3 flex items-center justify-between hover:opacity-75"
+  const renderOrderCard = (order, orderType) => {
+    const isExpanded = expandedOrderId === order.id;
+
+    return (
+      <div
+        key={order.id}
+        className={`w-full rounded-lg border-2 p-3 text-left transition ${ORDER_STATUS_COLORS[order.status] || ORDER_STATUS_COLORS.received
+          } ${isExpanded ? (orderType === 'table' ? 'border-purple-500 shadow-md' : 'border-blue-500 shadow-md') : ''}`}
       >
-        <div className="flex-1 text-left">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold bg-white">
-              {orderType === "table" ? "Table Order" : "Pickup Order"}
-            </span>
-            {order.status === "received" && (
-              <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-600 text-white">
-                NEW
+        <button
+          type="button"
+          onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
+          className="w-full flex flex-col gap-2"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-2">
+              <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold bg-white">
+                {orderType === "table" ? `Table ${order.table_number || "-"}` : (order.customer_name || "Pickup")}
               </span>
-            )}
-            {orderType === "table" && order.table_number && (
-              <span className="text-sm font-semibold text-gray-700">
-                Table {order.table_number}
+              <span className="text-xs font-semibold text-gray-600">
+                {getStatusBadge(order.status)}
               </span>
-            )}
-            {orderType === "pickup" && order.customer_name && (
-              <span className="text-sm font-semibold text-gray-700">
-                {order.customer_name}
-              </span>
-            )}
-            {orderType === "table" && order.customer_name && (
-              <span className="text-sm font-semibold text-gray-700">
-                {order.customer_name}
-              </span>
-            )}
-          </div>
-          <div className="text-xs text-gray-600">
-            Order #{order.id?.slice(0, 8)} • {getStatusBadge(order.status)}
-          </div>
-        </div>
-
-        <ChevronDown
-          className={`h-5 w-5 text-gray-600 transition ${expandedOrderId === order.id ? "rotate-180" : ""
-            }`}
-        />
-      </button>
-
-      {/* Order Details */}
-      {expandedOrderId === order.id && (
-        <div className="border-t px-4 py-4 space-y-4">
-          {/* Items */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">Items</h3>
-            <div className="space-y-2">
-              {order.items && Array.isArray(order.items) ? (
-                order.items.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between p-2 rounded-lg bg-white"
-                  >
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">
-                        {item.name || item.item_name}
-                      </p>
-                      <p className="text-xs text-gray-600">
-                        Qty: {item.quantity || 1}
-                      </p>
-                    </div>
-                    <span
-                      className={`text-xs font-semibold px-2 py-1 rounded-full ${ITEM_STATUS_COLORS[item.status] ||
-                        ITEM_STATUS_COLORS.pending
-                        }`}
-                    >
-                      {item.status || "Pending"}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-gray-600">No items information</p>
-              )}
             </div>
+            <span className="text-xs text-gray-400 font-mono">
+              #{order.id?.slice(0, 8)}
+            </span>
           </div>
 
-          {/* Order Info */}
-          {order.special_instructions && (
-            <div className="p-3 rounded-lg bg-white border border-yellow-100">
-              <p className="text-xs text-gray-600 mb-1">Special Instructions</p>
-              <p className="text-sm text-gray-900">{order.special_instructions}</p>
+          {/* Collapsed Summary */}
+          {!isExpanded && (
+            <div className="text-left">
+              <p className="text-xs font-bold text-gray-800">
+                {order.items?.length || 0} item{(order.items?.length || 0) !== 1 ? "s" : ""}
+              </p>
+              <p className="text-xs text-gray-600 truncate max-w-xs">
+                {order.items?.map((i) => i.name || i.item_name).join(", ") || "No items"}
+              </p>
             </div>
           )}
+        </button>
 
-          {/* Status Update Buttons — only shown for table orders in this card view */}
-          {orderType === "table" && (
-            <div className="flex gap-2 pt-2">
+        {/* Expanded Details */}
+        {isExpanded && (
+          <div className="mt-3 space-y-3">
+            <div className="text-left">
+              <p className="text-xs font-bold text-gray-800">
+                {order.items?.length || 0} item{(order.items?.length || 0) !== 1 ? "s" : ""}
+              </p>
+              <p className="text-xs text-gray-600">
+                {order.items?.map((i) => i.name || i.item_name).join(", ") || "No items"}
+              </p>
+            </div>
+
+            <hr className="border-gray-300" />
+
+            <div>
+              <p className="text-sm font-bold text-gray-900 mb-2">Items:</p>
+              <div className="space-y-2">
+                {order.items && Array.isArray(order.items) && order.items.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-sm bg-white/40 p-2 rounded-lg">
+                    <span className="font-medium text-gray-900">{item.name || item.item_name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-600 text-xs">Qty: {item.quantity || 1}</span>
+                      <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase">
+                        {item.status || "pending"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {order.special_instructions && (
+              <div className="text-xs bg-yellow-50 border border-yellow-200 p-2 rounded-lg">
+                <p className="font-semibold text-gray-900">{order.special_instructions}</p>
+              </div>
+            )}
+
+            <div className="pt-2">
               {(order.status === "received" || order.status === "accepted") && (
                 <button
-                  onClick={() =>
-                    handleStatusUpdate(order.id, "table", "PREPARING")
-                  }
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleStatusUpdate(order.id, orderType, "PREPARING");
+                  }}
                   disabled={updatingOrderId === order.id}
-                  className="flex-1 rounded-lg bg-blue-500 text-white py-2 text-sm font-medium hover:bg-blue-600 disabled:opacity-60"
+                  className="w-full rounded-lg bg-blue-600 text-white py-2.5 text-sm font-bold hover:bg-blue-700 transition shadow-sm disabled:opacity-60"
                 >
                   {updatingOrderId === order.id ? "Updating..." : "Mark Preparing"}
                 </button>
               )}
-
-              {(order.status === "preparing" || order.status === "accepted" || order.status === "received") && (
-                <button
-                  onClick={() =>
-                    handleStatusUpdate(order.id, "table", "COMPLETED")
-                  }
-                  disabled={updatingOrderId === order.id}
-                  className="flex-1 rounded-lg bg-green-500 text-white py-2 text-sm font-medium hover:bg-green-600 disabled:opacity-60"
-                >
-                  {updatingOrderId === order.id ? "Updating..." : "Mark Completed"}
-                </button>
-              )}
             </div>
-          )}
-          {orderType === "pickup" && (
-            <div className="flex gap-2 pt-2">
-              {(order.status === "received" || order.status === "accepted") && (
-                <button
-                  onClick={() =>
-                    handleStatusUpdate(order.id, "pickup", order.status === "received" ? "received" : "accepted")
-                  }
-                  disabled={updatingOrderId === order.id}
-                  className="flex-1 rounded-lg bg-blue-500 text-white py-2 text-sm font-medium hover:bg-blue-600 disabled:opacity-60"
-                >
-                  {updatingOrderId === order.id ? "Updating..." : "Advance Status"}
-                </button>
-              )}
-              {(order.status === "preparing" || order.status === "ready") && (
-                <button
-                  onClick={() =>
-                    handleStatusUpdate(order.id, "pickup", order.status)
-                  }
-                  disabled={updatingOrderId === order.id}
-                  className="flex-1 rounded-lg bg-green-500 text-white py-2 text-sm font-medium hover:bg-green-600 disabled:opacity-60"
-                >
-                  {updatingOrderId === order.id ? "Updating..." : order.status === "preparing" ? "Mark Ready" : "Mark Delivered"}
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
+          </div>
+        )}
+      </div>
+    );
+  };
 
   if (loading && tableOrders.length === 0 && pickupOrders.length === 0) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <div className="h-12 w-12 rounded-lg bg-purple-100 mx-auto mb-3" />
-          <p className="text-gray-600">Loading orders...</p>
+      <div className="space-y-6 py-12">
+        <div className="flex items-center justify-between">
+          <div className="h-8 w-48 animate-pulse rounded bg-gray-200" />
+          <div className="h-10 w-24 animate-pulse rounded bg-gray-200" />
+        </div>
+        <div className="grid grid-cols-2 gap-6">
+          {[1, 2].map((col) => (
+            <div key={col} className="space-y-4">
+              <div className="h-12 w-full animate-pulse rounded-lg bg-gray-200" />
+              {[1, 2, 3].map((card) => (
+                <div key={card} className="h-32 w-full animate-pulse rounded-lg border bg-gray-50" />
+              ))}
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -630,12 +587,6 @@ export default function KitchenDashboard() {
       ) : null}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Kitchen Orders</h1>
-        <button
-          onClick={() => fetchOrders()}
-          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
-          Refresh
-        </button>
       </div>
 
       {/* Two Column Layout */}
@@ -651,12 +602,6 @@ export default function KitchenDashboard() {
                 </span>
               )}
             </h2>
-            <button
-              onClick={() => fetchOrders()}
-              className="text-xs font-medium text-purple-600 hover:text-purple-700"
-            >
-              ⟳
-            </button>
           </div>
 
           {tableOrders.length === 0 ? (
@@ -665,120 +610,7 @@ export default function KitchenDashboard() {
             </div>
           ) : (
             <div className="flex-1 overflow-y-auto rounded-b-lg border border-gray-200 bg-white space-y-2 p-3">
-              {tableOrders.map((order) => (
-                <div
-                  key={order.id}
-                  className={`w-full rounded-lg border-2 p-3 text-left transition ${expandedOrderId === order.id
-                      ? ORDER_STATUS_COLORS[order.status] + " border-purple-500"
-                      : ORDER_STATUS_COLORS[order.status]
-                    }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setExpandedOrderId(
-                        expandedOrderId === order.id ? null : order.id
-                      )
-                    }
-                    className="w-full flex items-center justify-between mb-2"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="inline-block px-2 py-1 rounded-full text-xs font-bold bg-white">
-                        Table {order.table_number || "-"}
-                      </span>
-                      <span className="text-xs font-semibold text-gray-600">
-                        {getStatusBadge(order.status)}
-                      </span>
-                    </div>
-                    <span className="text-xs text-gray-600">
-                      #{order.id?.slice(0, 6)}
-                    </span>
-                  </button>
-
-                  {order.items && Array.isArray(order.items) && (
-                    <div className="text-xs text-gray-700 mb-2">
-                      <p className="font-medium">
-                        {order.items.length} item{order.items.length !== 1 ? "s" : ""}
-                      </p>
-                      <p className="truncate text-gray-600">
-                        {order.items.map((i) => i.name || i.item_name).join(", ")}
-                      </p>
-                    </div>
-                  )}
-
-                  {expandedOrderId === order.id && (
-                    <div className="mt-3 border-t pt-3 space-y-2">
-                      {order.items && Array.isArray(order.items) && (
-                        <div>
-                          <p className="text-xs font-semibold text-gray-900 mb-1">
-                            Items:
-                          </p>
-                          <div className="space-y-1">
-                            {order.items.map((item, idx) => (
-                              <div
-                                key={idx}
-                                className="flex items-center justify-between text-xs bg-gray-50 p-1.5 rounded"
-                              >
-                                <span className="font-medium">
-                                  {item.name || item.item_name}
-                                </span>
-                                <div className="flex items-center gap-1">
-                                  <span className="text-gray-600">
-                                    Qty: {item.quantity || 1}
-                                  </span>
-                                  <span
-                                    className={`text-xs font-semibold px-1.5 py-0.5 rounded ${ITEM_STATUS_COLORS[item.status] ||
-                                      ITEM_STATUS_COLORS.pending
-                                      }`}
-                                  >
-                                    {item.status || "Pending"}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {order.special_instructions && (
-                        <div className="text-xs bg-yellow-50 border border-yellow-200 p-1.5 rounded">
-                          <p className="font-semibold text-gray-900">
-                            {order.special_instructions}
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="flex gap-1 pt-2 flex-wrap">
-                        {order.status === "received" && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStatusUpdate(order.id, "table", "PREPARING");
-                            }}
-                            disabled={updatingOrderId === order.id}
-                            className="flex-1 text-xs rounded bg-blue-500 text-white py-1 font-medium hover:bg-blue-600 disabled:opacity-60"
-                          >
-                            Mark Preparing
-                          </button>
-                        )}
-
-                        {(order.status === "preparing" || order.status === "accepted" || order.status === "received") && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStatusUpdate(order.id, "table", "COMPLETED");
-                            }}
-                            disabled={updatingOrderId === order.id}
-                            className="flex-1 text-xs rounded bg-green-500 text-white py-1 font-medium hover:bg-green-600 disabled:opacity-60"
-                          >
-                            Mark Completed
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
+              {tableOrders.map((order) => renderOrderCard(order, "table"))}
             </div>
           )}
         </div>
@@ -794,12 +626,6 @@ export default function KitchenDashboard() {
                 </span>
               )}
             </h2>
-            <button
-              onClick={() => fetchOrders()}
-              className="text-xs font-medium text-blue-600 hover:text-blue-700"
-            >
-              ⟳
-            </button>
           </div>
 
           {pickupOrders.length === 0 ? (
@@ -808,138 +634,7 @@ export default function KitchenDashboard() {
             </div>
           ) : (
             <div className="flex-1 overflow-y-auto rounded-b-lg border border-gray-200 bg-white space-y-2 p-3">
-              {pickupOrders.map((order) => (
-                <div
-                  key={order.id}
-                  className={`w-full rounded-lg border-2 p-3 text-left transition ${expandedOrderId === order.id
-                      ? ORDER_STATUS_COLORS[order.status] + " border-blue-500"
-                      : ORDER_STATUS_COLORS[order.status]
-                    }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setExpandedOrderId(
-                        expandedOrderId === order.id ? null : order.id
-                      )
-                    }
-                    className="w-full flex items-center justify-between mb-2"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="inline-block px-2 py-1 rounded-full text-xs font-bold bg-white">
-                        {order.customer_name || "Pickup"}
-                      </span>
-                      <span className="text-xs font-semibold text-gray-600">
-                        {getStatusBadge(order.status)}
-                      </span>
-                    </div>
-                    <span className="text-xs text-gray-600">
-                      #{order.id?.slice(0, 6)}
-                    </span>
-                  </button>
-
-                  {order.items && Array.isArray(order.items) && (
-                    <div className="text-xs text-gray-700 mb-2">
-                      <p className="font-medium">
-                        {order.items.length} item{order.items.length !== 1 ? "s" : ""}
-                      </p>
-                      <p className="truncate text-gray-600">
-                        {order.items.map((i) => i.name || i.item_name).join(", ")}
-                      </p>
-                    </div>
-                  )}
-
-                  {expandedOrderId === order.id && (
-                    <div className="mt-3 border-t pt-3 space-y-2">
-                      {order.items && Array.isArray(order.items) && (
-                        <div>
-                          <p className="text-xs font-semibold text-gray-900 mb-1">
-                            Items:
-                          </p>
-                          <div className="space-y-1">
-                            {order.items.map((item, idx) => (
-                              <div
-                                key={idx}
-                                className="flex items-center justify-between text-xs bg-gray-50 p-1.5 rounded"
-                              >
-                                <span className="font-medium">
-                                  {item.name || item.item_name}
-                                </span>
-                                <div className="flex items-center gap-1">
-                                  <span className="text-gray-600">
-                                    Qty: {item.quantity || 1}
-                                  </span>
-                                  <span
-                                    className={`text-xs font-semibold px-1.5 py-0.5 rounded ${ITEM_STATUS_COLORS[item.status] ||
-                                      ITEM_STATUS_COLORS.pending
-                                      }`}
-                                  >
-                                    {item.status || "Pending"}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {order.special_instructions && (
-                        <div className="text-xs bg-yellow-50 border border-yellow-200 p-1.5 rounded">
-                          <p className="font-semibold text-gray-900">
-                            {order.special_instructions}
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="flex gap-1 pt-2 flex-wrap">
-                        {order.status === "received" && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStatusUpdate(order.id, "pickup", "accepted");
-                            }}
-                            disabled={updatingOrderId === order.id}
-                            className="flex-1 text-xs rounded bg-blue-500 text-white py-1 font-medium hover:bg-blue-600 disabled:opacity-60"
-                          >
-                            Mark Preparing
-                          </button>
-                        )}
-
-                        {(order.status === "accepted" ||
-                          order.status === "received") && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleStatusUpdate(order.id, "pickup", "ready");
-                              }}
-                              disabled={updatingOrderId === order.id}
-                              className="flex-1 text-xs rounded bg-green-500 text-white py-1 font-medium hover:bg-green-600 disabled:opacity-60"
-                            >
-                              Mark Completed
-                            </button>
-                          )}
-
-                        {order.status === "ready" && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStatusUpdate(
-                                order.id,
-                                "pickup",
-                                "delivered"
-                              );
-                            }}
-                            disabled={updatingOrderId === order.id}
-                            className="flex-1 text-xs rounded bg-gray-500 text-white py-1 font-medium hover:bg-gray-600 disabled:opacity-60"
-                          >
-                            Mark Completed
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
+              {pickupOrders.map((order) => renderOrderCard(order, "pickup"))}
             </div>
           )}
         </div>

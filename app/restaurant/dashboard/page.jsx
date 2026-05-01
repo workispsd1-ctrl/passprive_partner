@@ -627,16 +627,7 @@ export default function RestaurantDashboardPage() {
                                   {isUpdating ? "…" : "Mark Preparing"}
                                 </button>
                               )}
-                              {(st === "PLACED" || st === "CONFIRMED" || st === "PREPARING") && (
-                                <button
-                                  type="button"
-                                  onClick={() => updateTableOrderStatus(o.id, "COMPLETED")}
-                                  disabled={isUpdating}
-                                  className="rounded-lg bg-green-600 text-white px-2.5 py-1 text-xs font-semibold hover:bg-green-700 disabled:opacity-60"
-                                >
-                                  {isUpdating ? "…" : "Mark Completed"}
-                                </button>
-                              )}
+
                               {(st === "COMPLETED" || st === "PAID" || st === "CANCELLED") && (
                                 <span className="text-xs text-slate-400 italic">Done</span>
                               )}

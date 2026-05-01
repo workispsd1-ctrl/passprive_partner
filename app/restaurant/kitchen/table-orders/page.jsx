@@ -223,10 +223,23 @@ export default function TableOrdersPage() {
     try {
       setUpdatingOrderId(orderId);
 
-      await supabaseBrowser
-        .from("restaurant_table_bookings")
-        .update({ booking_status: bookingStatus })
-        .eq("id", orderId);
+      const { data: sessionData } = await supabaseBrowser.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) return;
+
+      const resp = await fetch("/api/kitchen/table-bookings", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ booking_id: orderId, booking_status: bookingStatus }),
+      });
+
+      const result = await resp.json();
+      if (!resp.ok || !result.ok) {
+        console.error("Error updating table booking status:", result.error || "Failed");
+      }
 
       if (["COMPLETED", "PAID", "CANCELLED"].includes(String(bookingStatus).toUpperCase())) {
         setSelectedOrderId(null);
@@ -307,12 +320,6 @@ export default function TableOrdersPage() {
       ) : null}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Table Orders</h1>
-        <button
-          onClick={() => fetchOrders()}
-          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
-          Refresh
-        </button>
       </div>
 
       {orders.length === 0 ? (
@@ -406,14 +413,7 @@ export default function TableOrdersPage() {
               >
                 {updatingOrderId === selectedOrder.id ? "Updating..." : "Mark Preparing"}
               </button>
-              <button
-                type="button"
-                onClick={() => handleStatusUpdate(selectedOrder.id, "COMPLETED")}
-                disabled={updatingOrderId === selectedOrder.id}
-                className="flex-1 h-10 rounded-xl text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60"
-              >
-                {updatingOrderId === selectedOrder.id ? "Updating..." : "Mark Completed"}
-              </button>
+
             </div>
           </div>
         </div>
