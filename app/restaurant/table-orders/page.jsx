@@ -672,15 +672,13 @@ export default function TableOrdersPage() {
     setUpdatingId(orderId);
     setError("");
 
-    const nextIsPaid = String(nextStatus || "").toUpperCase() === "PAID";
-
+    // Optimistic UI update
     setOrders((prev) =>
       prev.map((o) =>
         o.id === orderId
           ? {
               ...o,
               booking_status: nextStatus,
-              payment_status: nextIsPaid ? "PAID" : o.payment_status,
               updated_at: new Date().toISOString(),
             }
           : o
@@ -688,29 +686,51 @@ export default function TableOrdersPage() {
     );
     setDraftStatusById((prev) => ({ ...prev, [orderId]: nextStatus }));
 
-    const updatePayload = {
-      booking_status: nextStatus,
-      updated_at: new Date().toISOString(),
-    };
-    if (nextIsPaid) {
-      updatePayload.payment_status = "PAID";
-    }
+    try {
+      const { data: sessionData } = await supabaseBrowser.auth.getSession();
+      const token = sessionData?.session?.access_token;
 
-    const { error: upErr } = await supabaseBrowser
-      .from("restaurant_table_bookings")
-      .update(updatePayload)
-      .eq("id", orderId);
+      if (!token) {
+        setError("Not authenticated.");
+        setUpdatingId("");
+        return;
+      }
 
-    setUpdatingId("");
+      const resp = await fetch("/api/kitchen/table-bookings", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ booking_id: orderId, booking_status: nextStatus }),
+      });
 
-    if (upErr) {
-      setError(upErr.message || "Failed to update order status.");
+      const result = await resp.json();
+
+      if (!resp.ok || !result.ok) {
+        setError(result.error || "Failed to update order status.");
+        // Revert optimistic update
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === orderId
+              ? { ...o, booking_status: fallbackStatus, updated_at: new Date().toISOString() }
+              : o
+          )
+        );
+        setDraftStatusById((prev) => ({ ...prev, [orderId]: fallbackStatus }));
+      }
+    } catch (err) {
+      setError(err?.message || "Failed to update order status.");
       setOrders((prev) =>
         prev.map((o) =>
-          o.id === orderId ? { ...o, booking_status: fallbackStatus, updated_at: new Date().toISOString() } : o
+          o.id === orderId
+            ? { ...o, booking_status: fallbackStatus, updated_at: new Date().toISOString() }
+            : o
         )
       );
       setDraftStatusById((prev) => ({ ...prev, [orderId]: fallbackStatus }));
+    } finally {
+      setUpdatingId("");
     }
   }
 

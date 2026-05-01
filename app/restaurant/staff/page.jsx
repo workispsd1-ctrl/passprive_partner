@@ -79,6 +79,7 @@ export default function RestaurantStaffPage() {
       if (!res.ok || !json?.ok) {
         setMembers([]);
         setDevices([]);
+        toast.error(json?.error || "Failed to load staff members.");
         return;
       }
       setMembers(json.members || []);
@@ -94,10 +95,12 @@ export default function RestaurantStaffPage() {
         setDevices(devJson.devices || []);
       } else {
         setDevices([]);
+        toast.error(devJson?.error || "Failed to load paired devices.");
       }
     } catch {
       setMembers([]);
       setDevices([]);
+      toast.error("Failed to load staff data.");
     } finally {
       setLoadingMembers(false);
       setLoadingDevices(false);

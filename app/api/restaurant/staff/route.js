@@ -78,13 +78,27 @@ export async function GET(request) {
     const userIds = (staffRows || []).map((x) => x.user_id).filter(Boolean);
     let userMap = {};
 
-    if (userIds.length) {
-      const { data: usersRows } = await admin.from("users").select("id, full_name, email, phone").in("id", userIds);
-      userMap = Object.fromEntries((usersRows || []).map((u) => [u.id, u]));
+    if (userIds.length > 0) {
+      const { data: usersRows, error: usersErr } = await admin
+        .from("users")
+        .select("id, full_name, email, phone")
+        .in("id", userIds);
+      
+      if (usersErr) {
+        console.error("Error fetching users:", usersErr);
+        return NextResponse.json({ ok: false, error: `Failed to fetch user details: ${usersErr.message}` }, { status: 400 });
+      }
+      
+      if (usersRows && usersRows.length > 0) {
+        userMap = Object.fromEntries((usersRows || []).map((u) => [u.id, u]));
+      }
     }
 
     const members = (staffRows || []).map((m) => ({
-      ...m,
+      id: m.id,
+      role: m.role,
+      created_at: m.created_at,
+      user_id: m.user_id,
       full_name: userMap[m.user_id]?.full_name || "-",
       email: userMap[m.user_id]?.email || "-",
       phone: userMap[m.user_id]?.phone || "-",
@@ -93,6 +107,7 @@ export async function GET(request) {
     const setupUrl = `${new URL(request.url).origin}/staff-pin?restaurant_id=${owner.restaurantId}`;
     return NextResponse.json({ ok: true, members, setup_url: setupUrl, restaurant_id: owner.restaurantId });
   } catch (error) {
+    console.error("GET /api/restaurant/staff error:", error);
     return NextResponse.json({ ok: false, error: error?.message || "Unknown error" }, { status: 500 });
   }
 }

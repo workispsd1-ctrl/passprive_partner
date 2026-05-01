@@ -20,6 +20,8 @@ export default function RestaurantDashboardPage() {
   const [orders, setOrders] = useState([]);
   const [tableOrders, setTableOrders] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [updatingTableOrderId, setUpdatingTableOrderId] = useState("");
+  const [restaurantId, setRestaurantId] = useState(null);
 
   const isPendingBooking = (status) => {
     const s = String(status || "").toLowerCase();
@@ -82,10 +84,10 @@ export default function RestaurantDashboardPage() {
       }
 
       const restaurant = await fetchOwnedRestaurantDashboard(supabaseBrowser, user.id);
-      let restaurantId = restaurant?.restaurantId || null;
+      let rid = restaurant?.restaurantId || null;
       let reviewsSeed = Array.isArray(restaurant?.reviews) ? restaurant.reviews : [];
 
-      if (!restaurantId) {
+      if (!rid) {
         const staffRes = await supabaseBrowser
           .from("restaurant_staff")
           .select("restaurant_id")
@@ -93,14 +95,17 @@ export default function RestaurantDashboardPage() {
           .limit(1)
           .maybeSingle();
         if (staffRes.error) throw staffRes.error;
-        restaurantId = staffRes.data?.restaurant_id || null;
+        rid = staffRes.data?.restaurant_id || null;
       }
 
-      if (!restaurantId) {
+      if (!rid) {
         setError("No restaurant found for this account.");
         setLoading(false);
         return;
       }
+
+      setRestaurantId(rid);
+      let restaurantId = rid;
 
       if (!reviewsSeed.length) {
         const rv = await supabaseBrowser
@@ -240,6 +245,61 @@ export default function RestaurantDashboardPage() {
       .sort((a, b) => new Date(b?.created_at || 0).getTime() - new Date(a?.created_at || 0).getTime())
       .slice(0, 3);
   }, [reviews]);
+
+  const recentTableOrders = useMemo(() => {
+    return [...tableOrders]
+      .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+      .slice(0, 8);
+  }, [tableOrders]);
+
+  const activeTableOrders = useMemo(() => {
+    return tableOrders.filter((o) => {
+      const s = String(o.booking_status || "").toUpperCase();
+      return s !== "COMPLETED" && s !== "PAID" && s !== "CANCELLED";
+    });
+  }, [tableOrders]);
+
+  async function updateTableOrderStatus(orderId, nextStatus) {
+    setUpdatingTableOrderId(orderId);
+    // Optimistic local update
+    setTableOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId
+          ? { ...o, booking_status: nextStatus, updated_at: new Date().toISOString() }
+          : o
+      )
+    );
+
+    try {
+      const { data: sessionData } = await supabaseBrowser.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        console.error("No auth token for table status update");
+        setUpdatingTableOrderId("");
+        return;
+      }
+
+      const resp = await fetch("/api/kitchen/table-bookings", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ booking_id: orderId, booking_status: nextStatus }),
+      });
+
+      const result = await resp.json();
+      if (!resp.ok || !result.ok) {
+        console.error("Failed to update table booking status:", result.error);
+        // Revert on failure by reloading
+        await loadDashboard();
+      }
+    } catch (err) {
+      console.error("Error updating table booking status:", err);
+    } finally {
+      setUpdatingTableOrderId("");
+    }
+  }
 
   if (loading) {
     return (
@@ -510,6 +570,92 @@ export default function RestaurantDashboardPage() {
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-3 rounded-2xl border border-gray-200 bg-white p-5">
           <div className="flex items-center justify-between">
+            <div>
+              <div className="font-semibold text-gray-900">Live Table Orders</div>
+              <div className="text-xs text-gray-500">
+                {activeTableOrders.length} active • Update status directly from here
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => router.push("/restaurant/table-orders")}
+              className="text-sm font-medium"
+              style={{ color: "var(--accent)" }}
+            >
+              View all
+            </button>
+          </div>
+
+          <div className="mt-4">
+            {recentTableOrders.length === 0 ? (
+              <div className="text-sm text-gray-500">No table orders yet.</div>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-gray-200">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-600 text-xs">
+                    <tr>
+                      <th className="px-4 py-2 text-left">Table</th>
+                      <th className="px-4 py-2 text-left">Customer</th>
+                      <th className="px-4 py-2 text-left">Amount</th>
+                      <th className="px-4 py-2 text-left">Status</th>
+                      <th className="px-4 py-2 text-left">Quick Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {recentTableOrders.map((o) => {
+                      const st = String(o.booking_status || "PLACED").toUpperCase();
+                      const isUpdating = updatingTableOrderId === o.id;
+                      return (
+                        <tr key={o.id} className="align-middle">
+                          <td className="px-4 py-2 font-semibold text-slate-800">T{o.table_no || "—"}</td>
+                          <td className="px-4 py-2 text-slate-700">{o.customer_name || "Guest"}</td>
+                          <td className="px-4 py-2 font-semibold text-slate-900">
+                            {Number(o.total_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-2">
+                            <TableStatusBadge status={st} />
+                          </td>
+                          <td className="px-4 py-2">
+                            <div className="flex gap-1.5 flex-wrap">
+                              {(st === "PLACED" || st === "CONFIRMED") && (
+                                <button
+                                  type="button"
+                                  onClick={() => updateTableOrderStatus(o.id, "PREPARING")}
+                                  disabled={isUpdating}
+                                  className="rounded-lg bg-orange-500 text-white px-2.5 py-1 text-xs font-semibold hover:bg-orange-600 disabled:opacity-60"
+                                >
+                                  {isUpdating ? "…" : "Mark Preparing"}
+                                </button>
+                              )}
+                              {(st === "PLACED" || st === "CONFIRMED" || st === "PREPARING") && (
+                                <button
+                                  type="button"
+                                  onClick={() => updateTableOrderStatus(o.id, "COMPLETED")}
+                                  disabled={isUpdating}
+                                  className="rounded-lg bg-green-600 text-white px-2.5 py-1 text-xs font-semibold hover:bg-green-700 disabled:opacity-60"
+                                >
+                                  {isUpdating ? "…" : "Mark Completed"}
+                                </button>
+                              )}
+                              {(st === "COMPLETED" || st === "PAID" || st === "CANCELLED") && (
+                                <span className="text-xs text-slate-400 italic">Done</span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-3 rounded-2xl border border-gray-200 bg-white p-5">
+          <div className="flex items-center justify-between">
             <div className="font-semibold text-gray-900">Recent reviews</div>
             <button
               type="button"
@@ -686,4 +832,23 @@ function capitalize(v) {
   if (!v) return "";
   const s = String(v);
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function TableStatusBadge({ status }) {
+  const st = String(status || "PLACED").toUpperCase();
+  const cfg = {
+    PLACED:    { label: "Placed",    cls: "bg-amber-50 text-amber-700 border-amber-200" },
+    CONFIRMED: { label: "Confirmed", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+    PREPARING: { label: "Preparing", cls: "bg-violet-50 text-violet-700 border-violet-200" },
+    SERVED:    { label: "Served",    cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    COMPLETED: { label: "Completed", cls: "bg-teal-50 text-teal-700 border-teal-200" },
+    PAID:      { label: "Paid",      cls: "bg-lime-50 text-lime-700 border-lime-200" },
+    CANCELLED: { label: "Cancelled", cls: "bg-rose-50 text-rose-700 border-rose-200" },
+  }[st] || { label: st, cls: "bg-gray-50 text-gray-700 border-gray-200" };
+
+  return (
+    <span className={`text-xs font-semibold rounded-full border px-2 py-0.5 ${cfg.cls}`}>
+      {cfg.label}
+    </span>
+  );
 }
