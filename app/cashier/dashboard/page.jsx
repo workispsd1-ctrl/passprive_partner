@@ -446,13 +446,16 @@ export default function CashierDashboardPage() {
         <KpiCard title="Collected" value={money(derivedKpis.collected)} subtitle="verified sessions" icon={DollarSign} tone="green" onClick={() => router.push("/cashier/dashboard")} />
       </section>
 
-      <section className="rounded-3xl border border-slate-200 bg-white overflow-hidden">
+      <section className="rounded-3xl border border-slate-200 bg-white overflow-visible">
         <div className="border-b border-slate-100 px-5 py-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-900">Booking Time Flow</h2>
           <span className="text-xs text-slate-500">{fmtDate(selectedDate)} • {todaysBookings.length} bookings • {hourLabel(openingHour)} - {hourLabel(closingHour)}</span>
         </div>
-        <div className="overflow-x-auto px-4 py-5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-          <div className="min-w-[1520px] pr-10">
+        <div
+          className="overflow-x-auto overflow-y-visible px-4 py-5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          style={{ overflowY: "visible" }}
+        >
+          <div className="min-w-[1800px]">
             <div className="grid gap-3" style={{ gridTemplateColumns: `88px repeat(${bookingTimelineHours.length}, minmax(84px, 1fr))` }}>
               <div />
               {bookingTimelineHours.map((h) => (
@@ -465,15 +468,22 @@ export default function CashierDashboardPage() {
               {tableNumbers.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3 text-xs text-slate-500">No tables found in table layout.</div>
               ) : (
-                visibleTableNumbers.map((tableNo) => {
+                visibleTableNumbers.map((tableNo, rowIndex) => {
                   const bookingsForTable = timelineBookingsByTable.get(tableNo) || [];
+                  const openUpward = rowIndex >= Math.floor(visibleTableNumbers.length / 2);
                   return (
-                    <div key={`row-t-${tableNo}`} className="grid items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3" style={{ gridTemplateColumns: `88px repeat(${bookingTimelineHours.length}, minmax(84px, 1fr))` }}>
+                    <div key={`row-t-${tableNo}`} className="relative z-0 hover:z-[110] grid items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 overflow-visible" style={{ gridTemplateColumns: `88px repeat(${bookingTimelineHours.length}, minmax(84px, 1fr))` }}>
                       <div className={`rounded-xl px-3 py-2 text-center text-sm font-bold ${bookingsForTable.length ? "bg-emerald-100 text-emerald-800" : "bg-white text-slate-700"}`}>T{tableNo}</div>
-                      <div className="col-span-full -mt-[3.25rem] ml-[88px] mr-0 relative h-12">
+                      <div
+                        className="col-span-full -mt-[3.25rem] relative h-12"
+                        style={{ marginLeft: "88px", width: "calc(100% - 88px)" }}
+                      >
                         <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${bookingTimelineHours.length}, minmax(84px, 1fr))` }}>
                           {bookingTimelineHours.map((h, idx) => (
-                            <div key={`grid-${tableNo}-${h}`} className={`border-l border-slate-200 ${idx === bookingTimelineHours.length - 1 ? "border-r bg-slate-100/90" : idx % 2 === 0 ? "bg-slate-50/60" : "bg-transparent"}`} />
+                            <div
+                              key={`grid-${tableNo}-${h}`}
+                              className={`border-l border-slate-200 ${((idx + Number(tableNo) + 1) % 2 === 0) ? "bg-slate-50/60" : "bg-slate-50/30"} ${idx === bookingTimelineHours.length - 1 ? "border-r" : ""}`}
+                            />
                           ))}
                         </div>
                         {Array.from(groupedTimelineTokens.values()).filter((g) => g.tableNo === tableNo).map((group) => {
@@ -483,9 +493,13 @@ export default function CashierDashboardPage() {
                           const leftPct = (offsetMin / totalMin) * 100;
                           const eventCount = group.events.length;
                           return (
-                            <div key={`group-${tableNo}-${group.minuteBucket}`} className="group absolute top-1.5 z-20" style={{ left: `${leftPct}%` }}>
+                            <div key={`group-${tableNo}-${group.minuteBucket}`} className="group absolute top-1.5 z-[120] hover:z-[130]" style={{ left: `${leftPct}%` }}>
                               <div className="h-8 min-w-[34px] rounded-full border border-violet-300 bg-violet-500 px-2 text-[11px] font-bold leading-8 text-white shadow-md text-center">{eventCount}</div>
-                              <div className="pointer-events-none absolute left-0 top-10 hidden min-w-[290px] max-w-[360px] rounded-2xl border border-slate-200 bg-white p-3 text-left text-[11px] text-slate-700 shadow-2xl group-hover:block">
+                              <div
+                                className={`pointer-events-none absolute z-[200] hidden min-w-[290px] max-w-[360px] rounded-2xl border border-slate-200 bg-white p-3 text-left text-[11px] text-slate-700 shadow-2xl group-hover:block ${
+                                  leftPct > 75 ? "right-0" : "left-0"
+                                } ${openUpward ? "bottom-10" : "top-10"}`}
+                              >
                                 <p className="font-semibold text-slate-900">Table {tableNo} • {hourLabel(group.minuteBucket)}</p>
                                 <p className="mt-0.5 text-[10px] text-slate-500">{eventCount} event{eventCount > 1 ? "s" : ""} in this slot</p>
                                 <div className="mt-2 space-y-1.5">

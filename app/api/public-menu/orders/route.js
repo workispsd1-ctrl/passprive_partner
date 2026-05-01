@@ -11,7 +11,7 @@ function adminClient() {
 function isOpen(row) {
   const booking = String(row?.booking_status || "").toUpperCase();
   const payment = String(row?.payment_status || "").toUpperCase();
-  const bookingClosed = booking === "CANCELLED";
+  const bookingClosed = booking === "CANCELLED" || booking === "PAID";
   const paymentClosed = payment === "PAID" || payment === "COMPLETED";
   return !bookingClosed && !paymentClosed;
 }
@@ -19,7 +19,7 @@ function isOpen(row) {
 function canAppendItems(row) {
   const booking = String(row?.booking_status || "").toUpperCase();
   const payment = String(row?.payment_status || "").toUpperCase();
-  if (booking === "CANCELLED") return false;
+  if (booking === "CANCELLED" || booking === "PAID") return false;
   if (payment === "PAID" || payment === "COMPLETED") return false;
   if (booking === "COMPLETED") return false;
   return true;

@@ -177,6 +177,25 @@ function PublicRestaurantMenuContent() {
   const [billReady, setBillReady] = useState(false);
   const [activeOrderSnapshot, setActiveOrderSnapshot] = useState(null);
   const reconcileRanRef = useRef(false);
+  const clearCurrentOrderState = () => {
+    if (typeof window !== "undefined") {
+      const tableForKey = tableFromQr || tableNo || "";
+      const sessionKey = storageKey("public_menu_order_session_id", restaurantId, tableForKey);
+      const recordKey = storageKey("public_menu_order_record_id", restaurantId, tableForKey);
+      const cartKey = storageKey("public_menu_order_cart", restaurantId, tableForKey);
+      const notesKey = storageKey("public_menu_order_notes", restaurantId, tableForKey);
+      sessionStorage.removeItem(sessionKey);
+      sessionStorage.removeItem(recordKey);
+      sessionStorage.removeItem(cartKey);
+      sessionStorage.removeItem(notesKey);
+    }
+    setOrderSessionId("");
+    setOrderRecordId("");
+    setCart({});
+    setNotes("");
+    setBillReady(false);
+    setActiveOrderSnapshot(null);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -301,54 +320,39 @@ function PublicRestaurantMenuContent() {
         if (cancelled) return;
 
         if (openOrder?.id) {
-          const openBooking = String(openOrder.booking_status || "").toUpperCase();
-          const openPayment = String(openOrder.payment_status || "").toUpperCase();
+          let normalizedOpenOrder = openOrder;
+          try {
+            const fullRes = await fetch("/api/public-menu/orders", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "get_status", order_id: String(openOrder.id || "") }),
+            });
+            const fullJson = await fullRes.json();
+            if (fullRes.ok && fullJson?.ok && fullJson?.order?.id) {
+              normalizedOpenOrder = fullJson.order;
+            }
+          } catch {}
+
+          const openBooking = String(normalizedOpenOrder.booking_status || "").toUpperCase();
+          const openPayment = String(normalizedOpenOrder.payment_status || "").toUpperCase();
           const isClosedOrder =
             ["PAID", "COMPLETED"].includes(openPayment) ||
-            ["CANCELLED"].includes(openBooking);
+            ["PAID", "CANCELLED"].includes(openBooking);
 
           if (isClosedOrder) {
-            const tableForKey = tableFromQr || tableNo || "";
-            const sessionKey = storageKey("public_menu_order_session_id", restaurantId, tableForKey);
-            const recordKey = storageKey("public_menu_order_record_id", restaurantId, tableForKey);
-            const cartKey = storageKey("public_menu_order_cart", restaurantId, tableForKey);
-            const notesKey = storageKey("public_menu_order_notes", restaurantId, tableForKey);
-            sessionStorage.removeItem(sessionKey);
-            sessionStorage.removeItem(recordKey);
-            sessionStorage.removeItem(cartKey);
-            sessionStorage.removeItem(notesKey);
-            setOrderSessionId("");
-            setOrderRecordId("");
-            setCart({});
-            setNotes("");
-            setBillReady(false);
-            setActiveOrderSnapshot(null);
+            clearCurrentOrderState();
             return;
           }
 
-          const nextId = String(openOrder.id || "");
-          const nextSession = String(openOrder.session_id || orderSessionId || "");
+          const nextId = String(normalizedOpenOrder.id || "");
+          const nextSession = String(normalizedOpenOrder.session_id || orderSessionId || "");
           if (nextId && nextId !== orderRecordId) setOrderRecordId(nextId);
           if (nextSession && nextSession !== orderSessionId) setOrderSessionId(nextSession);
           return;
         }
 
         if (orderRecordId || orderSessionId) {
-          const tableForKey = tableFromQr || tableNo || "";
-          const sessionKey = storageKey("public_menu_order_session_id", restaurantId, tableForKey);
-          const recordKey = storageKey("public_menu_order_record_id", restaurantId, tableForKey);
-          const cartKey = storageKey("public_menu_order_cart", restaurantId, tableForKey);
-          const notesKey = storageKey("public_menu_order_notes", restaurantId, tableForKey);
-          sessionStorage.removeItem(sessionKey);
-          sessionStorage.removeItem(recordKey);
-          sessionStorage.removeItem(cartKey);
-          sessionStorage.removeItem(notesKey);
-          setOrderSessionId("");
-          setOrderRecordId("");
-          setCart({});
-          setNotes("");
-          setBillReady(false);
-          setActiveOrderSnapshot(null);
+          clearCurrentOrderState();
         }
       } catch {}
     };
@@ -357,28 +361,12 @@ function PublicRestaurantMenuContent() {
     return () => {
       cancelled = true;
     };
-  }, [restaurantId, tableFromQr, tableNo, orderSessionId, orderRecordId]);
+  }, [restaurantId, tableFromQr, tableNo]);
 
   useEffect(() => {
     if (!orderRecordId) return;
     let cancelled = false;
-    const clearPersistedOrder = () => {
-      const tableForKey = tableFromQr || tableNo || "";
-      const sessionKey = storageKey("public_menu_order_session_id", restaurantId, tableForKey);
-      const recordKey = storageKey("public_menu_order_record_id", restaurantId, tableForKey);
-      const cartKey = storageKey("public_menu_order_cart", restaurantId, tableForKey);
-      const notesKey = storageKey("public_menu_order_notes", restaurantId, tableForKey);
-      sessionStorage.removeItem(sessionKey);
-      sessionStorage.removeItem(recordKey);
-      sessionStorage.removeItem(cartKey);
-      sessionStorage.removeItem(notesKey);
-      setOrderSessionId("");
-      setOrderRecordId("");
-      setCart({});
-      setNotes("");
-      setBillReady(false);
-      setActiveOrderSnapshot(null);
-    };
+    const clearPersistedOrder = () => clearCurrentOrderState();
     const poll = async () => {
       const res = await fetch("/api/public-menu/orders", {
         method: "POST",
@@ -403,7 +391,7 @@ function PublicRestaurantMenuContent() {
         clearPersistedOrder();
         return;
       }
-      if (["CANCELLED"].includes(status)) {
+      if (["PAID", "CANCELLED"].includes(status)) {
         clearPersistedOrder();
         return;
       }
@@ -413,7 +401,7 @@ function PublicRestaurantMenuContent() {
     const timer = setInterval(() => {
       if (typeof document !== "undefined" && document.hidden) return;
       poll();
-    }, 15000);
+    }, 5000);
     return () => {
       cancelled = true;
       clearInterval(timer);
@@ -612,8 +600,44 @@ function PublicRestaurantMenuContent() {
     setIsPlacingOrder(true);
 
     try {
-      const sessionIdForOrder = orderSessionId || makeSessionId();
-      if (!orderSessionId) setOrderSessionId(sessionIdForOrder);
+      let nextTargetOrderId = String(orderRecordId || "").trim();
+      let sessionIdForOrder = orderSessionId || makeSessionId();
+
+      // Final guard: never append items to a paid/closed order.
+      if (nextTargetOrderId) {
+        try {
+          const currentRes = await fetch("/api/public-menu/orders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "get_status", order_id: nextTargetOrderId }),
+          });
+          const currentJson = await currentRes.json();
+          const currentOrder = currentRes.ok && currentJson?.ok ? currentJson?.order : null;
+          const currentBooking = String(currentOrder?.booking_status || "").toUpperCase();
+          const currentPayment = String(currentOrder?.payment_status || "").toUpperCase();
+          const isClosed =
+            ["PAID", "COMPLETED"].includes(currentPayment) ||
+            ["PAID", "CANCELLED"].includes(currentBooking);
+          if (isClosed || !currentOrder?.id) {
+            const tableForKey = tableFromQr || tableNo || "";
+            const sessionKey = storageKey("public_menu_order_session_id", restaurantId, tableForKey);
+            const recordKey = storageKey("public_menu_order_record_id", restaurantId, tableForKey);
+            sessionStorage.removeItem(sessionKey);
+            sessionStorage.removeItem(recordKey);
+            nextTargetOrderId = "";
+            sessionIdForOrder = makeSessionId();
+            setOrderRecordId("");
+            setOrderSessionId(sessionIdForOrder);
+            setBillReady(false);
+            setActiveOrderSnapshot(null);
+          }
+        } catch {}
+      }
+
+      if (!orderSessionId || !nextTargetOrderId) {
+        sessionIdForOrder = sessionIdForOrder || makeSessionId();
+        setOrderSessionId(sessionIdForOrder);
+      }
       const commonPayload = {
         session_id: sessionIdForOrder,
         restaurant_id: trimmedRestaurantId,
@@ -646,7 +670,7 @@ function PublicRestaurantMenuContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "upsert",
-          target_order_id: orderRecordId || null,
+          target_order_id: nextTargetOrderId || null,
           payload: commonPayload,
           bill_ready: billReady,
         }),
