@@ -41,7 +41,6 @@ export default function CashierTopNav() {
   const pathname = usePathname();
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
-  const [showScrollTabs, setShowScrollTabs] = useState(pathname !== "/cashier/dashboard");
   const [profile, setProfile] = useState({ restaurant_name: "Restaurant", user_name: "Cashier", restaurant_logo: "" });
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -63,22 +62,6 @@ export default function CashierTopNav() {
       } catch {}
     })();
   }, []);
-
-  useEffect(() => {
-    if (pathname !== "/cashier/dashboard") {
-      setShowScrollTabs(true);
-      return;
-    }
-
-    const onScroll = () => {
-      // Reveal compact nav tabs once KPI tile section is passed.
-      setShowScrollTabs(window.scrollY > 340);
-    };
-
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [pathname]);
 
   const activeTab = useMemo(() => tabs.find((t) => pathname === t.href || pathname.startsWith(t.href + "/"))?.href || "", [pathname]);
 
@@ -141,8 +124,7 @@ export default function CashierTopNav() {
           </div>
         </div>
 
-        {showScrollTabs ? (
-          <nav className="flex flex-wrap gap-5">
+        <nav className="flex flex-wrap gap-5">
             {tabs.map((tab) => {
               const active = activeTab === tab.href;
               const Icon = tab.icon;
@@ -165,7 +147,6 @@ export default function CashierTopNav() {
               );
             })}
           </nav>
-        ) : null}
       </div>
     </header>
   );
