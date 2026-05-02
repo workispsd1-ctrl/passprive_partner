@@ -538,16 +538,21 @@ export default function CashierDashboardPage() {
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Order Confirmations</h2>
-              <p className="text-sm text-slate-500">Track active QR/table orders and respond fast.</p>
+              
             </div>
             <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{activeQrOrders.length} Active</span>
           </div>
-          <div className="max-h-[28rem] overflow-y-auto p-4 space-y-3">
+          <div className="max-h-[18rem] overflow-y-auto p-4 space-y-3">
             {activeQrOrders.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">No active QR orders right now.</div>
             ) : (
               activeQrOrders.map((o) => (
-                <div key={o.id} className="rounded-2xl border border-slate-200 p-4 hover:border-violet-300 transition">
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => router.push(`/cashier/table-orders?order_id=${encodeURIComponent(String(o.id || ""))}`)}
+                  className="w-full rounded-2xl border border-slate-200 p-4 hover:border-violet-300 transition text-left"
+                >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="font-semibold text-slate-900">Order #{String(o.id).slice(0, 8)} • Table {o.table_no || "-"}</p>
                     <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusPill(o.booking_status)}`}>{String(o.booking_status || "PLACED").toUpperCase()}</span>
@@ -558,7 +563,7 @@ export default function CashierDashboardPage() {
                     <p className="flex items-center gap-2"><DollarSign className="h-4 w-4" /> {money(o.total_amount || 0)}</p>
                     <p className="flex items-center gap-2"><Clock3 className="h-4 w-4" /> {fmtTimeFromDateTime(o.created_at)}</p>
                   </div>
-                </div>
+                </button>
               ))
             )}
           </div>
@@ -575,14 +580,19 @@ export default function CashierDashboardPage() {
                 <div className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">No bookings for today.</div>
               ) : (
                 todaysBookings.map((b) => (
-                  <div key={b.id} className="rounded-xl border border-slate-200 p-3">
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => router.push(`/cashier/bookings?booking_id=${encodeURIComponent(String(b.id || ""))}`)}
+                    className="w-full rounded-xl border border-slate-200 p-3 text-left hover:border-violet-300 transition"
+                  >
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-semibold text-slate-800">{fmtBookingTime(b.booking_time)}</p>
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusPill(b.status)}`}>{String(b.status || "pending").toUpperCase()}</span>
                     </div>
                     <p className="mt-1 text-sm text-slate-700">{b.customer_name || "Guest"}</p>
                     <p className="mt-1 text-xs text-slate-500 flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {b.party_size || 0} guests</p>
-                  </div>
+                  </button>
                 ))
               )}
             </div>
