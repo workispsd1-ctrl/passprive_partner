@@ -145,7 +145,7 @@ export default function Page() {
   // UI controls
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("ALL"); // ALL | REPLIED | UNREPLIED
-  const [minRating, setMinRating] = useState("ALL"); // ALL | 4 | 3 | 2 | 1
+  const [minRating, setMinRating] = useState("ALL"); // ALL | 5 | 4 | 3 | 2 | 1
   const [sort, setSort] = useState("NEW"); // NEW | OLD | HIGH | LOW
 
   // reply state
@@ -325,7 +325,7 @@ export default function Page() {
 
     if (minRating !== "ALL") {
       const mr = Number(minRating);
-      list = list.filter((r) => (r.rating ?? 0) >= mr);
+      list = list.filter((r) => Math.round(r.rating ?? 0) === mr);
     }
 
     if (sort === "NEW") {
@@ -441,10 +441,11 @@ export default function Page() {
                 className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
               >
                 <option value="ALL">Any rating</option>
-                <option value="4">4★+</option>
-                <option value="3">3★+</option>
-                <option value="2">2★+</option>
-                <option value="1">1★+</option>
+                <option value="5">5★</option>
+                <option value="4">4★</option>
+                <option value="3">3★</option>
+                <option value="2">2★</option>
+                <option value="1">1★</option>
               </select>
 
               <select

@@ -291,8 +291,8 @@ export default function RestaurantBookingsPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="rounded-lg border border-gray-200 bg-white overflow-x-auto">
+        <table className="min-w-[860px] w-full text-sm">
           <thead className="bg-gray-50 text-gray-500">
             <tr>
               <th className="px-4 py-3 text-left">Guest details</th>
