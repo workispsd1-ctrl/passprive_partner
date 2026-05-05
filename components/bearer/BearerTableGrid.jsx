@@ -2,13 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
-import { 
-  PlusCircle, 
-  UtensilsCrossed,
-  Users,
+import {
   AlertCircle,
   LayoutGrid,
-  Map as MapIcon
+  Map as MapIcon,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -97,7 +94,7 @@ export default function BearerTableGrid({ restaurantId, initialLayouts = [] }) {
   }
 
   const tableCards = useMemo(() => {
-    return layouts.map((layout) => {
+    const cards = layouts.map((layout) => {
       const tableOrders = orders.filter((o) => Number(o?.table_no || 0) === Number(layout.table_no));
       const latest = [...tableOrders].sort(
         (a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime()
@@ -118,6 +115,12 @@ export default function BearerTableGrid({ restaurantId, initialLayouts = [] }) {
         isBlinking: Boolean(blinkingTables[String(layout.table_no)]),
         blinkColor: blinkAccent(layout.table_no),
       };
+    });
+    
+    return cards.sort((a, b) => {
+      const aNum = parseInt(String(a.table_no || 0).trim(), 10) || 0;
+      const bNum = parseInt(String(b.table_no || 0).trim(), 10) || 0;
+      return aNum - bNum;
     });
   }, [layouts, orders, blinkingTables]);
 
@@ -164,30 +167,40 @@ export default function BearerTableGrid({ restaurantId, initialLayouts = [] }) {
       </div>
 
       {viewMode === "grid" ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {tableCards.map((table) => (
-            <TableCard key={table.id} table={table} isGrid />
-          ))}
+        <div className="grid grid-cols-1 w-full gap-6 sm:gap-7 lg:gap-8">
+          {tableCards && tableCards.length > 0 ? (
+            tableCards.map((table) => (
+              <TableCard key={table.id} table={table} isGrid />
+            ))
+          ) : (
+            <div className="text-center py-8 text-slate-500">No tables found</div>
+          )}
         </div>
       ) : (
         <div className="relative w-full aspect-[16/10] sm:aspect-video bg-slate-50/50 rounded-[3rem] border-2 border-slate-100 overflow-hidden shadow-inner p-4">
           <div className="absolute inset-0 opacity-[0.03] pointer-events-none" 
                style={{ backgroundImage: `radial-gradient(circle, #000 1px, transparent 1px)`, backgroundSize: '30px 30px' }} />
           
-          {tableCards.map((table) => {
-            const x = Number(table.pos_x || 0);
-            const y = Number(table.pos_y || 0);
-            
-            return (
-              <div
-                key={table.id}
-                className="absolute -translate-x-1/2 -translate-y-1/2 transition-all duration-500"
-                style={{ left: `${x}%`, top: `${y}%`, zIndex: table.isOccupied ? 20 : 10 }}
-              >
-                <TableCard table={table} />
-              </div>
-            );
-          })}
+          {tableCards && tableCards.length > 0 ? (
+            tableCards.map((table) => {
+              const x = Number(table.pos_x || 0);
+              const y = Number(table.pos_y || 0);
+              
+              return (
+                <div
+                  key={table.id}
+                  className="absolute -translate-x-1/2 -translate-y-1/2 transition-all duration-500"
+                  style={{ left: `${x}%`, top: `${y}%`, zIndex: table.isOccupied ? 20 : 10 }}
+                >
+                  <TableCard table={table} />
+                </div>
+              );
+            })
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center text-slate-500">No tables on floor plan</div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -195,44 +208,46 @@ export default function BearerTableGrid({ restaurantId, initialLayouts = [] }) {
 }
 
 function TableCard({ table, isGrid = false }) {
-  const shapeClass = table.shape === 'circle' ? 'rounded-full' : 'rounded-[1.5rem] sm:rounded-[2rem]';
-  
+  const shapeClass = table.shape === "circle" ? "rounded-[1.5rem]" : "rounded-[1.5rem]";
+  const occupied = Boolean(table.isOccupied);
+  const stateLabel = occupied ? "ORDERING" : "EMPTY";
+  const stateClass = occupied ? "text-emerald-700" : "text-slate-500";
+  const borderClass = occupied
+    ? "border-emerald-400 bg-emerald-50/60"
+    : "border-slate-200 bg-white";
+
   return (
     <Link
       href={`/restaurant/bearer/table/${table.table_no}`}
-      className={`group relative flex flex-col items-center justify-center gap-1 transition-all duration-300 ${
-        isGrid ? "w-full aspect-square" : "w-16 h-16 sm:w-28 sm:h-28"
-      } ${shapeClass} border-2 shadow-sm ${
-        table.isOccupied
-          ? "border-amber-400 bg-amber-50"
-          : "border-white bg-white hover:border-violet-400 hover:shadow-xl hover:scale-110"
+      className={`group relative flex w-full overflow-hidden border-2 ${shapeClass} ${borderClass} px-8 py-6 shadow-sm transition-all duration-300 hover:shadow-lg hover:translate-y-[-2px] ${
+        isGrid ? "min-h-[12rem] sm:min-h-[13rem]" : "min-w-[180px] sm:min-w-[200px] min-h-[140px]"
       }`}
       style={table.isBlinking ? { borderColor: table.blinkColor.ring, boxShadow: `0 0 20px ${table.blinkColor.glow}` } : {}}
     >
-      <div className={`transition-transform duration-500 ${table.isOccupied ? "scale-110" : "group-hover:rotate-12"}`}>
-        {table.isOccupied ? (
-          <UtensilsCrossed className="h-4 w-4 sm:h-7 sm:w-7 text-amber-600" />
-        ) : (
-          <PlusCircle className="h-4 w-4 sm:h-7 sm:w-7 text-slate-300 group-hover:text-violet-500" />
-        )}
+      <div className="flex w-full flex-col justify-between gap-4">
+        <div className="flex items-start justify-between gap-3">
+          <span className={`text-[11px] font-bold uppercase tracking-[0.2em] ${occupied ? "text-emerald-700" : "text-slate-500"}`}>
+            TABLE
+          </span>
+        </div>
+
+        <div className="flex flex-1 items-center justify-center py-3">
+          <span className={`text-5xl font-black leading-tight sm:text-6xl ${occupied ? "text-slate-950" : "text-slate-900"}`}>
+            {table.table_no}
+          </span>
+        </div>
+
+        <div className="flex items-end justify-between gap-3">
+          <span className={`text-[11px] font-bold uppercase tracking-[0.15em] ${stateClass}`}>
+            {stateLabel}
+          </span>
+          <span className={`text-[11px] font-semibold ${occupied ? "text-emerald-600" : "text-slate-400"}`}>
+            {table.label || `T-${table.table_no}`}
+          </span>
+        </div>
       </div>
 
-      <div className="text-center px-1">
-        <span className={`block text-[6px] sm:text-[10px] font-black uppercase tracking-widest truncate max-w-full ${table.isOccupied ? "text-amber-500" : "text-slate-400"}`}>
-          {table.label || `T-${table.table_no}`}
-        </span>
-        <span className={`block text-sm sm:text-2xl font-black leading-none ${table.isOccupied ? "text-amber-900" : "text-slate-900"}`}>
-          {table.table_no}
-        </span>
-      </div>
-
-      <div className="absolute -bottom-1 -right-1 h-4 w-4 sm:h-7 sm:w-7 rounded-full bg-slate-900 text-white flex items-center justify-center border-2 border-white shadow-sm">
-         <span className="text-[6px] sm:text-[10px] font-bold">{table.capacity}</span>
-      </div>
-
-      {table.isOccupied && (
-        <div className="absolute top-1 right-1 sm:top-2 sm:right-2 h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-amber-500 animate-ping" />
-      )}
+      {occupied && <div className="absolute inset-x-0 top-0 h-1 bg-emerald-400" />}
     </Link>
   );
 }
