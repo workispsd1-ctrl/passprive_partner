@@ -804,14 +804,26 @@ function buildMiniBars(orders) {
   return days.map((v) => Math.max(8, Math.round((v / max) * 100)));
 }
 
+function averageRating(rows) {
+  const normalized = (rows || [])
+    .map((row) => Number(row?.rating))
+    .filter((value) => Number.isFinite(value));
+  if (!normalized.length) return 0;
+  return normalized.reduce((sum, value) => sum + value, 0) / normalized.length;
+}
+
 function averageRatingForRange(reviews, dates) {
-  if (!dates) return 0;
-  const filtered = (reviews || []).filter((review) => {
+  const allReviews = Array.isArray(reviews) ? reviews : [];
+  if (!allReviews.length) return 0;
+  if (!dates) return averageRating(allReviews);
+
+  const filtered = allReviews.filter((review) => {
     const created = new Date(review.createdAt || review.created_at || 0).getTime();
     return created >= dates.from.getTime() && created <= dates.to.getTime();
   });
-  if (!filtered.length) return 0;
-  return filtered.reduce((sum, review) => sum + Number(review.rating || 0), 0) / filtered.length;
+
+  // Keep KPI meaningful when the selected date range has no new reviews yet.
+  return filtered.length ? averageRating(filtered) : averageRating(allReviews);
 }
 
 function toTime(d) {

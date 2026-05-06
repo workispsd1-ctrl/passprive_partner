@@ -1,7 +1,14 @@
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
-const SUCCESS_STATUSES = new Set(["PAID"]);
-const CANCELLED_STATUSES = new Set(["CANCELLED", "REJECTED"]);
+const SUCCESS_STATUSES = new Set([
+  "PAID",
+  "COMPLETED",
+  "DELIVERED",
+  "FINALIZED",
+  "VERIFIED_SUCCESS",
+  "SUCCESS",
+]);
+const CANCELLED_STATUSES = new Set(["CANCELLED", "REJECTED", "VERIFIED_FAILED", "ERROR"]);
 function asNumber(value) {
   const n = Number(value || 0);
   return Number.isFinite(n) ? n : 0;
@@ -56,16 +63,21 @@ function formatDelta(current, previous) {
   return { change: "0%", changeType: "neutral" };
 }
 
-function getNormalizedStatus(row) {
-  return String(row?.payment_status || row?.status || "").toUpperCase();
+function getStatusCandidates(row) {
+  return [row?.payment_status, row?.status]
+    .map((value) => String(value || "").toUpperCase())
+    .filter(Boolean);
 }
 
 function isSuccessfulSession(row) {
-  return SUCCESS_STATUSES.has(getNormalizedStatus(row));
+  const statuses = getStatusCandidates(row);
+  if (!statuses.length) return false;
+  if (statuses.some((status) => CANCELLED_STATUSES.has(status))) return false;
+  return statuses.some((status) => SUCCESS_STATUSES.has(status));
 }
 
 function isCancelledSession(row) {
-  return CANCELLED_STATUSES.has(getNormalizedStatus(row));
+  return getStatusCandidates(row).some((status) => CANCELLED_STATUSES.has(status));
 }
 
 function getSessionTimestamp(row) {
@@ -129,7 +141,7 @@ function buildDailyTrend(rows, start, end) {
   rows.forEach((row) => {
     const key = toIsoDay(getSessionTimestamp(row));
     if (!revenueByDay.has(key)) return;
-    revenueByDay.set(key, revenueByDay.get(key) + asNumber(row.amount_major));
+    revenueByDay.set(key, revenueByDay.get(key) + asNumber(row.total_amount));
   });
 
   return Array.from(revenueByDay.entries()).map(([isoDay, value]) => ({
