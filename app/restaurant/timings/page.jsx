@@ -259,7 +259,7 @@ export default function RestaurantTimingsPage() {
                   <div className="grid gap-3 md:grid-cols-[140px_140px_auto] md:items-center">
                     <input
                       type="time"
-                      step="60"
+                      step="1800"
                       value={row.is_closed ? "" : (row.open_time || "")}
                       disabled={row.is_closed || busy}
                       onChange={(e) => updateRow(row.day_of_week, { open_time: e.target.value })}
@@ -268,7 +268,7 @@ export default function RestaurantTimingsPage() {
 
                     <input
                       type="time"
-                      step="60"
+                      step="1800"
                       value={row.is_closed ? "" : (row.close_time || "")}
                       disabled={row.is_closed || busy}
                       onChange={(e) => updateRow(row.day_of_week, { close_time: e.target.value })}
