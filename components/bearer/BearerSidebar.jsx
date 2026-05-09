@@ -3,14 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutGrid,
   QrCode,
   ListIndentDecrease,
   TextAlignJustify,
 } from "lucide-react";
 
 const NAV_ITEMS = [
-  { label: "Dashboard",    href: "/restaurant/bearer/dashboard",    icon: LayoutGrid },
   { label: "Table Orders", href: "/restaurant/bearer/table-orders", icon: QrCode },
 ];
 

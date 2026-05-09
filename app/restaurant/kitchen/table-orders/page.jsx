@@ -5,11 +5,11 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { Clock, CheckCircle2, AlertCircle, X } from "lucide-react";
 
 const ORDER_STATUS_COLORS = {
-  received: "bg-yellow-50 border-yellow-200",
-  accepted: "bg-blue-50 border-blue-200",
-  preparing: "bg-orange-50 border-orange-200",
-  ready: "bg-green-50 border-green-200",
-  delivered: "bg-gray-50 border-gray-200",
+  received: "bg-white border-gray-200",
+  accepted: "bg-white border-gray-200",
+  preparing: "bg-white border-gray-200",
+  ready: "bg-white border-gray-200",
+  delivered: "bg-white border-gray-200",
 };
 
 const ITEM_STATUS_COLORS = {
@@ -333,26 +333,26 @@ export default function TableOrdersPage() {
               key={order.id}
               type="button"
               onClick={() => setSelectedOrderId(order.id)}
-              className={`w-full rounded-lg border p-4 text-left transition hover:shadow ${ORDER_STATUS_COLORS[order.status] || ORDER_STATUS_COLORS.received}`}
+              className={`w-full rounded-2xl border p-5 text-left transition bg-white shadow-sm hover:shadow-md ${ORDER_STATUS_COLORS[order.status] || ORDER_STATUS_COLORS.received}`}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2.5 mb-3">
                     {order.table_number && (
-                      <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold bg-white text-gray-900">
+                      <span className="inline-block rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-bold text-gray-900 shadow-sm">
                         Table {order.table_number}
                       </span>
                     )}
                     <span className="text-sm font-semibold text-gray-700">{getStatusBadge(order.status)}</span>
                   </div>
-                  <div className="text-gray-900 text-sm font-semibold">
+                  <div className="text-gray-900 text-base font-semibold">
                     {order.items?.length || 0} item{(order.items?.length || 0) !== 1 ? "s" : ""}
                   </div>
-                  <div className="text-xs text-gray-700 line-clamp-1 mt-0.5">
+                  <div className="text-sm text-gray-700 line-clamp-1 mt-1">
                     {order.items?.map((i) => i.name || i.item_name).join(", ") || "No items"}
                   </div>
                 </div>
-                <div className="text-xs text-gray-600">#{order.id?.slice(0, 6)}</div>
+                <div className="text-xs text-gray-600 shrink-0 pt-1">#{order.id?.slice(0, 6)}</div>
               </div>
             </button>
           ))}

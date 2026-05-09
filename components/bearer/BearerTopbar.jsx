@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LogOut,
-  LayoutGrid,
   QrCode,
   RefreshCcw,
   Wifi,
@@ -15,15 +14,10 @@ import {
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 const tabs = [
-  { href: "/restaurant/bearer/dashboard",    label: "Dashboard",    icon: LayoutGrid },
   { href: "/restaurant/bearer/table-orders", label: "Table Orders", icon: QrCode },
 ];
 
 const tabStyles = {
-  "/restaurant/bearer/dashboard": {
-    active: "border-violet-700 bg-violet-600 text-white",
-    idle:   "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100",
-  },
   "/restaurant/bearer/table-orders": {
     active: "border-emerald-700 bg-emerald-600 text-white",
     idle:   "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
@@ -126,7 +120,7 @@ export default function BearerTopbar() {
   };
 
   return (
-    <header className="sticky top-0 z-40 mb-5 rounded-xl border border-slate-200 bg-white/95 backdrop-blur shadow-sm">
+    <header className="sticky top-0 z-40 mb-5 rounded-2xl border border-slate-200 bg-white/95 backdrop-blur shadow-sm">
       <div className="px-4 sm:px-5 py-4 flex flex-col gap-3">
         {/* Top row: logo + name + actions */}
         <div className="flex items-center justify-between gap-3">

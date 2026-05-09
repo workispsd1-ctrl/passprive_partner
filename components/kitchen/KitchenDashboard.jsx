@@ -437,8 +437,11 @@ export default function KitchenDashboard() {
     return (
       <div
         key={order.id}
-        className={`w-full rounded-lg border-2 p-3 text-left transition ${ORDER_STATUS_COLORS[order.status] || ORDER_STATUS_COLORS.received
-          } ${isExpanded ? (orderType === 'table' ? 'border-purple-500 shadow-md' : 'border-blue-500 shadow-md') : ''}`}
+        className={`w-full rounded-3xl border-3 p-4 text-left transition bg-white shadow-sm hover:shadow-md ${
+          isExpanded 
+            ? "border-violet-400 shadow-lg" 
+            : "border-violet-300"
+        }`}
       >
         <button
           type="button"
@@ -447,11 +450,11 @@ export default function KitchenDashboard() {
         >
           {/* Header */}
           <div className="flex items-center justify-between w-full">
-            <div className="flex items-center gap-2">
-              <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold bg-white">
+            <div className="flex items-center gap-3">
+              <span className="inline-block px-3 py-1.5 rounded-full text-sm font-bold bg-violet-100 text-violet-900">
                 {orderType === "table" ? `Table ${order.table_number || "-"}` : (order.customer_name || "Pickup")}
               </span>
-              <span className="text-xs font-semibold text-gray-600">
+              <span className="text-sm font-semibold text-gray-700">
                 {getStatusBadge(order.status)}
               </span>
             </div>
@@ -462,11 +465,11 @@ export default function KitchenDashboard() {
 
           {/* Collapsed Summary */}
           {!isExpanded && (
-            <div className="text-left">
-              <p className="text-xs font-bold text-gray-800">
+            <div className="text-left space-y-1">
+              <p className="text-sm font-bold text-gray-900">
                 {order.items?.length || 0} item{(order.items?.length || 0) !== 1 ? "s" : ""}
               </p>
-              <p className="text-xs text-gray-600 truncate max-w-xs">
+              <p className="text-sm text-gray-600 truncate max-w-xs">
                 {order.items?.map((i) => i.name || i.item_name).join(", ") || "No items"}
               </p>
             </div>
@@ -475,27 +478,27 @@ export default function KitchenDashboard() {
 
         {/* Expanded Details */}
         {isExpanded && (
-          <div className="mt-3 space-y-3">
-            <div className="text-left">
-              <p className="text-xs font-bold text-gray-800">
+          <div className="mt-4 space-y-4">
+            <div className="text-left space-y-1">
+              <p className="text-sm font-bold text-gray-900">
                 {order.items?.length || 0} item{(order.items?.length || 0) !== 1 ? "s" : ""}
               </p>
-              <p className="text-xs text-gray-600">
+              <p className="text-sm text-gray-700">
                 {order.items?.map((i) => i.name || i.item_name).join(", ") || "No items"}
               </p>
             </div>
 
-            <hr className="border-gray-300" />
+            <hr className="border-gray-200" />
 
             <div>
-              <p className="text-sm font-bold text-gray-900 mb-2">Items:</p>
+              <p className="text-sm font-bold text-gray-900 mb-3">Items:</p>
               <div className="space-y-2">
                 {order.items && Array.isArray(order.items) && order.items.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-sm bg-white/40 p-2 rounded-lg">
-                    <span className="font-medium text-gray-900">{item.name || item.item_name}</span>
+                  <div key={idx} className="flex items-center justify-between text-sm bg-slate-50 p-3 rounded-2xl">
+                    <span className="font-semibold text-gray-900">{item.name || item.item_name}</span>
                     <div className="flex items-center gap-2">
                       <span className="text-gray-600 text-xs">Qty: {item.quantity || 1}</span>
-                      <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase">
+                      <span className="bg-violet-100 text-violet-800 px-2.5 py-1 rounded-lg text-xs font-bold uppercase">
                         {item.status || "pending"}
                       </span>
                     </div>
@@ -505,7 +508,7 @@ export default function KitchenDashboard() {
             </div>
 
             {order.special_instructions && (
-              <div className="text-xs bg-yellow-50 border border-yellow-200 p-2 rounded-lg">
+              <div className="text-sm bg-yellow-50 border-2 border-yellow-200 p-3 rounded-2xl">
                 <p className="font-semibold text-gray-900">{order.special_instructions}</p>
               </div>
             )}
@@ -518,7 +521,7 @@ export default function KitchenDashboard() {
                     handleStatusUpdate(order.id, orderType, "PREPARING");
                   }}
                   disabled={updatingOrderId === order.id}
-                  className="w-full rounded-lg bg-blue-600 text-white py-2.5 text-sm font-bold hover:bg-blue-700 transition shadow-sm disabled:opacity-60"
+                  className="w-full rounded-2xl bg-blue-600 text-white py-3 text-sm font-bold hover:bg-blue-700 transition shadow-md disabled:opacity-60"
                 >
                   {updatingOrderId === order.id ? "Updating..." : "Mark Preparing"}
                 </button>

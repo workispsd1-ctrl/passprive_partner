@@ -126,19 +126,28 @@ export default function BearerTableGrid({ restaurantId, initialLayouts = [] }) {
 
   if (loading && layouts.length === 0) {
     return (
-      <div className="h-96 flex flex-col items-center justify-center bg-white rounded-[3rem] border border-dashed border-slate-200">
-        <div className="w-10 h-10 border-4 border-slate-100 border-t-slate-400 rounded-full animate-spin mb-4" />
-        <p className="text-slate-400 font-bold tracking-widest uppercase text-xs">Building Floor Plan...</p>
+      <div className="grid gap-4 lg:grid-cols-4 md:grid-cols-3 sm:grid-cols-2 animate-pulse">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={`sk-${i}`} className="rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="h-32 rounded-xl bg-slate-100" />
+            <div className="mt-3 h-4 w-3/4 rounded bg-slate-200" />
+            <div className="mt-2 h-3 w-full rounded bg-slate-100" />
+            <div className="mt-3 flex items-center justify-between">
+              <div className="h-3 w-16 rounded bg-slate-100" />
+              <div className="h-6 w-6 rounded bg-slate-100" />
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
 
   if (layouts.length === 0) {
     return (
-      <div className="h-64 flex flex-col items-center justify-center bg-white rounded-[3rem] border border-dashed border-slate-200 p-8 text-center">
-        <AlertCircle className="h-10 w-10 text-slate-300 mb-3" />
-        <p className="text-slate-600 font-bold">Floor Plan Empty</p>
-        <p className="text-slate-400 text-xs mt-1">No tables found for this restaurant.</p>
+      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
+        <AlertCircle className="mx-auto h-10 w-10 text-slate-300 mb-3" />
+        <p className="text-slate-600 font-semibold">No Tables Found</p>
+        <p className="text-slate-400 text-xs mt-1">No tables available for this restaurant.</p>
       </div>
     );
   }
@@ -146,39 +155,39 @@ export default function BearerTableGrid({ restaurantId, initialLayouts = [] }) {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <div className="inline-flex p-1 bg-slate-100 rounded-xl">
+        <div className="inline-flex p-1 bg-slate-100 rounded-xl gap-1">
           <button
             onClick={() => setViewMode("layout")}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-              viewMode === "layout" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+              viewMode === "layout" ? "bg-white text-slate-900 shadow-sm border border-slate-200" : "text-slate-600 hover:text-slate-900"
             }`}
           >
             <MapIcon className="h-3.5 w-3.5" /> Floor Plan
           </button>
           <button
             onClick={() => setViewMode("grid")}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-              viewMode === "grid" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+              viewMode === "grid" ? "bg-white text-slate-900 shadow-sm border border-slate-200" : "text-slate-600 hover:text-slate-900"
             }`}
           >
-            <LayoutGrid className="h-3.5 w-3.5" /> Grid
+            <LayoutGrid className="h-3.5 w-3.5" /> Grid View
           </button>
         </div>
       </div>
 
       {viewMode === "grid" ? (
-        <div className="grid grid-cols-1 w-full gap-6 sm:gap-7 lg:gap-8">
+        <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
           {tableCards && tableCards.length > 0 ? (
             tableCards.map((table) => (
               <TableCard key={table.id} table={table} isGrid />
             ))
           ) : (
-            <div className="text-center py-8 text-slate-500">No tables found</div>
+            <div className="col-span-full text-center py-8 text-slate-500">No tables found</div>
           )}
         </div>
       ) : (
-        <div className="relative w-full aspect-[16/10] sm:aspect-video bg-slate-50/50 rounded-[3rem] border-2 border-slate-100 overflow-hidden shadow-inner p-4">
-          <div className="absolute inset-0 opacity-[0.03] pointer-events-none" 
+        <div className="relative w-full aspect-[16/10] sm:aspect-video bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm p-4">
+          <div className="absolute inset-0 opacity-[0.02] pointer-events-none" 
                style={{ backgroundImage: `radial-gradient(circle, #000 1px, transparent 1px)`, backgroundSize: '30px 30px' }} />
           
           {tableCards && tableCards.length > 0 ? (
@@ -208,43 +217,70 @@ export default function BearerTableGrid({ restaurantId, initialLayouts = [] }) {
 }
 
 function TableCard({ table, isGrid = false }) {
-  const shapeClass = table.shape === "circle" ? "rounded-[1.5rem]" : "rounded-[1.5rem]";
   const occupied = Boolean(table.isOccupied);
-  const stateLabel = occupied ? "ORDERING" : "EMPTY";
-  const stateClass = occupied ? "text-emerald-700" : "text-slate-500";
+  const stateLabel = occupied ? "OCCUPIED" : "AVAILABLE";
+  const stateClass = occupied ? "text-emerald-700 bg-emerald-50" : "text-slate-600 bg-slate-50";
   const borderClass = occupied
-    ? "border-emerald-400 bg-emerald-50/60"
+    ? "border-emerald-300 bg-emerald-50/40"
     : "border-slate-200 bg-white";
 
+  if (isGrid) {
+    return (
+      <Link
+        href={`/restaurant/bearer/table/${table.table_no}`}
+        className={`group relative flex flex-col overflow-hidden rounded-2xl border-2 ${borderClass} p-3 shadow-sm transition-all duration-300 hover:shadow-md hover:border-slate-300 active:scale-95`}
+        style={table.isBlinking ? { borderColor: table.blinkColor.ring, boxShadow: `0 0 16px ${table.blinkColor.glow}, 0 1px 3px rgba(0, 0, 0, 0.1)` } : {}}
+      >
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="flex-1">
+            <span className={`text-[10px] font-bold uppercase tracking-widest ${occupied ? "text-emerald-700" : "text-slate-500"}`}>
+              Table
+            </span>
+            <div className="text-3xl font-black leading-tight text-slate-900 mt-1">
+              {table.table_no}
+            </div>
+          </div>
+          {occupied && <div className="w-2 h-2 rounded-full bg-emerald-500 mt-1" />}
+        </div>
+
+        <div className="mt-auto">
+          <span className={`inline-block px-2 py-1 rounded-lg text-[10px] font-semibold ${stateClass}`}>
+            {stateLabel}
+          </span>
+          <div className="text-[10px] text-slate-500 mt-2">{table.label || `T-${table.table_no}`}</div>
+        </div>
+      </Link>
+    );
+  }
+
+  // Floor plan mode
   return (
     <Link
       href={`/restaurant/bearer/table/${table.table_no}`}
-      className={`group relative flex w-full overflow-hidden border-2 ${shapeClass} ${borderClass} px-8 py-6 shadow-sm transition-all duration-300 hover:shadow-lg hover:translate-y-[-2px] ${
-        isGrid ? "min-h-[12rem] sm:min-h-[13rem]" : "min-w-[180px] sm:min-w-[200px] min-h-[140px]"
-      }`}
+      className={`group relative flex flex-col overflow-hidden rounded-2xl border-2 ${borderClass} p-4 shadow-sm transition-all duration-300 hover:shadow-md min-w-[160px]`}
       style={table.isBlinking ? { borderColor: table.blinkColor.ring, boxShadow: `0 0 20px ${table.blinkColor.glow}` } : {}}
     >
-      <div className="flex w-full flex-col justify-between gap-4">
-        <div className="flex items-start justify-between gap-3">
-          <span className={`text-[11px] font-bold uppercase tracking-[0.2em] ${occupied ? "text-emerald-700" : "text-slate-500"}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <span className={`text-[10px] font-bold uppercase tracking-widest ${occupied ? "text-emerald-700" : "text-slate-500"}`}>
             TABLE
           </span>
         </div>
+      </div>
 
-        <div className="flex flex-1 items-center justify-center py-3">
-          <span className={`text-5xl font-black leading-tight sm:text-6xl ${occupied ? "text-slate-950" : "text-slate-900"}`}>
-            {table.table_no}
-          </span>
-        </div>
+      <div className="flex flex-1 items-center justify-center py-3">
+        <span className={`text-4xl font-black leading-tight ${occupied ? "text-slate-950" : "text-slate-900"}`}>
+          {table.table_no}
+        </span>
+      </div>
 
-        <div className="flex items-end justify-between gap-3">
-          <span className={`text-[11px] font-bold uppercase tracking-[0.15em] ${stateClass}`}>
-            {stateLabel}
-          </span>
-          <span className={`text-[11px] font-semibold ${occupied ? "text-emerald-600" : "text-slate-400"}`}>
-            {table.label || `T-${table.table_no}`}
-          </span>
-        </div>
+      <div className="flex items-end justify-between gap-2">
+        <span className={`text-[10px] font-bold uppercase tracking-widest ${occupied ? "text-emerald-700" : "text-slate-500"}`}>
+          {stateLabel}
+        </span>
+        <span className={`text-[10px] font-semibold ${occupied ? "text-emerald-600" : "text-slate-400"}`}>
+          {table.label || `T-${table.table_no}`}
+        </span>
       </div>
 
       {occupied && <div className="absolute inset-x-0 top-0 h-1 bg-emerald-400" />}
