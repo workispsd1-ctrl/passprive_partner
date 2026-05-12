@@ -188,16 +188,27 @@ export default function RestaurantDashboardPage() {
   }, [customFrom, customTo]);
 
   const kpis = useMemo(() => {
-    const revenue = orders
-      .filter((o) => o.payment_status === "PAID")
+    const pickupRevenue = orders
+      .filter((o) => String(o.payment_status || "").toUpperCase() === "PAID")
       .reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
 
+    const tableRevenue = tableOrders
+      .filter((o) => {
+        const bs = String(o.booking_status || "").toUpperCase();
+        const ps = String(o.payment_status || "").toUpperCase();
+        return bs === "PAID" || ps === "PAID" || ps === "COMPLETED";
+      })
+      .reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
+
+    const revenue = pickupRevenue + tableRevenue;
+
     const totalBookings = bookings.length;
-    const totalOrders = orders.length;
+    const totalOrders = orders.length + tableOrders.length;
 
     const cancellations =
-      orders.filter((o) => o.order_status === "CANCELLED").length +
-      bookings.filter((b) => b.status === "cancelled").length;
+      orders.filter((o) => String(o.order_status || "").toUpperCase() === "CANCELLED").length +
+      bookings.filter((b) => String(b.status || "").toLowerCase() === "cancelled").length +
+      tableOrders.filter((o) => String(o.booking_status || "").toUpperCase() === "CANCELLED").length;
     const currentRating = averageRatingForRange(reviews, rangeDates);
 
     const newOrders =
@@ -409,9 +420,9 @@ export default function RestaurantDashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <KpiCard title="Revenue" value={`₹ ${Number(kpis.revenue).toLocaleString("en-IN")}`} meta="Paid orders" />
+        <KpiCard title="Revenue" value={`MUR ${Number(kpis.revenue).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} meta="Paid orders (pickup + table)" />
         <KpiCard title="Bookings" value={String(kpis.totalBookings)} meta="In selected range" />
-        <KpiCard title="Orders" value={String(kpis.totalOrders)} meta="Pickup orders" />
+        <KpiCard title="Orders" value={String(kpis.totalOrders)} meta="Pickup + table orders" />
         <KpiCard title="Cancellations" value={String(kpis.cancellations)} meta="Bookings + orders" />
         <KpiCard title="Rating" value={kpis.rating.toFixed(1)} meta="Restaurant rating" />
       </div>
