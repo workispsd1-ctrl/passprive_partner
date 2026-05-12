@@ -162,6 +162,7 @@ export default function KitchenDashboard() {
   const [orderAlert, setOrderAlert] = useState(null);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const lastSnapshotRef = useRef("");
   const [restaurantId, setRestaurantId] = useState(null);
   const [updatingOrderId, setUpdatingOrderId] = useState(null);
   const seenOrdersRef = useRef(new Set());
@@ -191,12 +192,12 @@ export default function KitchenDashboard() {
     getRestaurantId();
   }, []);
 
-  // Fetch orders
-  const fetchOrders = async () => {
+  // Fetch orders. Accepts `{ silent }` to avoid triggering UI updates when nothing changed.
+  const fetchOrders = async ({ silent = false } = {}) => {
     if (!restaurantId) return;
 
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
 
       const { data: sessionData } = await supabaseBrowser.auth.getSession();
       const token = sessionData?.session?.access_token;
@@ -226,11 +227,26 @@ export default function KitchenDashboard() {
       }
       const pickupOrdersData = pickupPayload?.orders || [];
 
-      // Check for new orders and play sound
+      // Normalize
       const normalizedTableOrders = (tablePayload?.orders || [])
         .filter((order) => isActiveTableBooking(order?.booking_status))
         .map(mapTableBooking);
       const normalizedPickupOrders = (pickupOrdersData || []).map(mapPickupOrder);
+
+      // Create a lightweight snapshot to detect no-op updates (like cashier pages)
+      const snapshot = JSON.stringify({
+        table: normalizedTableOrders.map((o) => [o.id, o.status, o.booking_status, o.updated_at || ""]),
+        pickup: normalizedPickupOrders.map((o) => [o.id, o.status, o.order_status, o.updated_at || ""]),
+      });
+
+      if (silent && snapshot === lastSnapshotRef.current) {
+        // nothing changed
+        if (!silent) setLoading(false);
+        return;
+      }
+
+      // Update snapshot
+      lastSnapshotRef.current = snapshot;
 
       const notifyCandidates = [];
       if (hasHydratedOrdersRef.current) {
@@ -268,9 +284,9 @@ export default function KitchenDashboard() {
           totalAmount: Number(first.total_amount || 0),
           items: Array.isArray(first.items)
             ? first.items.map((item) => ({
-              name: item?.name || item?.item_name || "Item",
-              quantity: Number(item?.quantity ?? item?.qty ?? 1),
-            }))
+                name: item?.name || item?.item_name || "Item",
+                quantity: Number(item?.quantity ?? item?.qty ?? 1),
+              }))
             : [],
         });
       }
@@ -301,12 +317,23 @@ export default function KitchenDashboard() {
     // Initial fetch
     fetchOrders();
 
+    const onTopRefresh = () => fetchOrders();
+    window.addEventListener("kitchen:refresh", onTopRefresh);
+
     const interval = setInterval(() => {
-      fetchOrders();
-    }, 5000);
+      if (typeof document !== "undefined" && document.hidden) return;
+      fetchOrders({ silent: true });
+    }, 60000);
+
+    const onVisibility = () => {
+      if (typeof document !== "undefined" && !document.hidden) fetchOrders();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
       clearInterval(interval);
+      window.removeEventListener("kitchen:refresh", onTopRefresh);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [restaurantId]);
 

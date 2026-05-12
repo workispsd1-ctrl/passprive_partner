@@ -227,9 +227,11 @@ export default function StoreTimingsPage() {
 
     setSavingDay(row.day_of_week);
     try {
+      // Ensure we don't send a null `id` to the DB. Spread `row` first
+      // and then override fields (so `id` becomes `undefined` when null).
       const payload = {
-        id: row.id || undefined,
         ...row,
+        id: row.id || undefined,
         store_id: selectedStoreId,
         day_of_week: Number(row.day_of_week),
         open_time: row.is_closed ? null : normalizeTime(row.open_time),
