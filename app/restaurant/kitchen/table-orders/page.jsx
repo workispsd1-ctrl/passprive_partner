@@ -241,7 +241,8 @@ export default function TableOrdersPage() {
         console.error("Error updating table booking status:", result.error || "Failed");
       }
 
-      if (["COMPLETED", "PAID", "CANCELLED"].includes(String(bookingStatus).toUpperCase())) {
+      if (["COMPLETED", "PAID", "CANCELLED", "PREPARING"].includes(String(bookingStatus).toUpperCase())) {
+        // Close the order details modal when the booking moves to preparing/completed states
         setSelectedOrderId(null);
       }
 

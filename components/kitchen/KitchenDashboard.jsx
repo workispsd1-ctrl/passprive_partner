@@ -375,6 +375,10 @@ export default function KitchenDashboard() {
           await fetchOrders();
           return;
         }
+        // Close expanded details view when marking preparing
+        if (String(dbStatus).toUpperCase() === "PREPARING") {
+          setExpandedOrderId(null);
+        }
       } else {
         // For pickup orders, convert local display status to server order_status
         const nextOrderStatus = getPickupOrderNextStatus(bookingStatus);
@@ -398,6 +402,11 @@ export default function KitchenDashboard() {
 
         if (pickupErr) {
           console.error("Error updating pickup order status:", pickupErr);
+        } else {
+          // Close expanded details view for pickup orders when moving to preparing
+          if (String(nextOrderStatus).toLowerCase() === "preparing") {
+            setExpandedOrderId(null);
+          }
         }
       }
 
