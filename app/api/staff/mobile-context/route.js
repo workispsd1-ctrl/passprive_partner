@@ -64,7 +64,7 @@ export async function POST(request) {
         .maybeSingle(),
       admin
         .from("restaurant_table_layouts")
-        .select("id, table_no, seats")
+        .select("id, table_no, label, capacity")
         .eq("restaurant_id", restaurantId)
         .order("table_no", { ascending: true }),
     ]);
