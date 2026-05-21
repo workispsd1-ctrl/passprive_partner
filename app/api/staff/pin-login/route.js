@@ -84,11 +84,12 @@ export async function POST(request) {
       });
 
       if (!signInErr && signInData?.session && signInData?.user) {
-        await supabase.auth.signOut();
         return NextResponse.json({
           ok: true,
           email,
           role: roleByUser.get(row.id) || normalizeRole(row?.role),
+          access_token: signInData.session.access_token,
+          refresh_token: signInData.session.refresh_token,
         });
       }
     }
