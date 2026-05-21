@@ -55,6 +55,7 @@ export async function POST(request) {
     const [
       { data: restaurantRow, error: restaurantErr },
       { data: tableRows, error: tableErr },
+      { data: orderRows, error: orderErr },
     ] = await Promise.all([
       admin
         .from("restaurants")
@@ -67,10 +68,19 @@ export async function POST(request) {
         .select("id, table_no, label, capacity")
         .eq("restaurant_id", restaurantId)
         .order("table_no", { ascending: true }),
+      admin
+        .from("restaurant_table_bookings")
+        .select("id, table_no, booking_status, payment_status, total_amount, order_items, notes, updated_at")
+        .eq("restaurant_id", restaurantId)
+        .not("booking_status", "in", "(CANCELLED,COMPLETED,PAID)")
+        .not("payment_status", "in", "(PAID,COMPLETED)")
+        .order("updated_at", { ascending: false })
+        .limit(100),
     ]);
 
     if (restaurantErr) return NextResponse.json({ ok: false, error: restaurantErr.message }, { status: 400 });
     if (tableErr) return NextResponse.json({ ok: false, error: tableErr.message }, { status: 400 });
+    if (orderErr) return NextResponse.json({ ok: false, error: orderErr.message }, { status: 400 });
     if (!restaurantRow?.id) {
       return NextResponse.json({ ok: false, error: "Restaurant not found." }, { status: 404 });
     }
@@ -84,6 +94,7 @@ export async function POST(request) {
       },
       menu: parseMenu(restaurantRow.menu_json),
       tables: tableRows || [],
+      open_orders: orderRows || [],
     });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error?.message || "Unknown error" }, { status: 500 });
