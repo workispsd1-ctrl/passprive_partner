@@ -97,3 +97,51 @@ export async function POST(request) {
     return NextResponse.json({ ok: false, error: error?.message || "Unknown error" }, { status: 500 });
   }
 }
+
+export async function PATCH(request) {
+  try {
+    const body = await request.json();
+    const restaurantId = clean(body?.restaurant_id);
+    const deviceId = clean(body?.device_id);
+    const orderId = clean(body?.order_id);
+    const status = clean(body?.status).toUpperCase();
+
+    const ALLOWED = ["CONFIRMED", "PREPARING", "SERVED", "COMPLETED", "CANCELLED"];
+    if (!restaurantId || !deviceId || !orderId) {
+      return NextResponse.json({ ok: false, error: "restaurant_id, device_id and order_id are required" }, { status: 400 });
+    }
+    if (!ALLOWED.includes(status)) {
+      return NextResponse.json({ ok: false, error: `status must be one of: ${ALLOWED.join(", ")}` }, { status: 400 });
+    }
+
+    const admin = adminClient();
+    if (!admin) {
+      return NextResponse.json({ ok: false, error: "SUPABASE_SERVICE_ROLE_KEY is missing." }, { status: 500 });
+    }
+
+    const { data: deviceRow, error: deviceErr } = await admin
+      .from("restaurant_staff_devices")
+      .select("device_id")
+      .eq("device_id", deviceId)
+      .eq("restaurant_id", restaurantId)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (deviceErr) return NextResponse.json({ ok: false, error: deviceErr.message }, { status: 400 });
+    if (!deviceRow?.device_id) {
+      return NextResponse.json({ ok: false, error: "Device not authorised." }, { status: 403 });
+    }
+
+    const { error: updateErr } = await admin
+      .from("restaurant_table_bookings")
+      .update({ booking_status: status, updated_at: new Date().toISOString() })
+      .eq("id", orderId)
+      .eq("restaurant_id", restaurantId);
+
+    if (updateErr) return NextResponse.json({ ok: false, error: updateErr.message }, { status: 400 });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return NextResponse.json({ ok: false, error: error?.message || "Unknown error" }, { status: 500 });
+  }
+}
