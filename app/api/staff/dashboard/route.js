@@ -12,8 +12,16 @@ function isPendingBooking(status) {
   return s === "pending" || s === "payment_successful" || s === "payment_successfull";
 }
 
-function getRangeDates(range) {
+function getRangeDates(range, customFrom, customTo) {
   const now = new Date();
+
+  if (range === "month") {
+    const from = new Date(now.getFullYear(), now.getMonth(), 1);
+    from.setHours(0, 0, 0, 0);
+    const to = new Date(now);
+    to.setHours(23, 59, 59, 999);
+    return { from, to };
+  }
 
   if (range === "yesterday") {
     const from = new Date(now);
@@ -34,6 +42,14 @@ function getRangeDates(range) {
     return { from, to };
   }
 
+  if (range === "custom" && customFrom && customTo) {
+    const from = new Date(`${customFrom}T00:00:00`);
+    const to = new Date(`${customTo}T23:59:59`);
+    if (!isNaN(from.getTime()) && !isNaN(to.getTime())) {
+      return { from, to };
+    }
+  }
+
   // Default: today
   const from = new Date(now);
   from.setHours(0, 0, 0, 0);
@@ -48,6 +64,8 @@ export async function POST(request) {
     const restaurantId = String(body?.restaurant_id || "").trim();
     const deviceId = String(body?.device_id || "").trim();
     const range = String(body?.range || "today").trim();
+    const customFrom = String(body?.from || "").trim();
+    const customTo = String(body?.to || "").trim();
 
     if (!restaurantId || !deviceId) {
       return NextResponse.json(
@@ -79,7 +97,7 @@ export async function POST(request) {
     const todayStr = now.toISOString().split("T")[0];
     const plus2h = new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
-    const { from: rangeFrom, to: rangeTo } = getRangeDates(range);
+    const { from: rangeFrom, to: rangeTo } = getRangeDates(range, customFrom, customTo);
     const fromISO = rangeFrom.toISOString();
     const toISO = rangeTo.toISOString();
 
