@@ -10,6 +10,7 @@ import { useAppDispatch } from "@/store/hooks";
 const ALLOWED_ROLES = new Set([
   "storepartner",
   "restaurantpartner",
+  "restaurant_admin",
   "corporateadmin",
   "storemanager",
   "cashier",
@@ -80,7 +81,7 @@ const AuthCallbackPage = () => {
           return;
         }
 
-        if (role === "restaurantpartner") {
+        if (role === "restaurantpartner" || role === "restaurant_admin") {
           if (!cancelled) router.replace("/restaurant/dashboard");
           return;
         }

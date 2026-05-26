@@ -35,6 +35,7 @@ async function resolveKitchenRestaurant(token) {
   if (![
     "restaurant_kitchen",
     "restaurant_cashier",
+    "restaurant_admin",
     "restaurantpartner",
     "restaurant_partner",
     "admin",

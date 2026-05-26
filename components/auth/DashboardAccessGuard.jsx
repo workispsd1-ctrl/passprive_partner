@@ -10,7 +10,7 @@ function normalizeRole(role) {
 
 function resolveTargetForRole(role) {
   if (role === "storepartner" || role === "storemanager") return "/store-partner/dashboard";
-  if (role === "restaurantpartner") return "/restaurant/dashboard";
+  if (role === "restaurantpartner" || role === "restaurant_admin") return "/restaurant/dashboard";
   if (role === "cashier" || role === "restaurant_cashier") return "/cashier/dashboard";
   if (role === "restaurant_kitchen") return "/restaurant/kitchen/dashboard";
   if (role === "restaurant_bearer") return "/restaurant/bearer/dashboard";
@@ -24,7 +24,7 @@ function isAllowed(scope, role, pathname) {
   if (scope === "corporate") return role === "corporateadmin";
 
   if (scope === "restaurant") {
-    if (role === "restaurantpartner") return true;
+    if (role === "restaurantpartner" || role === "restaurant_admin") return true;
     if (role === "restaurant_kitchen") return String(pathname || "").startsWith("/restaurant/kitchen");
     if (role === "restaurant_bearer") return String(pathname || "").startsWith("/restaurant/bearer");
     return false;

@@ -286,8 +286,8 @@ export default function RestaurantMenuPage() {
         setLoading(false);
         return;
       }
-      if (!userRow || userRow.role !== "restaurantpartner") {
-        setSaveError("Not a restaurant partner account.");
+      if (!userRow || !["restaurantpartner", "restaurant_admin"].includes(String(userRow.role || "").toLowerCase())) {
+        setSaveError("Not a restaurant management account.");
         setLoading(false);
         return;
       }

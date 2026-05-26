@@ -6,6 +6,7 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { toast } from "sonner";
 
 const ROLE_OPTIONS = [
+  { value: "restaurant_admin", label: "Admin" },
   { value: "restaurant_cashier", label: "Cashier" },
   { value: "restaurant_kitchen", label: "Kitchen" },
   { value: "restaurant_bearer", label: "Bearer" },

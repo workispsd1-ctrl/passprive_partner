@@ -125,7 +125,7 @@ export default function RestaurantTopbar({ collapsed = false, onToggleSidebar })
         .eq("id", user.id)
         .single();
 
-      if (!userRow || userRow.role !== "restaurantpartner") return;
+      if (!userRow || !["restaurantpartner", "restaurant_admin"].includes(String(userRow.role || "").toLowerCase())) return;
 
       const { data: restaurant } = await supabaseBrowser
         .from("restaurants")

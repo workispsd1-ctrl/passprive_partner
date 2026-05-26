@@ -10,6 +10,7 @@ import { Eye, EyeOff } from "lucide-react";
 const ALLOWED_ROLES = new Set([
   "storepartner",
   "restaurantpartner",
+  "restaurant_admin",
   "corporateadmin",
   "storemanager",
   "cashier",
@@ -78,7 +79,7 @@ const SignInPage = () => {
         // 🚫 Non partner roles denied
         await supabaseBrowser.auth.signOut();
         throw new Error(
-          "Access denied. This portal is only for Store Partner and Restaurant Partner accounts."
+          "Access denied. This portal is only for partner, restaurant admin, and staff accounts."
         );
       }
 
@@ -190,7 +191,7 @@ const SignInPage = () => {
                 Partner Portal Login
               </h1>
               <p className="text-gray-600">
-                Sign in to access your partner dashboard (Store Partner / Restaurant Partner only).
+                Sign in to access your partner or restaurant staff dashboard.
               </p>
               <a href="/staff-pin" className="mt-2 inline-block text-sm font-semibold text-[#771FA8] underline underline-offset-2">
                 Staff PIN Login

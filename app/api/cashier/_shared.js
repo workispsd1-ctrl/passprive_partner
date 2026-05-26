@@ -41,7 +41,7 @@ export async function resolveCashierRestaurant(token) {
     .maybeSingle();
 
   const role = String(userRow?.role || "").toLowerCase();
-  if (!["cashier", "restaurant_cashier", "restaurantpartner", "restaurant_partner", "admin", "superadmin"].includes(role)) {
+  if (!["cashier", "restaurant_cashier", "restaurantpartner", "restaurant_partner", "restaurant_admin", "admin", "superadmin"].includes(role)) {
     return { error: "Access denied", status: 403 };
   }
 

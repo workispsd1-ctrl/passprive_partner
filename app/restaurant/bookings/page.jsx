@@ -139,7 +139,7 @@ export default function RestaurantBookingsPage() {
       .eq("id", user.id)
       .single();
 
-    if (userRow?.role !== "restaurantpartner") return;
+    if (!["restaurantpartner", "restaurant_admin"].includes(String(userRow?.role || "").toLowerCase())) return;
 
     const { data: restaurant } = await supabaseBrowser
       .from("restaurants")
