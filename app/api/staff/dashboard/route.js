@@ -115,6 +115,7 @@ export async function POST(request) {
       liveTableRes,
       todayBookingsRes,
       chartOrdersRes,
+      latestPickupRes,
     ] = await Promise.all([
       // 1. Reviews — all time for rating
       admin
@@ -124,7 +125,7 @@ export async function POST(request) {
         .order("created_at", { ascending: false })
         .limit(200),
 
-      // 2. Orders — range-filtered for KPIs
+      // 2. Orders — range-filtered for KPIs only
       admin
         .from("restaurant_orders")
         .select("id,order_number,customer_name,total_amount,payment_status,order_status,pickup_code,created_at")
@@ -179,6 +180,15 @@ export async function POST(request) {
         .gte("created_at", sevenDaysAgo.toISOString())
         .order("created_at", { ascending: true })
         .limit(500),
+
+      // 8. Latest pickup orders — NOT range-filtered, always show most recent
+      admin
+        .from("restaurant_orders")
+        .select("id,order_number,customer_name,total_amount,payment_status,order_status,pickup_code,created_at")
+        .eq("restaurant_id", restaurantId)
+        .neq("order_status", "CANCELLED")
+        .order("created_at", { ascending: false })
+        .limit(6),
     ]);
 
     const reviews = reviewsRes.data || [];
@@ -188,6 +198,7 @@ export async function POST(request) {
     const allLiveTableOrders = liveTableRes.data || [];
     const todayBookings = todayBookingsRes.data || [];
     const chartOrders = chartOrdersRes.data || [];
+    const latestPickupOrders = latestPickupRes.data || [];
 
     // ── KPIs ──────────────────────────────────────────────────────────────────
     const pickupRevenue = orders
@@ -265,7 +276,7 @@ export async function POST(request) {
       },
       chart_data: chartData,
       upcoming_bookings: upcomingBookings,
-      pickup_orders: orders.slice(0, 6),
+      pickup_orders: latestPickupOrders,
       table_orders: liveTableOrders,
       recent_reviews: reviews.slice(0, 3),
     });
