@@ -112,7 +112,7 @@ export async function POST(request) {
         .limit(2000),
       admin
         .from("restaurant_reviews")
-        .select("id, rating, comment, username_snapshot, created_at")
+        .select("id, rating, review_text, username_snapshot, created_at, owner_reply_text, owner_reply_at")
         .eq("restaurant_id", restaurantId)
         .order("created_at", { ascending: false })
         .limit(500),
@@ -191,12 +191,15 @@ export async function POST(request) {
     const dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     const sentiment_counts = { positive: 0, neutral: 0, negative: 0 };
     const ratingNums = [];
+    let replied_count = 0;
+    let pending_reply_count = 0;
 
     const reviewsEnriched = reviews.map((r) => {
-      const comment = String(r.comment || "");
+      const comment = String(r.review_text || "");
       const sentiment = simpleSentiment(comment);
       const rating = r.rating != null ? Number(r.rating) : null;
       const hasRating = rating != null && Number.isFinite(rating);
+      const hasReply = Boolean(r.owner_reply_text);
 
       sentiment_counts[sentiment] = (sentiment_counts[sentiment] || 0) + 1;
 
@@ -206,12 +209,16 @@ export async function POST(request) {
         dist[rounded] += 1;
       }
 
+      if (hasReply) replied_count += 1;
+      else if (comment) pending_reply_count += 1;
+
       return {
         id: r.id,
         rating: hasRating ? rating : null,
         comment,
         author_name: String(r.username_snapshot || "Anonymous"),
         sentiment,
+        has_reply: hasReply,
         created_at: r.created_at,
       };
     });
@@ -220,7 +227,10 @@ export async function POST(request) {
       ? ratingNums.reduce((a, c) => a + c, 0) / ratingNums.length
       : null;
 
-    const keywords = topKeywords(reviews, 10);
+    const keywords = topKeywords(
+      reviews.map((r) => ({ comment: r.review_text || "" })),
+      10
+    );
 
     const review_stats = {
       avg_rating,
@@ -228,6 +238,8 @@ export async function POST(request) {
       sentiment_counts,
       keywords,
       total: reviews.length,
+      replied_count,
+      pending_reply_count,
     };
 
     const recent_bookings = bookings.slice(0, 50).map((b) => ({

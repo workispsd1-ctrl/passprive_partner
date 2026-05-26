@@ -43,7 +43,7 @@ export async function POST(request) {
 
     const { data: reviews, error: reviewsErr } = await admin
       .from("restaurant_reviews")
-      .select("id,rating,comment,username_snapshot,created_at")
+      .select("id,rating,review_text,username_snapshot,created_at,owner_reply_text,owner_reply_at")
       .eq("restaurant_id", restaurantId)
       .order("created_at", { ascending: false })
       .limit(200);
