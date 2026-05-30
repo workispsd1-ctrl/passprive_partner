@@ -92,11 +92,13 @@ export default function TableOrdersPage() {
   const [openItemsPopoverId, setOpenItemsPopoverId] = useState("");
   const [draftStatusById, setDraftStatusById] = useState({});
   const [lastStatusById, setLastStatusById] = useState({});
-  const [orderAlert, setOrderAlert] = useState(null);
+  const [alertQueue, setAlertQueue] = useState([]);
+  const alertQueueRef = useRef([]);
+  alertQueueRef.current = alertQueue;
+  const soundRef = useRef(null);
   const knownOrderIdsRef = useRef(new Set());
   const knownOrderSnapshotRef = useRef(new Map());
-  const lastNotifyKeyRef = useRef("");
-  const lastNotifyAtRef = useRef(0);
+  const queuedOrderIdsRef = useRef(new Set());
   const tableLayoutLoadedRef = useRef(false);
   const [blinkingTables, setBlinkingTables] = useState({});
   const realtimeCleanupRef = useRef(null);
@@ -353,34 +355,24 @@ export default function TableOrdersPage() {
         });
       }
 
-      const newestNew = newOrders.length > 0 ? newOrders[0] : null;
-      if (newestNew?.id) {
-        const notifyTarget = newestNew;
-        const qtySum = Array.isArray(notifyTarget.order_items)
-          ? notifyTarget.order_items.reduce((sum, i) => sum + Number(i?.qty || 0), 0)
-          : 0;
-        const notifyKey = [
-          String(notifyTarget.id),
-          String(notifyTarget.updated_at || notifyTarget.created_at || ""),
-          String(notifyTarget.total_amount || ""),
-          String(qtySum),
-        ].join("|");
-
-        const now = Date.now();
-        const isDuplicate = notifyKey === lastNotifyKeyRef.current && now - lastNotifyAtRef.current < 7000;
-        if (!isDuplicate) {
-          lastNotifyKeyRef.current = notifyKey;
-          lastNotifyAtRef.current = now;
-          playOrderSound();
-          const msg = `New order received for table ${notifyTarget.table_no || "?"}`;
-          setOrderAlert({
-            id: String(notifyTarget.id),
-            message: msg,
-            tableNo: Number(notifyTarget.table_no || 0) || "—",
-            customerName: notifyTarget.customer_name || "Guest",
-            totalAmount: Number(notifyTarget.total_amount || 0),
-          });
-        }
+      // Queue ALL new orders (not just the first one). Guard against racing
+      // fetches adding the same order twice via queuedOrderIdsRef.
+      const unqueued = newOrders.filter(
+        (o) => o?.id && !queuedOrderIdsRef.current.has(String(o.id))
+      );
+      if (unqueued.length > 0) {
+        unqueued.forEach((o) => queuedOrderIdsRef.current.add(String(o.id)));
+        const incoming = unqueued.map((o) => ({
+          id: String(o.id),
+          tableNo: Number(o.table_no || 0) || "—",
+          customerName: o.customer_name || "Guest",
+          status: o.booking_status || "placed",
+          totalAmount: Number(o.total_amount || 0),
+          items: Array.isArray(o.order_items) ? o.order_items : [],
+          notes: o.notes || "",
+        }));
+        startOrderSound();
+        setAlertQueue((prev) => [...prev, ...incoming]);
       }
     }
 
@@ -419,12 +411,29 @@ export default function TableOrdersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restaurantId, tableLayoutNumbers.length]);
 
-  function playOrderSound() {
+  function startOrderSound() {
+    if (soundRef.current) return; // already looping
     try {
-      const a = new Audio("/sounds/new-order.wav");
+      const a = new Audio("/sound.wav");
+      a.loop = true;
       a.volume = 0.9;
       a.play().catch(() => {});
+      soundRef.current = a;
     } catch {}
+  }
+
+  function stopOrderSound() {
+    if (soundRef.current) {
+      soundRef.current.pause();
+      soundRef.current.currentTime = 0;
+      soundRef.current = null;
+    }
+  }
+
+  function dismissAlert() {
+    const rest = alertQueueRef.current.slice(1);
+    if (rest.length === 0) stopOrderSound();
+    setAlertQueue(rest);
   }
 
   function printBill(order) {
@@ -835,21 +844,71 @@ export default function TableOrdersPage() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
-      {orderAlert ? (
-        <div className="fixed right-4 top-4 z-[95] w-[320px] max-w-[92vw] rounded-2xl border border-[rgba(119,31,168,.35)] bg-[#F4E7D1] p-4 shadow-2xl">
-          <div className="text-sm font-semibold text-slate-900">{orderAlert.message}</div>
-          <div className="mt-2 text-xs text-slate-700 space-y-1">
-            <div>Table: {orderAlert.tableNo}</div>
-            <div>Customer: {orderAlert.customerName}</div>
-            <div>Amount: MUR {money(orderAlert.totalAmount)}</div>
+      {alertQueue.length > 0 ? (
+        <div className="fixed inset-0 z-[95] flex items-end justify-center pb-8 px-4 bg-black/40">
+          <div className="w-full max-w-sm rounded-2xl border border-[rgba(107,33,168,.35)] bg-[#F4E7D1] p-5 shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[rgba(107,33,168,.12)] border border-[rgba(107,33,168,.25)]">
+                <Bell size={18} className="text-[#6B21A8]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-[#3B0764] text-lg leading-tight">New Order!</div>
+                <div className="text-sm text-[#7C3AED]">Table {alertQueue[0].tableNo}</div>
+              </div>
+              <span className="shrink-0 rounded-lg border border-[rgba(107,33,168,.22)] bg-[rgba(107,33,168,.1)] px-2.5 py-1 text-xs font-semibold text-[#6B21A8] capitalize">
+                {String(alertQueue[0].status).replace(/_/g, " ")}
+              </span>
+            </div>
+
+            {/* Items */}
+            {alertQueue[0].items.length > 0 && (
+              <div className="rounded-xl border border-[rgba(107,33,168,.18)] bg-white/70 mb-4 overflow-hidden">
+                <div className="px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Items</div>
+                <div className="max-h-44 overflow-y-auto divide-y divide-[rgba(107,33,168,.1)]">
+                  {alertQueue[0].items.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2 px-3 py-2">
+                      <span className="w-6 shrink-0 text-right text-xs font-semibold text-[#6B21A8]">{item.qty ?? 1}×</span>
+                      <span className="flex-1 text-sm text-slate-800 truncate">{item.name ?? "Item"}</span>
+                      {item.unit_price != null && (
+                        <span className="shrink-0 text-xs font-semibold text-slate-600">
+                          MUR {money(Number(item.unit_price) * (item.qty ?? 1))}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {alertQueue[0].notes ? (
+                  <div className="border-t border-[rgba(107,33,168,.12)] px-3 py-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-0.5">Notes</div>
+                    <div className="text-xs text-slate-600 italic">{alertQueue[0].notes}</div>
+                  </div>
+                ) : null}
+                <div className="flex items-center justify-between border-t border-[rgba(107,33,168,.18)] bg-[rgba(107,33,168,.05)] px-3 py-2.5">
+                  <span className="text-sm font-semibold text-slate-700">Total</span>
+                  <span className="text-base font-bold text-[#6B21A8]">MUR {money(alertQueue[0].totalAmount)}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Fallback: no items */}
+            {alertQueue[0].items.length === 0 && (
+              <div className="rounded-xl border border-[rgba(107,33,168,.18)] bg-white/70 mb-4 overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2.5">
+                  <span className="text-sm font-semibold text-slate-700">Total</span>
+                  <span className="text-base font-bold text-[#6B21A8]">MUR {money(alertQueue[0].totalAmount)}</span>
+                </div>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={dismissAlert}
+              className="w-full h-11 rounded-xl bg-[#6B21A8] text-sm font-semibold text-white hover:bg-[#5B1898] transition-colors"
+            >
+              Ok, Got It
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setOrderAlert(null)}
-            className="mt-3 h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            Dismiss
-          </button>
         </div>
       ) : null}
       <div className="rounded-2xl border border-[rgba(119,31,168,.18)] bg-[#F4E7D1] p-4 sm:p-5">

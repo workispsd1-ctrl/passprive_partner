@@ -65,7 +65,7 @@ export async function GET(request) {
       return m ? Number(m[1]) : null;
     };
 
-    const activeBookingStatuses = new Set(["pending", "confirmed", "payment_successfull"]);
+    const activeBookingStatuses = new Set(["pending", "confirmed"]);
 
     const occupiedBySlot = new Map();
     for (const b of bookings) {
@@ -124,27 +124,8 @@ export async function GET(request) {
       }
     }
 
-    if (autoAssigned.length) {
-      for (const row of autoAssigned) {
-        const baseNotes = String(row.notes_internal || "");
-        const withoutOld = baseNotes.replace(/(?:^|\s)\[?table_no\s*:\s*\d+\]?/gi, "").trim();
-        const nextNotes = `${withoutOld}${withoutOld ? " " : ""}[table_no:${row.table_no}]`.trim();
-        await ctx.admin
-          .from("restaurant_bookings")
-          .update({ notes_internal: nextNotes, updated_at: new Date().toISOString() })
-          .eq("id", row.id)
-          .eq("restaurant_id", ctx.restaurantId);
-      }
-      const refreshed = await ctx.admin
-        .from("restaurant_bookings")
-        .select("id,customer_name,customer_phone,booking_date,booking_time,duration_minutes,party_size,status,created_at,booking_code,special_request,booked_slot_label,payment_status,notes_internal")
-        .eq("restaurant_id", ctx.restaurantId)
-        .order("created_at", { ascending: false })
-        .limit(200);
-      if (!refreshed.error && Array.isArray(refreshed.data)) {
-        bookings.splice(0, bookings.length, ...refreshed.data);
-      }
-    }
+    // Auto-assignment writes are deferred to POST action:"auto_assign_tables"
+    // so GET remains read-only and idempotent.
 
     const decorated = bookings.map((b) => {
       const bDate = dateOnly(b.booking_date);
@@ -189,6 +170,115 @@ export async function GET(request) {
   }
 }
 
+export async function POST(request) {
+  try {
+    const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
+    if (!token) return NextResponse.json({ ok: false, error: "Missing auth token" }, { status: 401 });
+
+    const ctx = await resolveCashierRestaurant(token);
+    if (ctx.error) return NextResponse.json({ ok: false, error: ctx.error }, { status: ctx.status });
+
+    const body = await request.json();
+    const action = String(body?.action || "").trim().toLowerCase();
+    if (action !== "auto_assign_tables") {
+      return NextResponse.json({ ok: false, error: "Invalid action" }, { status: 400 });
+    }
+
+    const activeStatuses = new Set(["pending", "confirmed"]);
+
+    const [bookingRes, layoutRes] = await Promise.all([
+      ctx.admin
+        .from("restaurant_bookings")
+        .select("id,booking_date,booking_time,duration_minutes,party_size,status,notes_internal")
+        .eq("restaurant_id", ctx.restaurantId)
+        .order("created_at", { ascending: false })
+        .limit(200),
+      ctx.admin
+        .from("restaurant_table_layouts")
+        .select("id,table_no,capacity")
+        .eq("restaurant_id", ctx.restaurantId)
+        .order("table_no", { ascending: true }),
+    ]);
+    if (bookingRes.error) return NextResponse.json({ ok: false, error: bookingRes.error.message }, { status: 400 });
+    if (layoutRes.error) return NextResponse.json({ ok: false, error: layoutRes.error.message }, { status: 400 });
+
+    const bookings = bookingRes.data || [];
+    const layouts = layoutRes.data || [];
+
+    const parseHHMM = (value) => {
+      const raw = String(value || "").slice(0, 5);
+      const [h, m] = raw.split(":").map((x) => Number(x));
+      if (!Number.isInteger(h) || !Number.isInteger(m)) return null;
+      return h * 60 + m;
+    };
+    const overlapMinutes = (aStart, aEnd, bStart, bEnd) => Math.max(aStart, bStart) < Math.min(aEnd, bEnd);
+    const parseMappedTableNoLocal = (notes) => {
+      const m = String(notes || "").match(/table_no\s*:\s*(\d+)/i);
+      return m ? Number(m[1]) : null;
+    };
+
+    // Build time-slot occupancy from already-assigned active bookings
+    const occupiedBySlot = new Map();
+    for (const b of bookings) {
+      if (!activeStatuses.has(String(b.status || "").toLowerCase())) continue;
+      const mapped = parseMappedTableNoLocal(b.notes_internal);
+      if (!mapped) continue;
+      const d = String(b.booking_date || "");
+      const start = parseHHMM(b.booking_time);
+      if (!d || start == null) continue;
+      const duration = Number(b.duration_minutes || 90);
+      const end = start + (Number.isFinite(duration) && duration > 0 ? duration : 90);
+      const key = `${d}::${mapped}`;
+      if (!occupiedBySlot.has(key)) occupiedBySlot.set(key, []);
+      occupiedBySlot.get(key).push({ start, end });
+    }
+
+    // Auto-assign unassigned active bookings to best-fit table
+    const toWrite = [];
+    for (const b of bookings) {
+      if (!activeStatuses.has(String(b.status || "").toLowerCase())) continue;
+      if (parseMappedTableNoLocal(b.notes_internal)) continue;
+      const d = String(b.booking_date || "");
+      const start = parseHHMM(b.booking_time);
+      if (!d || start == null) continue;
+      const duration = Number(b.duration_minutes || 90);
+      const end = start + (Number.isFinite(duration) && duration > 0 ? duration : 90);
+      const members = Number(b.party_size || 1);
+      const eligible = layouts
+        .map((t) => ({ table_no: Number(t.table_no || 0), capacity: Number(t.capacity || 0) }))
+        .filter((t) => t.table_no > 0 && t.capacity >= members)
+        .sort((a, z) => a.capacity - z.capacity || a.table_no - z.table_no);
+      let chosen = null;
+      for (const table of eligible) {
+        const key = `${d}::${table.table_no}`;
+        const slots = occupiedBySlot.get(key) || [];
+        if (!slots.some((s) => overlapMinutes(start, end, s.start, s.end))) {
+          chosen = table.table_no;
+          if (!occupiedBySlot.has(key)) occupiedBySlot.set(key, []);
+          occupiedBySlot.get(key).push({ start, end });
+          break;
+        }
+      }
+      if (chosen) toWrite.push({ id: b.id, table_no: chosen, notes_internal: b.notes_internal || "" });
+    }
+
+    for (const row of toWrite) {
+      const base = String(row.notes_internal || "");
+      const cleaned = base.replace(/(?:^|\s)\[?table_no\s*:\s*\d+\]?/gi, "").trim();
+      const next = `${cleaned}${cleaned ? " " : ""}[table_no:${row.table_no}]`.trim();
+      await ctx.admin
+        .from("restaurant_bookings")
+        .update({ notes_internal: next, updated_at: new Date().toISOString() })
+        .eq("id", row.id)
+        .eq("restaurant_id", ctx.restaurantId);
+    }
+
+    return NextResponse.json({ ok: true, assigned_count: toWrite.length });
+  } catch (error) {
+    return NextResponse.json({ ok: false, error: error?.message || "Unknown error" }, { status: 500 });
+  }
+}
+
 export async function PATCH(request) {
   try {
     const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
@@ -209,13 +299,51 @@ export async function PATCH(request) {
       if (!Number.isInteger(tableNo) || tableNo <= 0) {
         return NextResponse.json({ ok: false, error: "Valid table_no is required" }, { status: 400 });
       }
+
+      // Fetch the booking being assigned so we know its date/time/duration
       const { data: existing, error: existingErr } = await ctx.admin
         .from("restaurant_bookings")
-        .select("id,notes_internal")
+        .select("id,notes_internal,booking_date,booking_time,duration_minutes,status")
         .eq("id", id)
         .eq("restaurant_id", ctx.restaurantId)
         .single();
       if (existingErr) return NextResponse.json({ ok: false, error: existingErr.message }, { status: 400 });
+
+      const activeStatuses = new Set(["pending", "confirmed"]);
+      if (activeStatuses.has(String(existing.status || "").toLowerCase())) {
+        // Check for overlap with other active bookings already assigned to this table on the same date
+        const { data: clashCandidates, error: clashErr } = await ctx.admin
+          .from("restaurant_bookings")
+          .select("id,booking_time,duration_minutes,notes_internal,status")
+          .eq("restaurant_id", ctx.restaurantId)
+          .eq("booking_date", existing.booking_date)
+          .neq("id", id);
+
+        if (!clashErr && clashCandidates?.length) {
+          const reqStart = parseHHMM(existing.booking_time);
+          const reqDur = Number(existing.duration_minutes || 90);
+          const reqEnd = reqStart + (Number.isFinite(reqDur) && reqDur > 0 ? reqDur : 90);
+
+          const clash = clashCandidates.find((c) => {
+            if (!activeStatuses.has(String(c.status || "").toLowerCase())) return false;
+            const mapped = String(c.notes_internal || "").match(/table_no\s*:\s*(\d+)/i);
+            if (!mapped || Number(mapped[1]) !== tableNo) return false;
+            const cStart = parseHHMM(c.booking_time);
+            if (cStart == null || reqStart == null) return false;
+            const cDur = Number(c.duration_minutes || 90);
+            const cEnd = cStart + (Number.isFinite(cDur) && cDur > 0 ? cDur : 90);
+            return overlapMinutes(reqStart, reqEnd, cStart, cEnd);
+          });
+
+          if (clash) {
+            return NextResponse.json(
+              { ok: false, error: `Table ${tableNo} is already booked at that time. Please choose a different table.` },
+              { status: 409 }
+            );
+          }
+        }
+      }
+
       const baseNotes = String(existing?.notes_internal || "");
       const withoutOld = baseNotes.replace(/(?:^|\s)\[?table_no\s*:\s*\d+\]?/gi, "").trim();
       const nextNotes = `${withoutOld}${withoutOld ? " " : ""}[table_no:${tableNo}]`.trim();

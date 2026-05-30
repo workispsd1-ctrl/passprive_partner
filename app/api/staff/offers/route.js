@@ -149,6 +149,64 @@ export async function POST(request) {
       return NextResponse.json({ ok: true });
     }
 
+    // ── ACTIVATE PREMIUM ──────────────────────────────────────────────────────
+    if (action === "activate_premium") {
+      const planCode = String(body?.plan_code || "ALL").trim();
+
+      const ACCESS_BY_PLAN = {
+        ALL:            { unlock_all: true, time_slot_enabled: true, repeat_rewards_enabled: true, dish_discounts_enabled: true },
+        TIME_SLOT:      { time_slot_enabled: true },
+        REPEAT_REWARDS: { repeat_rewards_enabled: true },
+        DISCOUNTS:      { dish_discounts_enabled: true },
+      };
+      const accessPatch = ACCESS_BY_PLAN[planCode] || ACCESS_BY_PLAN.ALL;
+
+      const { data: existing, error: existingErr } = await admin
+        .from("restaurant_subscriptions")
+        .select("id, unlock_all, time_slot_enabled, repeat_rewards_enabled, dish_discounts_enabled")
+        .eq("restaurant_id", restaurantId)
+        .eq("status", "active")
+        .maybeSingle();
+
+      if (existingErr) return NextResponse.json({ ok: false, error: existingErr.message }, { status: 400 });
+
+      if (existing?.id) {
+        const merged = {
+          unlock_all: Boolean(existing.unlock_all || accessPatch.unlock_all),
+          time_slot_enabled: Boolean(existing.time_slot_enabled || accessPatch.time_slot_enabled),
+          repeat_rewards_enabled: Boolean(existing.repeat_rewards_enabled || accessPatch.repeat_rewards_enabled),
+          dish_discounts_enabled: Boolean(existing.dish_discounts_enabled || accessPatch.dish_discounts_enabled),
+        };
+        if (merged.time_slot_enabled && merged.repeat_rewards_enabled && merged.dish_discounts_enabled) {
+          merged.unlock_all = true;
+        }
+        const { error } = await admin
+          .from("restaurant_subscriptions")
+          .update({ plan_code: planCode, status: "active", starts_at: new Date().toISOString(), ...merged })
+          .eq("id", existing.id);
+        if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+      } else {
+        const newAccess = {
+          unlock_all: false, time_slot_enabled: false,
+          repeat_rewards_enabled: false, dish_discounts_enabled: false,
+          ...accessPatch,
+        };
+        if (newAccess.time_slot_enabled && newAccess.repeat_rewards_enabled && newAccess.dish_discounts_enabled) {
+          newAccess.unlock_all = true;
+        }
+        const { error } = await admin.from("restaurant_subscriptions").insert({
+          restaurant_id: restaurantId,
+          plan_code: planCode,
+          status: "active",
+          starts_at: new Date().toISOString(),
+          ...newAccess,
+        });
+        if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+      }
+
+      return NextResponse.json({ ok: true });
+    }
+
     // ── LOAD ──────────────────────────────────────────────────────────────────
     const [offersRes, subscriptionRes] = await Promise.all([
       admin

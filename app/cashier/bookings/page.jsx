@@ -92,7 +92,23 @@ export default function CashierBookingsPage() {
   };
 
   useEffect(() => {
-    load();
+    const init = async () => {
+      // Run auto-assignment once on mount so unassigned bookings get a table,
+      // then load fresh data. Subsequent silent polls are read-only.
+      try {
+        const { data: sess } = await supabaseBrowser.auth.getSession();
+        const token = sess?.session?.access_token;
+        if (token) {
+          await fetch("/api/cashier/bookings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ action: "auto_assign_tables" }),
+          });
+        }
+      } catch {}
+      load();
+    };
+    init();
     const onTopRefresh = () => load();
     window.addEventListener("cashier:refresh", onTopRefresh);
     return () => window.removeEventListener("cashier:refresh", onTopRefresh);
@@ -119,7 +135,7 @@ export default function CashierBookingsPage() {
 
   const enrichedBookings = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
-    const activeStatuses = new Set(["pending", "confirmed", "payment_successfull"]);
+    const activeStatuses = new Set(["pending", "confirmed"]);
     return bookings.map((b) => {
       const dt = toDateTime(b.booking_date, b.booking_time);
       const mins = minutesDiff(dt);
@@ -133,7 +149,7 @@ export default function CashierBookingsPage() {
   }, [bookings]);
 
   const activeBookings = useMemo(() => {
-    const activeSet = new Set(["pending", "confirmed", "payment_successfull"]);
+    const activeSet = new Set(["pending", "confirmed"]);
     return enrichedBookings.filter((b) => activeSet.has(String(b.status || "").toLowerCase()));
   }, [enrichedBookings]);
 
@@ -215,7 +231,7 @@ export default function CashierBookingsPage() {
   }, [mappedAllByTable, selectedTableNo]);
 
   const selectedActiveBookings = useMemo(() => {
-    const activeSet = new Set(["pending", "confirmed", "payment_successfull"]);
+    const activeSet = new Set(["pending", "confirmed"]);
     return selectedBookings.filter((b) => activeSet.has(String(b.status || "").toLowerCase()));
   }, [selectedBookings]);
 
