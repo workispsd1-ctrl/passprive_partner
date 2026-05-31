@@ -51,7 +51,7 @@ export async function GET(request) {
         .order("table_no", { ascending: true }),
       ctx.admin
         .from("restaurant_table_bookings")
-        .select("id, table_no, customer_name, customer_phone, order_items, order_details, notes, total_amount, booking_status, payment_status")
+        .select("id, table_no, customer_name, customer_phone, order_items, order_details, notes, total_amount, booking_status, payment_status, created_at, updated_at, source")
         .eq("restaurant_id", ctx.restaurantId)
         .order("created_at", { ascending: false }),
     ]);

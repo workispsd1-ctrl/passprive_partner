@@ -70,7 +70,7 @@ export async function POST(request) {
         .order("table_no", { ascending: true }),
       admin
         .from("restaurant_table_bookings")
-        .select("id, table_no, booking_status, payment_status, total_amount, order_items, notes, updated_at")
+        .select("id, table_no, booking_status, payment_status, total_amount, order_items, notes, updated_at, source, order_details")
         .eq("restaurant_id", restaurantId)
         .not("booking_status", "in", "(CANCELLED,COMPLETED,PAID)")
         .not("payment_status", "in", "(PAID,COMPLETED)")
