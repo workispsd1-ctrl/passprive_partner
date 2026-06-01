@@ -184,6 +184,16 @@ export default function BearerTableOrdersPage() {
 
       toast.success(`Order placed for Table ${selectedTable}!`);
 
+      // Open-check ownership: taking a table order claims that table for this
+      // waiter (best-effort; ignored server-side if another waiter already owns it).
+      try {
+        await fetch("/api/waiter/assignments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ action: "claim", table_no: Number(selectedTable) }),
+        });
+      } catch {}
+
       setCart({});
       setNotes("");
     } catch (e) {

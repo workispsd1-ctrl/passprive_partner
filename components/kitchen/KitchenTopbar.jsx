@@ -14,7 +14,7 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 const tabs = [
   { href: "/restaurant/kitchen/dashboard",     label: "Dashboard",     icon: LayoutGrid },
-  { href: "/restaurant/kitchen/table-orders",  label: "Table Orders",  icon: QrCode },
+  { href: "/restaurant/kitchen/table-orders",  label: "Kitchen Display",  icon: QrCode },
   { href: "/restaurant/kitchen/pickup-orders", label: "Pickup Orders", icon: Soup },
 ];
 

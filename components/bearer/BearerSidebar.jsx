@@ -4,12 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   QrCode,
+  LayoutGrid,
   ListIndentDecrease,
   TextAlignJustify,
 } from "lucide-react";
 
 const NAV_ITEMS = [
-  { label: "Table Orders", href: "/restaurant/bearer/table-orders", icon: QrCode },
+  { label: "My Floor", href: "/restaurant/bearer/floor", icon: LayoutGrid },
+  { label: "New Order", href: "/restaurant/bearer/table-orders", icon: QrCode },
 ];
 
 export default function BearerSidebar({ collapsed = false, onToggle }) {

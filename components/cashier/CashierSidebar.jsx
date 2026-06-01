@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Package2, CalendarCheck2, QrCode, ShoppingBag, Table2, ChevronLeft, ChevronRight, ListIndentDecrease, TextAlignJustify } from "lucide-react";
+import { LayoutGrid, Package2, CalendarCheck2, QrCode, ShoppingBag, Footprints, Table2, ChevronLeft, ChevronRight, ListIndentDecrease, TextAlignJustify } from "lucide-react";
 
 const items = [
   { href: "/cashier/dashboard", label: "Dashboard", icon: LayoutGrid },
@@ -10,8 +10,8 @@ const items = [
   { href: "/cashier/table-layout", label: "Table Layout", icon: Table2 },
   { href: "/cashier/bookings", label: "DineIn Bookings", icon: CalendarCheck2 },
   { href: "/cashier/table-orders", label: "QR Orders", icon: QrCode },
+  { href: "/cashier/walkin-orders", label: "Walk In Orders", icon: Footprints },
   { href: "/cashier/pickup-orders", label: "Pickup Orders", icon: ShoppingBag },
-  
 ];
 
 export default function CashierSidebar({ collapsed = false, onToggle }) {

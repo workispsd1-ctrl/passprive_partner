@@ -11,6 +11,7 @@ const tabs = [
   { href: "/cashier/orders", label: "Make Order", icon: Package2 },
   { href: "/cashier/bookings", label: "DineIn Bookings", icon: CalendarCheck },
   { href: "/cashier/table-orders", label: "QR Orders", icon: QrCode },
+  { href: "/cashier/walkin-orders", label: "Walk In", icon: QrCode },
   { href: "/cashier/pickup-orders", label: "Pickup", icon: Package2 },
 ];
 
@@ -30,6 +31,10 @@ const tabStyles = {
   "/cashier/table-orders": {
     active: "border-emerald-700 bg-emerald-600 text-white",
     idle: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
+  },
+  "/cashier/walkin-orders": {
+    active: "border-amber-700 bg-amber-600 text-white",
+    idle: "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100",
   },
   "/cashier/pickup-orders": {
     active: "border-rose-700 bg-rose-600 text-white",

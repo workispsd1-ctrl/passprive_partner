@@ -12,7 +12,7 @@ import {
 
 const NAV_ITEMS = [
   { label: "Dashboard",     href: "/restaurant/kitchen/dashboard",     icon: LayoutGrid },
-  { label: "Table Orders",  href: "/restaurant/kitchen/table-orders",  icon: QrCode },
+  { label: "Kitchen Display",  href: "/restaurant/kitchen/table-orders",  icon: QrCode },
   { label: "Pickup Orders", href: "/restaurant/kitchen/pickup-orders", icon: Soup },
 ];
 

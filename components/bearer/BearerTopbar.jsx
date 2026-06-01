@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LogOut,
   QrCode,
+  LayoutGrid,
   RefreshCcw,
   Wifi,
   WifiOff,
@@ -14,10 +15,15 @@ import {
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 const tabs = [
-  { href: "/restaurant/bearer/table-orders", label: "Table Orders", icon: QrCode },
+  { href: "/restaurant/bearer/floor", label: "My Floor", icon: LayoutGrid },
+  { href: "/restaurant/bearer/table-orders", label: "New Order", icon: QrCode },
 ];
 
 const tabStyles = {
+  "/restaurant/bearer/floor": {
+    active: "border-[#771FA8] bg-[#771FA8] text-white",
+    idle:   "border-[#771FA8]/30 bg-[#771FA8]/10 text-[#771FA8] hover:bg-[#771FA8]/15",
+  },
   "/restaurant/bearer/table-orders": {
     active: "border-emerald-700 bg-emerald-600 text-white",
     idle:   "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
