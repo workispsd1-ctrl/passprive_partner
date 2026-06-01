@@ -112,3 +112,46 @@ export async function GET(request) {
     return NextResponse.json({ ok: false, error: error?.message || "Unknown error" }, { status: 500 });
   }
 }
+
+const VALID_PICKUP_STATUSES = ["NEW", "ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "PICKED_UP", "CANCELLED"];
+
+// Kitchen advances a takeaway/pickup ticket through its cook lifecycle.
+export async function PATCH(request) {
+  try {
+    const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
+    if (!token) return NextResponse.json({ ok: false, error: "Missing auth token" }, { status: 401 });
+
+    const ctx = await resolveKitchenRestaurant(token);
+    if (ctx.error) return NextResponse.json({ ok: false, error: ctx.error }, { status: ctx.status });
+
+    const body = await request.json().catch(() => ({}));
+    const id = String(body?.order_id || body?.id || "").trim();
+    const nextStatus = String(body?.order_status || "").trim().toUpperCase();
+
+    if (!id) return NextResponse.json({ ok: false, error: "order_id is required" }, { status: 400 });
+    if (!VALID_PICKUP_STATUSES.includes(nextStatus)) {
+      return NextResponse.json({ ok: false, error: `Invalid order_status. One of: ${VALID_PICKUP_STATUSES.join(", ")}` }, { status: 400 });
+    }
+
+    const patch = { order_status: nextStatus, updated_at: new Date().toISOString() };
+    if (nextStatus === "ACCEPTED") patch.accepted_at = new Date().toISOString();
+    if (nextStatus === "READY_FOR_PICKUP") patch.ready_at = new Date().toISOString();
+    if (nextStatus === "PICKED_UP") patch.picked_up_at = new Date().toISOString();
+    if (nextStatus === "CANCELLED") patch.cancelled_at = new Date().toISOString();
+
+    const { data, error } = await ctx.admin
+      .from("restaurant_orders")
+      .update(patch)
+      .eq("id", id)
+      .eq("restaurant_id", ctx.restaurantId)
+      .select("id, order_number, order_status, payment_status")
+      .maybeSingle();
+
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+    if (!data?.id) return NextResponse.json({ ok: false, error: "Pickup order not found." }, { status: 404 });
+
+    return NextResponse.json({ ok: true, order: data });
+  } catch (error) {
+    return NextResponse.json({ ok: false, error: error?.message || "Unknown error" }, { status: 500 });
+  }
+}
