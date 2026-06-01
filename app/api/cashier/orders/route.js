@@ -290,3 +290,61 @@ export async function POST(request) {
     return NextResponse.json({ ok: false, error: error?.message || "Unknown error" }, { status: 500 });
   }
 }
+
+// Update a pickup order's status / payment (restaurant_orders).
+export async function PATCH(request) {
+  try {
+    const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
+    if (!token) return NextResponse.json({ ok: false, error: "Missing auth token" }, { status: 401 });
+
+    const ctx = await resolveCashierRestaurant(token);
+    if (ctx.error) return NextResponse.json({ ok: false, error: ctx.error }, { status: ctx.status });
+
+    const body = await request.json();
+    const id = String(body?.id || "").trim();
+    const orderStatus = String(body?.order_status || "").trim().toUpperCase();
+    const paymentStatus = String(body?.payment_status || "").trim().toUpperCase();
+
+    const allowedOrderStatus = new Set(["NEW", "ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "PICKED_UP", "CANCELLED"]);
+    const allowedPaymentStatus = new Set(["PENDING", "PAID"]);
+
+    if (!id) return NextResponse.json({ ok: false, error: "id is required" }, { status: 400 });
+    if (!orderStatus && !paymentStatus) {
+      return NextResponse.json({ ok: false, error: "order_status or payment_status is required" }, { status: 400 });
+    }
+    if (orderStatus && !allowedOrderStatus.has(orderStatus)) {
+      return NextResponse.json({ ok: false, error: "Invalid order_status" }, { status: 400 });
+    }
+    if (paymentStatus && !allowedPaymentStatus.has(paymentStatus)) {
+      return NextResponse.json({ ok: false, error: "Invalid payment_status" }, { status: 400 });
+    }
+
+    const patch = { updated_at: new Date().toISOString() };
+    if (orderStatus) {
+      patch.order_status = orderStatus;
+      if (orderStatus === "ACCEPTED") patch.accepted_at = new Date().toISOString();
+      if (orderStatus === "READY_FOR_PICKUP") patch.ready_at = new Date().toISOString();
+      if (orderStatus === "PICKED_UP") patch.picked_up_at = new Date().toISOString();
+      if (orderStatus === "CANCELLED") patch.cancelled_at = new Date().toISOString();
+    }
+    if (paymentStatus) {
+      patch.payment_status = paymentStatus;
+      if (paymentStatus === "PAID") patch.payment_method = "CASH";
+    }
+
+    const { data, error } = await ctx.admin
+      .from("restaurant_orders")
+      .update(patch)
+      .eq("id", id)
+      .eq("restaurant_id", ctx.restaurantId)
+      .select("id, order_number, order_status, payment_status, total_amount, pickup_code")
+      .maybeSingle();
+
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+    if (!data?.id) return NextResponse.json({ ok: false, error: "Pickup order not found." }, { status: 404 });
+
+    return NextResponse.json({ ok: true, order: data });
+  } catch (error) {
+    return NextResponse.json({ ok: false, error: error?.message || "Unknown error" }, { status: 500 });
+  }
+}
