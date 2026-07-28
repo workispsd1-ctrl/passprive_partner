@@ -39,6 +39,74 @@ function emptyOfferForm() {
   };
 }
 
+function uid() {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `id_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function onlyDigits(v) {
+  return String(v || "").replace(/\D/g, "");
+}
+
+const REPEAT_REWARD_TYPES = [
+  { value: "FREE_ITEM", label: "Free item" },
+  { value: "PERCENT", label: "% discount" },
+  { value: "FLAT", label: "Flat MUR off" },
+];
+
+function emptyTier() {
+  return { id: uid(), visitCount: "", rewardType: "FREE_ITEM", rewardLabel: "", rewardValue: "" };
+}
+
+function normalizeTier(t) {
+  return {
+    id: t?.id || uid(),
+    visitCount: t?.visitCount ?? "",
+    rewardType: t?.rewardType || "FREE_ITEM",
+    rewardLabel: t?.rewardLabel || "",
+    rewardValue: t?.rewardValue ?? "",
+  };
+}
+
+function sanitizeTier(t) {
+  const visitCount = Number(t.visitCount);
+  const rewardValue = t.rewardValue === "" || t.rewardValue == null ? "" : Number(t.rewardValue);
+  return {
+    id: t.id || uid(),
+    visitCount: Number.isFinite(visitCount) ? Math.max(1, Math.min(10, visitCount)) : "",
+    rewardType: t.rewardType || "FREE_ITEM",
+    rewardLabel: String(t.rewardLabel || "").trim(),
+    rewardValue,
+  };
+}
+
+function isVisitOfferRow(row) {
+  const md = row?.metadata && typeof row.metadata === "object" ? row.metadata : {};
+  return String(md?.offerKind || "").toUpperCase() === "VISIT" || Boolean(md?.visitRewards?.enabled);
+}
+
+function tiersFromRow(row) {
+  const md = row?.metadata && typeof row.metadata === "object" ? row.metadata : {};
+  const tiers = Array.isArray(md?.visitRewards?.tiers) ? md.visitRewards.tiers : [];
+  return tiers.map(normalizeTier);
+}
+
+function formatVisitRewards(tiers) {
+  const list = Array.isArray(tiers) ? tiers : [];
+  const sorted = [...list]
+    .filter((t) => Number(t.visitCount) >= 1 && Number(t.visitCount) <= 10)
+    .sort((a, b) => Number(a.visitCount) - Number(b.visitCount));
+  if (!sorted.length) return "No tiers configured yet";
+  return sorted
+    .map((t) => {
+      if (t.rewardType === "FREE_ITEM") return `Visit ${t.visitCount}: ${t.rewardLabel || "Free item"}`;
+      if (t.rewardType === "PERCENT") return `Visit ${t.visitCount}: ${t.rewardValue || 0}% off`;
+      return `Visit ${t.visitCount}: MUR ${t.rewardValue || 0} off`;
+    })
+    .join(" • ");
+}
+
 function toTitleCase(value) {
   return String(value || "")
     .toLowerCase()
@@ -501,6 +569,119 @@ function OfferEditor({ open, mode, form, saving, onChange, onClose, onSave }) {
   );
 }
 
+function RepeatRewardsEditor({ open, tiers, saving, onAddTier, onRemoveTier, onPatchTier, onClose, onSave }) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-[32px] border bg-white shadow-2xl" style={{ borderColor: THEME_BORDER }}>
+        <div className="flex items-center justify-between border-b px-6 py-5" style={{ borderColor: THEME_BORDER }}>
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">Repeat Rewards Program</h2>
+            <p className="mt-1 text-sm text-slate-500">Reward repeat customers by visit milestones (1-10 visits).</p>
+          </div>
+          <button type="button" onClick={onClose} className="inline-flex h-10 w-10 items-center justify-center rounded-full border text-slate-600" style={{ borderColor: THEME_BORDER }}>
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-4 overflow-y-auto px-6 py-5">
+          {tiers.map((tier, idx) => (
+            <div key={tier.id} className="rounded-2xl border p-4" style={{ borderColor: THEME_BORDER }}>
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold text-slate-800">Tier {idx + 1}</div>
+                {tiers.length > 1 ? (
+                  <button type="button" onClick={() => onRemoveTier(tier.id)} className="inline-flex items-center gap-1 text-xs font-semibold text-red-600">
+                    <Trash2 className="h-3.5 w-3.5" /> Remove
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="mt-3 grid gap-3 md:grid-cols-3">
+                <label className="block">
+                  <div className="mb-1 text-xs font-medium text-slate-600">Visit number (1-10)</div>
+                  <input
+                    value={tier.visitCount}
+                    onChange={(e) => onPatchTier(tier.id, { visitCount: e.target.value })}
+                    inputMode="numeric"
+                    placeholder="e.g. 3"
+                    className="h-11 w-full rounded-2xl border px-4 outline-none"
+                    style={{ borderColor: THEME_BORDER }}
+                  />
+                </label>
+                <label className="block">
+                  <div className="mb-1 text-xs font-medium text-slate-600">Reward type</div>
+                  <select
+                    value={tier.rewardType}
+                    onChange={(e) => onPatchTier(tier.id, { rewardType: e.target.value })}
+                    className="h-11 w-full rounded-2xl border px-4 outline-none"
+                    style={{ borderColor: THEME_BORDER }}
+                  >
+                    {REPEAT_REWARD_TYPES.map((r) => (
+                      <option key={r.value} value={r.value}>{r.label}</option>
+                    ))}
+                  </select>
+                </label>
+                {tier.rewardType === "FREE_ITEM" ? (
+                  <label className="block">
+                    <div className="mb-1 text-xs font-medium text-slate-600">Free item</div>
+                    <input
+                      value={tier.rewardLabel}
+                      onChange={(e) => onPatchTier(tier.id, { rewardLabel: e.target.value })}
+                      placeholder="e.g. Free tote bag"
+                      className="h-11 w-full rounded-2xl border px-4 outline-none"
+                      style={{ borderColor: THEME_BORDER }}
+                    />
+                  </label>
+                ) : (
+                  <label className="block">
+                    <div className="mb-1 text-xs font-medium text-slate-600">
+                      {tier.rewardType === "PERCENT" ? "Discount (%)" : "Flat amount (MUR)"}
+                    </div>
+                    <input
+                      value={tier.rewardValue}
+                      onChange={(e) => onPatchTier(tier.id, { rewardValue: e.target.value })}
+                      inputMode="numeric"
+                      placeholder={tier.rewardType === "PERCENT" ? "e.g. 20" : "e.g. 200"}
+                      className="h-11 w-full rounded-2xl border px-4 outline-none"
+                      style={{ borderColor: THEME_BORDER }}
+                    />
+                  </label>
+                )}
+              </div>
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={onAddTier}
+            className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold"
+            style={{ borderColor: THEME_BORDER, color: THEME_ACCENT }}
+          >
+            <Plus className="h-4 w-4" /> Add tier
+          </button>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 border-t px-6 py-5" style={{ borderColor: THEME_BORDER }}>
+          <button type="button" onClick={onClose} className="rounded-full border px-5 py-2.5 text-sm font-semibold text-slate-700" style={{ borderColor: THEME_BORDER }}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            style={{ background: THEME_ACCENT }}
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Save program
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function StorePartnerOffersRoute() {
   const router = useRouter();
   const pathname = usePathname();
@@ -525,6 +706,10 @@ export default function StorePartnerOffersRoute() {
   const [deleteOfferId, setDeleteOfferId] = useState("");
   const [deleteOfferTitle, setDeleteOfferTitle] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [repeatEditorOpen, setRepeatEditorOpen] = useState(false);
+  const [repeatTiers, setRepeatTiers] = useState([emptyTier()]);
+  const [savingRepeat, setSavingRepeat] = useState(false);
+  const [repeatEnabled, setRepeatEnabled] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -544,7 +729,7 @@ export default function StorePartnerOffersRoute() {
         else setLoading(true);
         setError("");
 
-        const [storeRes, offersRes] = await Promise.all([
+        const [storeRes, offersRes, subRes] = await Promise.all([
           supabaseBrowser
             .from("stores")
             .select("id,name,city,logo_url,updated_at,is_active")
@@ -555,6 +740,10 @@ export default function StorePartnerOffersRoute() {
             .select("id,title,description,badge_text,offer_type,discount_value,maximum_discount,min_spend,start_at,end_at,is_active,metadata,updated_at")
             .eq("store_id", selectedStoreId)
             .order("created_at", { ascending: false }),
+          supabaseBrowser
+            .from("store_subscriptions")
+            .select("repeat_rewards_enabled,status")
+            .eq("store_id", selectedStoreId),
         ]);
 
         if (storeRes.error) throw storeRes.error;
@@ -562,6 +751,9 @@ export default function StorePartnerOffersRoute() {
         if (!cancelled) {
           setStoreRecord(storeRes.data || null);
           setOffersRows(offersRes.data || []);
+          setRepeatEnabled(
+            (subRes.data || []).some((s) => s?.repeat_rewards_enabled && String(s?.status || "").toLowerCase() === "active")
+          );
         }
       } catch (e) {
         if (!cancelled) {
@@ -583,24 +775,30 @@ export default function StorePartnerOffersRoute() {
     };
   }, [selectedStoreId]);
 
+  const repeatOfferRow = useMemo(() => offersRows.find(isVisitOfferRow) || null, [offersRows]);
+  const repeatTiersSaved = useMemo(() => (repeatOfferRow ? tiersFromRow(repeatOfferRow) : []), [repeatOfferRow]);
+
   const offers = useMemo(() => {
-    return offersRows.map((row, index) =>
-      normalizeOffer(
-        {
-          ...row,
-          name: row.title,
-          badge: row.badge_text,
-          offer_type: row.offer_type,
-          maximum_discount: row.maximum_discount,
-          min_spend: row.min_spend,
-          starts_at: row.start_at,
-          ends_at: row.end_at,
-          is_active: row.is_active,
-          metadata: row.metadata,
-        },
-        index
+    return offersRows
+      .filter((row) => !isVisitOfferRow(row))
+      .map((row, index) =>
+        normalizeOffer(
+          {
+            ...row,
+            name: row.title,
+            badge: row.badge_text,
+            offer_type: row.offer_type,
+            maximum_discount: row.maximum_discount,
+            min_spend: row.min_spend,
+            starts_at: row.start_at,
+            ends_at: row.end_at,
+            is_active: row.is_active,
+            metadata: row.metadata,
+          },
+          index
+        )
       )
-    ).filter(Boolean);
+      .filter(Boolean);
   }, [offersRows]);
 
   const activeOffers = useMemo(() => offers.filter((offer) => offer.isActive).length, [offers]);
@@ -612,7 +810,7 @@ export default function StorePartnerOffersRoute() {
     try {
       setRefreshing(true);
       setError("");
-      const [storeRes, offersRes] = await Promise.all([
+      const [storeRes, offersRes, subRes] = await Promise.all([
         supabaseBrowser
           .from("stores")
           .select("id,name,city,logo_url,updated_at,is_active")
@@ -623,11 +821,18 @@ export default function StorePartnerOffersRoute() {
             .select("id,title,description,badge_text,offer_type,discount_value,maximum_discount,min_spend,start_at,end_at,is_active,metadata,updated_at")
           .eq("store_id", selectedStoreId)
           .order("created_at", { ascending: false }),
+        supabaseBrowser
+          .from("store_subscriptions")
+          .select("repeat_rewards_enabled,status")
+          .eq("store_id", selectedStoreId),
       ]);
       if (storeRes.error) throw storeRes.error;
       if (offersRes.error) throw offersRes.error;
       setStoreRecord(storeRes.data || null);
       setOffersRows(offersRes.data || []);
+      setRepeatEnabled(
+        (subRes.data || []).some((s) => s?.repeat_rewards_enabled && String(s?.status || "").toLowerCase() === "active")
+      );
     } catch (e) {
       setError(e?.message || "Failed to refresh offers.");
     } finally {
@@ -727,6 +932,84 @@ export default function StorePartnerOffersRoute() {
       setError(e?.message || "Failed to save offer.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openRepeatEditor = () => {
+    setRepeatTiers(repeatTiersSaved.length ? repeatTiersSaved.map(normalizeTier) : [emptyTier()]);
+    setRepeatEditorOpen(true);
+  };
+
+  const addRepeatTier = () => setRepeatTiers((prev) => [...prev, emptyTier()]);
+
+  const removeRepeatTier = (id) =>
+    setRepeatTiers((prev) => {
+      const next = prev.filter((t) => t.id !== id);
+      return next.length ? next : [emptyTier()];
+    });
+
+  const patchRepeatTier = (id, patch) => {
+    const nextPatch = { ...patch };
+    if (Object.prototype.hasOwnProperty.call(nextPatch, "visitCount")) {
+      nextPatch.visitCount = onlyDigits(nextPatch.visitCount).slice(0, 2);
+    }
+    if (Object.prototype.hasOwnProperty.call(nextPatch, "rewardValue")) {
+      nextPatch.rewardValue = onlyDigits(nextPatch.rewardValue);
+    }
+    setRepeatTiers((prev) => prev.map((t) => (t.id === id ? { ...t, ...nextPatch } : t)));
+  };
+
+  const handleSaveRepeatProgram = async () => {
+    if (!selectedStoreId) return;
+
+    const tiers = repeatTiers.map(sanitizeTier);
+    const seen = new Set();
+    for (const t of tiers) {
+      const vc = Number(t.visitCount);
+      if (!Number.isFinite(vc) || vc < 1 || vc > 10) {
+        setError("Visit number must be between 1 and 10 for every tier.");
+        return;
+      }
+      if (seen.has(vc)) {
+        setError(`Duplicate visit number ${vc}. Each milestone must be unique.`);
+        return;
+      }
+      seen.add(vc);
+      if (t.rewardType === "FREE_ITEM" && !t.rewardLabel) {
+        setError(`Enter the free item for visit ${vc}.`);
+        return;
+      }
+      if ((t.rewardType === "PERCENT" || t.rewardType === "FLAT") && (!Number.isFinite(Number(t.rewardValue)) || Number(t.rewardValue) <= 0)) {
+        setError(`Enter a valid reward value for visit ${vc}.`);
+        return;
+      }
+    }
+
+    try {
+      setSavingRepeat(true);
+      setError("");
+
+      const payload = {
+        store_id: selectedStoreId,
+        title: "Repeat Rewards",
+        offer_type: "custom",
+        is_active: true,
+        metadata: { offerKind: "VISIT", visitRewards: { enabled: true, tiers } },
+      };
+
+      const query = repeatOfferRow?.id
+        ? supabaseBrowser.from("store_offers").update(payload).eq("id", repeatOfferRow.id)
+        : supabaseBrowser.from("store_offers").insert(payload);
+
+      const { error: saveError } = await query;
+      if (saveError) throw saveError;
+
+      setRepeatEditorOpen(false);
+      await handleRefresh();
+    } catch (e) {
+      setError(e?.message || "Failed to save repeat rewards program.");
+    } finally {
+      setSavingRepeat(false);
     }
   };
 
@@ -834,6 +1117,43 @@ export default function StorePartnerOffersRoute() {
           <StatCard icon={Tag} label="Inactive Offers" value={loading ? "..." : String(inactiveOffers)} hint={storeRecord?.updated_at ? `Updated ${formatDate(storeRecord.updated_at)}` : "Waiting for store data"} />
         </section>
 
+        <section className="rounded-[32px] border p-5 shadow-sm" style={{ background: "rgba(255,255,255,0.82)", borderColor: THEME_BORDER }}>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]" style={{ background: THEME_ACCENT_SOFT, color: THEME_ACCENT }}>
+                <Gift className="h-3.5 w-3.5" />
+                Repeat Rewards
+              </div>
+              <h2 className="mt-3 text-xl font-semibold text-slate-900">Loyalty program for repeat customers</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                Reward customers by visit milestones (1-10 visits), the same way restaurants do. Rewards apply once repeat rewards are activated for this store.
+              </p>
+              <p className="mt-3 text-sm font-medium text-slate-800">{formatVisitRewards(repeatTiersSaved)}</p>
+              <div className="mt-3">
+                {repeatEnabled ? (
+                  <span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold" style={{ background: "rgba(22, 163, 74, 0.12)", color: "#166534" }}>
+                    Repeat rewards active for this store
+                  </span>
+                ) : (
+                  <span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold" style={{ background: "rgba(234, 179, 8, 0.14)", color: "#92400E" }}>
+                    Not activated yet — contact PassPrive to enable for this store
+                  </span>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={openRepeatEditor}
+              disabled={loading || storesLoading || !selectedStoreId}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold text-white disabled:opacity-60"
+              style={{ background: THEME_ACCENT, boxShadow: "0 12px 24px rgba(119, 31, 168, 0.22)" }}
+            >
+              {repeatOfferRow ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {repeatOfferRow ? "Edit program" : "Setup program"}
+            </button>
+          </div>
+        </section>
+
         <section className="rounded-[32px] border p-5 shadow-sm" style={{ background: "rgba(255,255,255,0.8)", borderColor: THEME_BORDER }}>
           {error ? <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
@@ -867,6 +1187,17 @@ export default function StorePartnerOffersRoute() {
         deleting={deleting}
         onCancel={closeDelete}
         onConfirm={handleDeleteOffer}
+      />
+
+      <RepeatRewardsEditor
+        open={repeatEditorOpen}
+        tiers={repeatTiers}
+        saving={savingRepeat}
+        onAddTier={addRepeatTier}
+        onRemoveTier={removeRepeatTier}
+        onPatchTier={patchRepeatTier}
+        onClose={() => setRepeatEditorOpen(false)}
+        onSave={handleSaveRepeatProgram}
       />
     </div>
   );
