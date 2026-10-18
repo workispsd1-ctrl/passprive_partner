@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  MonitorSmartphone,
   LayoutDashboard,
   Tag,
   Boxes,
@@ -44,6 +45,7 @@ const baseNav = [
   { label: "Inventory", href: "/store-partner/inventory", icon: Package, key: "inventory", premium: true },
   { label: "My Stores", href: "/store-partner/all-stores", icon: Store },
   { label: "Staff", href: "/store-partner/staff", icon: UserRound },
+  { label: "POS Terminals", href: "/store-partner/pos", icon: MonitorSmartphone },
   { label: "Offers", href: "/store-partner/offers", icon: Tag },
   { label: "Timings", href: "/store-partner/timings", icon: Clock3 },
   // { label: "Reviews", href: "/store-partner/reviews", icon: MessageSquareText },

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  MonitorSmartphone,
   LayoutDashboard,
   CalendarCheck,
   UtensilsCrossed,
@@ -36,6 +37,7 @@ const nav = [
   { label: "Branches", href: "/restaurant/branches", icon: Building2, masterOnly: true },
   { label: "Bookings", href: "/restaurant/bookings", icon: CalendarCheck },
     { label: "Staff", href: "/restaurant/staff", icon: UserRound },
+  { label: "POS Terminals", href: "/restaurant/pos", icon: MonitorSmartphone },
   { label: "QR Orders", href: "/restaurant/table-orders", icon: QrCode, key: "table_orders", premium: true },
   { label: "Table Layout", href: "/restaurant/table-layout", icon: Table2, premium: true },
 
