@@ -259,8 +259,8 @@ export function PartnerOfferForm({
           type="button"
           onClick={onSubmit}
           disabled={saving}
-          className="inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white shadow-lg shadow-[rgba(119,31,168,0.28)] disabled:opacity-60"
-          style={{ background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)" }}
+          className="inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white shadow-lg shadow-[rgba(255,72,0,0.28)] disabled:opacity-60"
+          style={{ background: "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)" }}
         >
           {mode === "edit" ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
           {mode === "edit" ? "Save Merchant Offer" : "Create Merchant Offer"}

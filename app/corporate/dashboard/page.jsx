@@ -351,7 +351,7 @@ export default function CorporateDashboardPage() {
             onClick={() => setTimePeriod('daily')}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
               timePeriod === 'daily'
-                ? 'bg-[#5D5FEF] text-white shadow-sm'
+                ? 'bg-[#FF4800] text-white shadow-sm'
                 : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
@@ -361,7 +361,7 @@ export default function CorporateDashboardPage() {
             onClick={() => setTimePeriod('weekly')}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
               timePeriod === 'weekly'
-                ? 'bg-[#5D5FEF] text-white shadow-sm'
+                ? 'bg-[#FF4800] text-white shadow-sm'
                 : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
@@ -371,7 +371,7 @@ export default function CorporateDashboardPage() {
             onClick={() => setTimePeriod('monthly')}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
               timePeriod === 'monthly'
-                ? 'bg-[#5D5FEF] text-white shadow-sm'
+                ? 'bg-[#FF4800] text-white shadow-sm'
                 : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
@@ -386,8 +386,8 @@ export default function CorporateDashboardPage() {
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-[#737791]">Total Points</h3>
-            <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center">
-              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-12 h-12 rounded-full bg-[#FFF7F4] flex items-center justify-center">
+              <svg className="w-6 h-6 text-[#FF4800]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
               </svg>
             </div>
@@ -400,8 +400,8 @@ export default function CorporateDashboardPage() {
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-[#737791]">Total Passes</h3>
-            <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center">
-              <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-12 h-12 rounded-full bg-[#FFF7F4] flex items-center justify-center">
+              <svg className="w-6 h-6 text-[#FF4800]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
               </svg>
             </div>
@@ -442,9 +442,9 @@ export default function CorporateDashboardPage() {
               <h3 className="font-semibold text-gray-900 text-lg">Points Distribution Trend</h3>
               <p className="text-sm text-gray-500 mt-1">{metrics.periodLabel} Performance</p>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 rounded-lg">
-              <div className="w-2 h-2 rounded-full bg-[#5D5FEF]"></div>
-              <span className="text-xs font-medium text-[#5D5FEF]">Points</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-[#FFF7F4] rounded-lg">
+              <div className="w-2 h-2 rounded-full bg-[#FF4800]"></div>
+              <span className="text-xs font-medium text-[#FF4800]">Points</span>
             </div>
           </div>
           <div className="relative h-[260px]">
@@ -467,9 +467,9 @@ export default function CorporateDashboardPage() {
               <h3 className="font-semibold text-gray-900 text-lg">Pass Generation Analytics</h3>
               <p className="text-sm text-gray-500 mt-1">{metrics.periodLabel} Distribution</p>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 rounded-lg">
-              <div className="w-2 h-2 rounded-full bg-[#5D5FEF]"></div>
-              <span className="text-xs font-medium text-[#5D5FEF]">Passes</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-[#FFF7F4] rounded-lg">
+              <div className="w-2 h-2 rounded-full bg-[#FF4800]"></div>
+              <span className="text-xs font-medium text-[#FF4800]">Passes</span>
             </div>
           </div>
           <div className="relative h-[260px]">
@@ -492,11 +492,11 @@ export default function CorporateDashboardPage() {
               <h3 className="font-semibold text-gray-900 text-lg">Pass Type Distribution</h3>
               <p className="text-sm text-gray-500 mt-1">Breakdown by tier</p>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 rounded-lg">
-              <svg className="w-4 h-4 text-[#5D5FEF]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-[#FFF7F4] rounded-lg">
+              <svg className="w-4 h-4 text-[#FF4800]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
-              <span className="text-xs font-medium text-[#5D5FEF]">Types</span>
+              <span className="text-xs font-medium text-[#FF4800]">Types</span>
             </div>
           </div>
           <div className="relative h-[260px]">
@@ -536,8 +536,8 @@ export default function CorporateDashboardPage() {
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-4">
             <h4 className="font-semibold text-[#151D48]">Pass Distribution</h4>
-            <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center">
-              <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-10 h-10 rounded-full bg-[#FFF7F4] flex items-center justify-center">
+              <svg className="w-5 h-5 text-[#FF4800]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
               </svg>
             </div>

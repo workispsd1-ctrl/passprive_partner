@@ -256,10 +256,10 @@ export default function AddStoreBranchPage() {
             type="button"
             disabled={!canSubmit || loading}
             onClick={handleSubmit}
-            className="h-11 rounded-full px-5 text-sm font-semibold text-white inline-flex items-center gap-2 disabled:opacity-60 shadow-lg shadow-[rgba(119,31,168,0.28)]"
+            className="h-11 rounded-full px-5 text-sm font-semibold text-white inline-flex items-center gap-2 disabled:opacity-60 shadow-lg shadow-[rgba(255,72,0,0.28)]"
             style={{
               background:
-                "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
+                "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)",
             }}
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
@@ -268,9 +268,9 @@ export default function AddStoreBranchPage() {
         </div>
 
         {/* Hero */}
-        <div className="rounded-3xl border border-[rgba(119,31,168,0.14)] bg-white/70 backdrop-blur p-6 md:p-8 shadow-sm">
+        <div className="rounded-3xl border border-[#FFE2D6] bg-white/70 backdrop-blur p-6 md:p-8 shadow-sm">
           <div className="flex items-start gap-4">
-            <div className="h-12 w-12 rounded-2xl bg-[#F4E7D1] text-[#771FA8] flex items-center justify-center">
+            <div className="h-12 w-12 rounded-2xl bg-[#FFF7F4] text-[#FF4800] flex items-center justify-center">
               <Store className="h-6 w-6" />
             </div>
             <div>
@@ -373,7 +373,7 @@ export default function AddStoreBranchPage() {
           {/* Side Summary */}
           <aside className="lg:sticky lg:top-6 h-fit rounded-3xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
             <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-xl bg-[#F4E7D1] text-[#771FA8] flex items-center justify-center">
+              <div className="h-9 w-9 rounded-xl bg-[#FFF7F4] text-[#FF4800] flex items-center justify-center">
                 <Phone className="h-4 w-4" />
               </div>
               <div>
@@ -397,10 +397,10 @@ export default function AddStoreBranchPage() {
               type="button"
               disabled={!canSubmit || loading}
               onClick={handleSubmit}
-              className="w-full h-11 rounded-full px-5 text-sm font-semibold text-white inline-flex items-center justify-center gap-2 disabled:opacity-60 shadow-lg shadow-[rgba(119,31,168,0.28)]"
+              className="w-full h-11 rounded-full px-5 text-sm font-semibold text-white inline-flex items-center justify-center gap-2 disabled:opacity-60 shadow-lg shadow-[rgba(255,72,0,0.28)]"
               style={{
                 background:
-                  "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
+                  "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)",
               }}
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4" />}
@@ -440,7 +440,7 @@ function Toggle({ checked, onChange, label, disabled }) {
           disabled={disabled}
           className="peer sr-only"
         />
-        <span className="h-6 w-11 rounded-full bg-gray-200 peer-checked:bg-[#771FA8] transition-colors" />
+        <span className="h-6 w-11 rounded-full bg-gray-200 peer-checked:bg-[#FF4800] transition-colors" />
         <span className="absolute left-1 h-4 w-4 rounded-full bg-white shadow-sm peer-checked:translate-x-5 transition-transform" />
       </span>
       {label}

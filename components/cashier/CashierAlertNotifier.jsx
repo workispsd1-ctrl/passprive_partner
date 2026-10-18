@@ -207,8 +207,8 @@ export default function CashierAlertNotifier() {
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-[#771FA8]/20 bg-[#F4E7D1] shadow-2xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-[#771FA8]/20 flex items-center justify-between">
+      <div className="w-full max-w-md rounded-2xl border border-[#FF4800]/20 bg-[#FFF7F4] shadow-2xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-[#FF4800]/20 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-900">
             {active.type === "TABLE_ORDER" ? "New Table Order" : "New Booking"}
           </h3>

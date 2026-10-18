@@ -26,8 +26,8 @@ export default function CashierFloatingSidebar() {
                 href={item.href}
                 className={`h-11 rounded-xl px-3 text-sm font-semibold flex items-center gap-2 border transition ${
                   active
-                    ? "border-[#771FA8] bg-[#F4E7D1] text-[#771FA8]"
-                    : "border-transparent text-slate-700 hover:bg-slate-50"
+                    ? "border-[#FF4800] bg-[linear-gradient(91.59deg,#FF4800_2.56%,#FFA680_97.05%)] text-white shadow-[0_10px_18px_rgba(255,72,0,0.18)]"
+                    : "border-transparent text-slate-700 hover:bg-gradient-to-r hover:from-[#FFF0EB] hover:to-[#FFE2D6] hover:text-[#FF4800]"
                 }`}
               >
                 <Icon className="h-4 w-4" />

@@ -105,7 +105,7 @@ function PrimaryButton({ children, onClick, disabled = false, type = "button" })
       type={type}
       disabled={disabled}
       onClick={onClick}
-      className="rounded-xl bg-[#5D5FEF] hover:bg-[#4D4FDF] px-4 py-2 text-sm font-medium text-white active:scale-[0.98] transition disabled:opacity-60 disabled:cursor-not-allowed focus:ring-2 focus:ring-[#5D5FEF] focus:ring-offset-2"
+      className="rounded-xl bg-[#FF4800] hover:bg-[#4D4FDF] px-4 py-2 text-sm font-medium text-white active:scale-[0.98] transition disabled:opacity-60 disabled:cursor-not-allowed focus:ring-2 focus:ring-[#5D5FEF] focus:ring-offset-2"
     >
       {children}
     </button>

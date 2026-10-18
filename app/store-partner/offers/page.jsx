@@ -19,9 +19,9 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useStores } from "@/lib/store-partner/useStores";
 import { SkeletonBlock } from "@/components/ui/PageSkeletons";
 
-const THEME_ACCENT = "#771FA8";
-const THEME_ACCENT_SOFT = "rgba(119, 31, 168, 0.12)";
-const THEME_BORDER = "rgba(119, 31, 168, 0.18)";
+const THEME_ACCENT = "#FF4800";
+const THEME_ACCENT_SOFT = "rgba(255, 72, 0, 0.12)";
+const THEME_BORDER = "rgba(255, 72, 0, 0.18)";
 
 function emptyOfferForm() {
   return {
@@ -277,7 +277,7 @@ function StatCard({ icon: Icon, label, value, hint }) {
       style={{
         background: "rgba(255,255,255,0.72)",
         borderColor: THEME_BORDER,
-        boxShadow: "0 18px 40px rgba(119, 31, 168, 0.08)",
+        boxShadow: "0 18px 40px rgba(255, 72, 0, 0.08)",
       }}
     >
       <div className="flex items-start justify-between gap-3">

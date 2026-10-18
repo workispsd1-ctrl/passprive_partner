@@ -27,9 +27,9 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchOwnedRestaurantStatus } from "@/lib/restaurantData";
 import { resolveActiveRestaurant, selectRestaurant } from "@/lib/restaurant-partner/activeRestaurant";
 
-const THEME_BG = "#F4E7D1";
-const THEME_ACCENT = "#771FA899";
-const THEME_ACCENT_SOLID = "#771FA8";
+const THEME_BG = "#FFF7F4";
+const THEME_ACCENT = "rgba(255,72,0,0.3)";
+const THEME_ACCENT_SOLID = "#FF4800";
 
 const nav = [
   { label: "Dashboard", href: "/restaurant/dashboard", icon: LayoutDashboard },
@@ -115,7 +115,7 @@ function ConfirmModal({
             onClick={onConfirm}
             disabled={loading}
             className="h-9 rounded-xl text-white px-4 text-sm font-medium hover:opacity-95 disabled:opacity-60"
-            style={{ background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)" }}
+            style={{ background: "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)" }}
           >
             {loading ? "Saving..." : confirmText}
           </button>
@@ -421,22 +421,13 @@ export default function RestaurantSidebar({ collapsed = false }) {
                   "relative flex items-center rounded-xl px-3 py-2.5 text-sm font-medium transition",
                   collapsed ? "justify-center" : "justify-between",
                   active
-                    ? "text-gray-900 border"
-                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+                    ? "bg-[linear-gradient(91.59deg,#FF4800_2.56%,#FFA680_97.05%)] text-white shadow-[0_10px_18px_rgba(255,72,0,0.18)]"
+                    : "text-gray-700 hover:bg-gradient-to-r hover:from-[#FFF0EB] hover:to-[#FFE2D6] hover:text-[#FF4800]",
                 ].join(" ")}
-                style={
-                  active
-                    ? {
-                        background: THEME_BG,
-                        borderColor: THEME_ACCENT,
-                        boxShadow: "0 14px 34px -24px rgba(119,31,168,0.45)",
-                      }
-                    : undefined
-                }
               >
                 <span className={`flex min-w-0 items-center ${collapsed ? "justify-center" : "gap-3"}`}>
                   <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-                    <Icon className="h-4 w-4" style={{ color: active ? THEME_ACCENT_SOLID : undefined }} />
+                    <Icon className="h-4 w-4" style={{ color: active ? "#FFFFFF" : undefined }} />
                   </span>
                   {!collapsed ? (
                     <>

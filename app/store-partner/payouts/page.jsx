@@ -19,9 +19,9 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useStores } from "@/lib/store-partner/useStores";
 import { SkeletonBlock } from "@/components/ui/PageSkeletons";
 
-const THEME_ACCENT = "#771FA8";
-const THEME_ACCENT_SOFT = "rgba(119, 31, 168, 0.12)";
-const THEME_BORDER = "rgba(119, 31, 168, 0.18)";
+const THEME_ACCENT = "#FF4800";
+const THEME_ACCENT_SOFT = "rgba(255, 72, 0, 0.12)";
+const THEME_BORDER = "rgba(255, 72, 0, 0.18)";
 const SUCCESS_STATUSES = new Set(["VERIFIED_SUCCESS", "FINALIZED"]);
 const CANCELLED_STATUSES = new Set(["CANCELLED"]);
 const IN_TRANSIT_PAYOUT_STATUSES = new Set(["REQUESTED", "PENDING", "PROCESSING", "APPROVED"]);
@@ -235,10 +235,10 @@ function RequestPayoutModal({
         </div>
 
         <div className="space-y-4 px-6 py-5">
-          <div className="rounded-[24px] p-5" style={{ background: "rgba(119, 31, 168, 0.08)" }}>
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[#771FA8]">Request amount</div>
+          <div className="rounded-[24px] p-5" style={{ background: "rgba(255, 72, 0, 0.08)" }}>
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[#FF4800]">Request amount</div>
             <div className="mt-2 flex items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-[#771FA8]">MUR</span>
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-[#FF4800]">MUR</span>
               <input
                 type="number"
                 min="0"
@@ -247,7 +247,7 @@ function RequestPayoutModal({
                 value={safeCustomAmount}
                 onChange={(e) => onCustomAmountChange(e.target.value)}
                 inputMode="decimal"
-                className="h-12 w-full appearance-none rounded-2xl border border-[rgba(119,31,168,0.18)] bg-white/90 px-4 text-2xl font-bold text-[#5B1685] outline-none [moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="h-12 w-full appearance-none rounded-2xl border border-[#FFE2D6] bg-white/90 px-4 text-2xl font-bold text-[#D43B00] outline-none [moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
             </div>
             <div className="mt-2 text-xs text-slate-500">Maximum available: MUR {formatMoney(maxAmount)}</div>

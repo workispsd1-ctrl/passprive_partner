@@ -824,7 +824,7 @@ export default function TableOrdersPage() {
     <div className="p-4 sm:p-6 space-y-4">
       {alertQueue.length > 0 ? (
         <div className="fixed inset-0 z-[95] flex items-end justify-center pb-8 px-4 bg-black/40">
-          <div className="w-full max-w-sm rounded-2xl border border-[rgba(107,33,168,.35)] bg-[#F4E7D1] p-5 shadow-2xl">
+          <div className="w-full max-w-sm rounded-2xl border border-[rgba(107,33,168,.35)] bg-[#FFF7F4] p-5 shadow-2xl">
             {/* Header */}
             <div className="flex items-center gap-3 mb-4">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[rgba(107,33,168,.12)] border border-[rgba(107,33,168,.25)]">
@@ -889,7 +889,7 @@ export default function TableOrdersPage() {
           </div>
         </div>
       ) : null}
-      <div className="rounded-2xl border border-[rgba(119,31,168,.18)] bg-[#F4E7D1] p-4 sm:p-5">
+      <div className="rounded-2xl border border-[#FFE2D6] bg-[#FFF7F4] p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-xl font-bold text-slate-900">Table Orders</div>

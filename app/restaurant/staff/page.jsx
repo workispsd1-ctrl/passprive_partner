@@ -19,7 +19,7 @@ function Field({ label, ...props }) {
       <span className="text-xs font-semibold text-gray-600">{label}</span>
       <input
         {...props}
-        className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-[#771FA8]"
+        className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-[#FF4800]"
       />
     </label>
   );
@@ -32,7 +32,7 @@ function SelectField({ label, value, onChange, options }) {
       <select
         value={value}
         onChange={onChange}
-        className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-[#771FA8]"
+        className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-[#FF4800]"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>{option.label}</option>
@@ -254,9 +254,9 @@ export default function RestaurantStaffPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-[rgba(119,31,168,.18)] bg-[#F4E7D1] p-6">
+      <div className="rounded-3xl border border-[#FFE2D6] bg-[#FFF7F4] p-6">
         <div className="flex items-start gap-3">
-          <div className="h-10 w-10 rounded-xl bg-white/80 text-[#771FA8] flex items-center justify-center">
+          <div className="h-10 w-10 rounded-xl bg-white/80 text-[#FF4800] flex items-center justify-center">
             <Users className="h-5 w-5" />
           </div>
           <div>
@@ -281,7 +281,7 @@ export default function RestaurantStaffPage() {
               onClick={onCreate}
               disabled={loading || !fullName.trim() || !/^\d{4,6}$/.test(pin)}
               className="inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-60"
-              style={{ background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)" }}
+              style={{ background: "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)" }}
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
               Create Staff PIN Login
@@ -444,7 +444,7 @@ export default function RestaurantStaffPage() {
 
       {editingMember ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-[rgba(119,31,168,.18)] bg-white p-5">
+          <div className="w-full max-w-md rounded-2xl border border-[#FFE2D6] bg-white p-5">
             <div className="text-sm font-semibold text-gray-900">Edit Staff Member</div>
             <div className="mt-3 grid gap-3">
               <Field label="Full name" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Staff name" />
@@ -456,7 +456,7 @@ export default function RestaurantStaffPage() {
                 onClick={onEditSave}
                 disabled={savingEdit}
                 className="inline-flex h-9 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-60"
-                style={{ background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)" }}
+                style={{ background: "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)" }}
               >
                 {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 Save Changes

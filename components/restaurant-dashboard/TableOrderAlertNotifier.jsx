@@ -236,8 +236,8 @@ export default function TableOrderAlertNotifier() {
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg rounded-2xl border border-[#771FA8]/20 bg-[#F4E7D1] shadow-2xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#771FA8]/20 flex items-center justify-between">
+      <div className="w-full max-w-lg rounded-2xl border border-[#FF4800]/20 bg-[#FFF7F4] shadow-2xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-[#FF4800]/20 flex items-center justify-between">
           <h3 className="text-base font-semibold text-gray-900">New Table Order</h3>
           <button
             type="button"
@@ -273,12 +273,12 @@ export default function TableOrderAlertNotifier() {
           </div>
         </div>
 
-        <div className="px-5 py-4 border-t border-[#771FA8]/20 bg-white">
+        <div className="px-5 py-4 border-t border-[#FF4800]/20 bg-white">
           <button
             type="button"
             onClick={acknowledge}
             className="w-full h-10 rounded-xl text-sm font-semibold text-white"
-            style={{ background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)" }}
+            style={{ background: "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)" }}
           >
             OK
           </button>

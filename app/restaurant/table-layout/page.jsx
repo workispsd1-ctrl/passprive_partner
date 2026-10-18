@@ -291,9 +291,9 @@ export default function RestaurantTableLayoutPage() {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border border-[rgba(119,31,168,.18)] bg-[#F4E7D1] p-5">
+      <div className="rounded-2xl border border-[#FFE2D6] bg-[#FFF7F4] p-5">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-white/80 text-[#771FA8] flex items-center justify-center">
+          <div className="h-10 w-10 rounded-xl bg-white/80 text-[#FF4800] flex items-center justify-center">
             <Table2 className="h-5 w-5" />
           </div>
           <div>
@@ -363,7 +363,7 @@ export default function RestaurantTableLayoutPage() {
                 onClick={saveAll}
                 disabled={saving}
                 className="h-10 rounded-xl px-4 text-sm font-semibold text-white inline-flex items-center gap-2 disabled:opacity-60"
-                style={{ background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)" }}
+                style={{ background: "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)" }}
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 Save Layout
@@ -378,7 +378,7 @@ export default function RestaurantTableLayoutPage() {
           >
             {tables.map((t) => {
               const size = sizeForShape(t.shape);
-              const selectedCls = selectedId === t.id ? "ring-2 ring-[#771FA8]" : "ring-1 ring-gray-200";
+              const selectedCls = selectedId === t.id ? "ring-2 ring-[#FF4800]" : "ring-1 ring-gray-200";
               const chairs = chairPositions(t.shape, t.capacity);
               return (
                 <button
@@ -399,7 +399,7 @@ export default function RestaurantTableLayoutPage() {
                   {chairs.map((c, idx) => (
                     <span
                       key={`${t.id}-chair-${idx}`}
-                      className="absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-gray-300 bg-[#F4E7D1]"
+                      className="absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-gray-300 bg-[#FFF7F4]"
                       style={{ left: `${c.x}%`, top: `${c.y}%` }}
                     />
                   ))}

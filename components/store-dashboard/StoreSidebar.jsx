@@ -27,11 +27,11 @@ import {
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchMyStores } from "@/lib/store-partner/stores";
 
-const BRAND_ACCENT = "#771FA8";
-const ACTIVE_ICON = "#771FA8";
+const BRAND_ACCENT = "#FF4800";
+const ACTIVE_ICON = "#FFFFFF";
 const INACTIVE_ICON = "#6b7280";
-const ACTIVE_BG = "#F4E7D1";
-const ACTIVE_BORDER = "rgba(119,31,168,0.18)";
+const ACTIVE_BG = "#FFF7F4";
+const ACTIVE_BORDER = "rgba(255, 72, 0, 0.25)";
 
 const CACHE_KEY = "store_sidebar_cache_v1";
 const ACTIVE_STORE_KEY = "store_partner_selected_store_id";
@@ -501,7 +501,7 @@ export default function StoreSidebar() {
           <div className="flex items-center gap-2">
             <div
               className="h-9 w-9 rounded-xl overflow-hidden border flex items-center justify-center"
-              style={{ backgroundColor: "#F4E7D1", borderColor: "rgba(119,31,168,0.18)" }}
+              style={{ backgroundColor: "#FFF7F4", borderColor: "rgba(255, 72, 0, 0.25)" }}
             >
               {selectedStore?.logo_url ? (
                 <img
@@ -535,21 +535,12 @@ export default function StoreSidebar() {
                 className={[
                   "flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition",
                   active
-                    ? "text-gray-900 border"
-                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+                    ? "bg-[linear-gradient(91.59deg,#FF4800_2.56%,#FFA680_97.05%)] text-white shadow-[0_10px_18px_rgba(255,72,0,0.18)]"
+                    : "text-gray-700 hover:bg-gradient-to-r hover:from-[#FFF0EB] hover:to-[#FFE2D6] hover:text-[#FF4800]",
                 ].join(" ")}
-                style={
-                  active
-                    ? {
-                        background: ACTIVE_BG,
-                        borderColor: ACTIVE_BORDER,
-                        boxShadow: "0 14px 34px -24px rgba(119,31,168,0.45)",
-                      }
-                    : undefined
-                }
               >
                 <span className="flex items-center gap-3">
-                  <Icon className="h-4 w-4" style={{ color: active ? ACTIVE_ICON : INACTIVE_ICON }} />
+                  <Icon className="h-4 w-4" style={{ color: active ? "#FFFFFF" : undefined }} />
                   {item.label}
                   {item.premium ? (
                     <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-1.5 py-0.5 text-[9px] font-semibold text-green-700">

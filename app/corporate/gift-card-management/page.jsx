@@ -534,8 +534,8 @@ export default function GiftCardManagementPage() {
         <div className="bg-white rounded-xl p-5 lg:p-6 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-[#737791]">Total Points</h3>
-            <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
-              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-10 h-10 rounded-full bg-[#FFF7F4] flex items-center justify-center">
+              <svg className="w-5 h-5 text-[#FF4800]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
               </svg>
             </div>
@@ -560,8 +560,8 @@ export default function GiftCardManagementPage() {
         <div className="bg-white rounded-xl p-5 lg:p-6 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-[#737791]">Points Distributed</h3>
-            <div className="w-10 h-10 rounded-full bg-[#F4E7D1] flex items-center justify-center">
-              <svg className="w-5 h-5 text-[#771FA8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-10 h-10 rounded-full bg-[#FFF7F4] flex items-center justify-center">
+              <svg className="w-5 h-5 text-[#FF4800]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
@@ -573,8 +573,8 @@ export default function GiftCardManagementPage() {
         <div className="bg-white rounded-xl p-5 lg:p-6 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-[#737791]">Points Redeemed</h3>
-            <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center">
-              <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-10 h-10 rounded-full bg-[#FFF7F4] flex items-center justify-center">
+              <svg className="w-5 h-5 text-[#FF4800]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
@@ -594,7 +594,7 @@ export default function GiftCardManagementPage() {
               onClick={() => setFilter("all")}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filter === "all"
-                  ? "bg-[#5D5FEF] text-white"
+                  ? "bg-[#FF4800] text-white"
                   : "bg-gray-100 text-[#737791] hover:bg-gray-200"
               }`}
             >
@@ -604,7 +604,7 @@ export default function GiftCardManagementPage() {
               onClick={() => setFilter("active")}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filter === "active"
-                  ? "bg-[#5D5FEF] text-white"
+                  ? "bg-[#FF4800] text-white"
                   : "bg-gray-100 text-[#737791] hover:bg-gray-200"
               }`}
             >
@@ -614,7 +614,7 @@ export default function GiftCardManagementPage() {
               onClick={() => setFilter("redeemed")}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filter === "redeemed"
-                  ? "bg-[#5D5FEF] text-white"
+                  ? "bg-[#FF4800] text-white"
                   : "bg-gray-100 text-[#737791] hover:bg-gray-200"
               }`}
             >
@@ -624,7 +624,7 @@ export default function GiftCardManagementPage() {
               onClick={() => setFilter("expired")}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filter === "expired"
-                  ? "bg-[#5D5FEF] text-white"
+                  ? "bg-[#FF4800] text-white"
                   : "bg-gray-100 text-[#737791] hover:bg-gray-200"
               }`}
             >
@@ -636,7 +636,7 @@ export default function GiftCardManagementPage() {
             <button
               onClick={handleDownloadExcel}
               disabled={filteredCards.length === 0}
-              className="flex items-center gap-2 px-4 py-2 border border-[#5D5FEF] text-[#5D5FEF] rounded-lg text-sm font-medium hover:bg-[#5D5FEF] hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2 border border-[#5D5FEF] text-[#FF4800] rounded-lg text-sm font-medium hover:bg-[#FF4800] hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -645,7 +645,7 @@ export default function GiftCardManagementPage() {
             </button>
             <button
               onClick={() => setShowCreateForm(!showCreateForm)}
-              className="flex items-center gap-2 px-4 py-2 bg-[#5D5FEF] text-white rounded-lg text-sm font-medium hover:bg-[#4D4FDF] transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-[#FF4800] text-white rounded-lg text-sm font-medium hover:bg-[#4D4FDF] transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -732,7 +732,7 @@ export default function GiftCardManagementPage() {
                 <button
                   onClick={handleCreateGiftCards}
                   disabled={loading}
-                  className="flex-1 px-6 py-2.5 bg-[#5D5FEF] text-white rounded-lg text-sm font-medium hover:bg-[#4D4FDF] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 px-6 py-2.5 bg-[#FF4800] text-white rounded-lg text-sm font-medium hover:bg-[#4D4FDF] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? "Purchasing..." : "Purchase Points"}
                 </button>
@@ -780,7 +780,7 @@ export default function GiftCardManagementPage() {
               onClick={() => setDistributeMode("manual")}
               className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 distributeMode === "manual"
-                  ? "bg-[#5D5FEF] text-white"
+                  ? "bg-[#FF4800] text-white"
                   : "bg-gray-100 text-[#737791] hover:bg-gray-200"
               }`}
             >
@@ -790,7 +790,7 @@ export default function GiftCardManagementPage() {
               onClick={() => setDistributeMode("excel")}
               className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 distributeMode === "excel"
-                  ? "bg-[#5D5FEF] text-white"
+                  ? "bg-[#FF4800] text-white"
                   : "bg-gray-100 text-[#737791] hover:bg-gray-200"
               }`}
             >
@@ -862,14 +862,14 @@ export default function GiftCardManagementPage() {
           {/* Excel Upload Mode */}
           {distributeMode === "excel" && (
             <div className="space-y-4 mb-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="bg-[#FFF7F4] border border-[#FFE2D6] rounded-lg p-4">
                 <div className="flex items-start gap-3">
-                  <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-[#FF4800] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-blue-900 mb-2">Excel Format Required:</p>
-                    <ul className="text-xs text-blue-800 space-y-1 mb-3">
+                    <p className="text-sm font-medium text-gray-900 mb-2">Excel Format Required:</p>
+                    <ul className="text-xs text-[#FF4800] space-y-1 mb-3">
                       <li>• <strong>Email</strong>: Recipient email address</li>
                       <li>• <strong>Points</strong>: Gift card points value</li>
                       <li>• <strong>Expiry Date</strong>: In YYYY-MM-DD format</li>
@@ -877,7 +877,7 @@ export default function GiftCardManagementPage() {
                     </ul>
                     <button
                       onClick={downloadDistributionTemplate}
-                      className="text-sm font-medium text-blue-600 hover:text-blue-700 underline"
+                      className="text-sm font-medium text-[#FF4800] hover:text-[#FF4800] underline"
                     >
                       Download Sample Template
                     </button>
@@ -976,7 +976,7 @@ export default function GiftCardManagementPage() {
               {filter === "all" && (
                 <button
                   onClick={() => setShowCreateForm(true)}
-                  className="px-6 py-2.5 bg-[#5D5FEF] text-white rounded-lg text-sm font-medium hover:bg-[#4D4FDF] transition-colors"
+                  className="px-6 py-2.5 bg-[#FF4800] text-white rounded-lg text-sm font-medium hover:bg-[#4D4FDF] transition-colors"
                 >
                   Create First Gift Card
                 </button>
@@ -1017,7 +1017,7 @@ export default function GiftCardManagementPage() {
                   <tr key={card.id} className="hover:bg-gray-50">
                     <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
-                        <code className="text-sm font-mono font-semibold text-[#5D5FEF] bg-indigo-50 px-2 py-1 rounded">
+                        <code className="text-sm font-mono font-semibold text-[#FF4800] bg-indigo-50 px-2 py-1 rounded">
                           {card.code}
                         </code>
                       </div>
@@ -1041,7 +1041,7 @@ export default function GiftCardManagementPage() {
                           card.status === "active"
                             ? "bg-green-100 text-green-800"
                             : card.status === "redeemed"
-                            ? "bg-blue-100 text-blue-800"
+                            ? "bg-blue-100 text-[#FF4800]"
                             : "bg-red-100 text-red-800"
                         }`}
                       >
@@ -1057,7 +1057,7 @@ export default function GiftCardManagementPage() {
                     <td className="px-4 lg:px-6 py-4 text-sm text-[#737791]">
                       {card.status === "redeemed" ? (
                         <div>
-                          <div className="font-medium text-blue-600 text-sm">Redeemed</div>
+                          <div className="font-medium text-[#FF4800] text-sm">Redeemed</div>
                           <div className="text-xs text-[#737791]">Date: {card.redeemedDate}</div>
                         </div>
                       ) : card.status === "active" ? (
@@ -1072,7 +1072,7 @@ export default function GiftCardManagementPage() {
                     <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm">
                       <button
                         onClick={() => handleCopyCode(card.code)}
-                        className="text-[#5D5FEF] hover:text-[#4D4FDF] font-medium flex items-center gap-1"
+                        className="text-[#FF4800] hover:text-[#4D4FDF] font-medium flex items-center gap-1"
                         title="Copy code"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1090,12 +1090,12 @@ export default function GiftCardManagementPage() {
       </div>
 
       {/* Info Box */}
-      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+      <div className="mt-6 p-4 bg-[#FFF7F4] border border-[#FFE2D6] rounded-lg">
         <div className="flex gap-3">
-          <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 text-[#FF4800] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <div className="text-sm text-blue-800">
+          <div className="text-sm text-[#FF4800]">
             <p className="font-semibold mb-1">How the Points Pool System Works:</p>
             <ul className="space-y-1 list-disc list-inside">
               <li><strong>Purchase Points Pool:</strong> Buy a large pool of points upfront that stays in your company balance</li>

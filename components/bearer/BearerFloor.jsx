@@ -246,7 +246,7 @@ export default function BearerFloor() {
       <div className={`rounded-2xl border bg-white p-4 shadow-sm border-l-4 ${isReady ? "border-l-emerald-500" : mins >= AGE_RED_MIN ? "border-l-rose-500" : mins >= AGE_AMBER_MIN ? "border-l-amber-500" : "border-l-emerald-500"}`}>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <span className="inline-flex h-10 min-w-10 items-center justify-center rounded-xl bg-[#771FA8]/10 px-2 text-sm font-bold text-[#771FA8]">
+            <span className="inline-flex h-10 min-w-10 items-center justify-center rounded-xl bg-[#FF4800]/10 px-2 text-sm font-bold text-[#FF4800]">
               {Number(o.table_no) > 0 ? `T${o.table_no}` : "—"}
             </span>
             <div>
@@ -256,7 +256,7 @@ export default function BearerFloor() {
                   {isReady ? "Ready" : progressLabel(o.booking_status)}
                 </span>
                 {mine ? (
-                  <span className="rounded-full border border-[#771FA8]/40 bg-[#771FA8]/10 px-2 py-0.5 text-[10px] font-semibold text-[#771FA8]">Mine</span>
+                  <span className="rounded-full border border-[#FF4800]/40 bg-[#FF4800]/10 px-2 py-0.5 text-[10px] font-semibold text-[#FF4800]">Mine</span>
                 ) : unclaimed ? (
                   <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Unclaimed</span>
                 ) : (
@@ -276,7 +276,7 @@ export default function BearerFloor() {
           ) : (
             items.map((it, idx) => (
               <div key={idx} className={`flex items-center gap-3 px-3 py-2 ${idx > 0 ? "border-t border-slate-100" : ""}`}>
-                <span className="min-w-7 text-sm font-bold text-[#771FA8]">{it.qty}×</span>
+                <span className="min-w-7 text-sm font-bold text-[#FF4800]">{it.qty}×</span>
                 <span className="flex-1 text-sm font-semibold text-slate-800">{it.name}</span>
               </div>
             ))
@@ -289,7 +289,7 @@ export default function BearerFloor() {
 
         <div className="mt-3">
           {unclaimed ? (
-            <button type="button" disabled={claimBusy} onClick={() => claim(o.table_no)} className="h-11 w-full rounded-xl bg-[#771FA8] text-sm font-semibold text-white disabled:opacity-60">
+            <button type="button" disabled={claimBusy} onClick={() => claim(o.table_no)} className="h-11 w-full rounded-xl bg-[#FF4800] text-sm font-semibold text-white disabled:opacity-60">
               {claimBusy ? "Taking…" : `Take Table ${o.table_no}`}
             </button>
           ) : !mine ? (
@@ -320,7 +320,7 @@ export default function BearerFloor() {
         <h1 className="text-2xl font-bold text-slate-900">My Floor</h1>
         <div className="flex rounded-xl border border-slate-200 bg-white p-1">
           {["mine", "all"].map((s) => (
-            <button key={s} type="button" onClick={() => setScope(s)} className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${scope === s ? "bg-[#771FA8] text-white" : "text-slate-600"}`}>
+            <button key={s} type="button" onClick={() => setScope(s)} className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${scope === s ? "bg-[#FF4800] text-white" : "text-slate-600"}`}>
               {s === "mine" ? "My tables" : "All tables"}
             </button>
           ))}
@@ -332,7 +332,7 @@ export default function BearerFloor() {
         {TABS.map((tb) => {
           const active = tab === tb.key;
           return (
-            <button key={tb.key} type="button" onClick={() => setTab(tb.key)} className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold whitespace-nowrap ${active ? "border-[#771FA8] bg-[#771FA8] text-white" : "border-slate-200 bg-white text-slate-700"}`}>
+            <button key={tb.key} type="button" onClick={() => setTab(tb.key)} className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold whitespace-nowrap ${active ? "border-[#FF4800] bg-[#FF4800] text-white" : "border-slate-200 bg-white text-slate-700"}`}>
               {tb.label}
               <span className={`inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-bold ${active ? "bg-white/25 text-white" : "bg-slate-100 text-slate-600"}`}>{counts[tb.key]}</span>
             </button>
@@ -358,7 +358,7 @@ export default function BearerFloor() {
                 <div key={ft.tableNo} className={`rounded-2xl border-2 p-4 ${ready ? "border-emerald-500 bg-emerald-50" : active ? "border-blue-300 bg-blue-50" : "border-slate-200 bg-white"}`}>
                   <div className="text-lg font-bold text-slate-900">{ft.label}</div>
                   <div className={`text-xs font-semibold ${ready ? "text-emerald-700" : active ? "text-blue-700" : "text-slate-500"}`}>{ready ? "Food ready" : active ? "Active" : "Free"}</div>
-                  {owner ? <div className={`mt-1 text-[11px] font-semibold ${mine ? "text-[#771FA8]" : "text-slate-500"}`}>{mine ? "★ Mine" : owner.waiter_name}</div> : null}
+                  {owner ? <div className={`mt-1 text-[11px] font-semibold ${mine ? "text-[#FF4800]" : "text-slate-500"}`}>{mine ? "★ Mine" : owner.waiter_name}</div> : null}
                   {mine ? (
                     <button type="button" onClick={() => release(ft.tableNo)} className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-600">Release</button>
                   ) : null}

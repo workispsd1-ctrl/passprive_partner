@@ -14,12 +14,26 @@ const beVietnamPro = Be_Vietnam_Pro({
 
 export const metadata = {
   title: "PassPrive - Partner Dashboard",
+  icons: {
+    icon: [
+      { url: "/icon.png?v=2" },
+      { url: "/favicon.ico?v=2" },
+    ],
+    shortcut: "/icon.png?v=2",
+    apple: "/icon.png?v=2",
+  },
 };
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="icon" href="/icon.png?v=2" type="image/png" sizes="any" />
+        <link rel="shortcut icon" href="/icon.png?v=2" />
+        <link rel="apple-touch-icon" href="/icon.png?v=2" />
+      </head>
       <body
+        suppressHydrationWarning
         className={`${beVietnamPro.className} ${beVietnamPro.variable} antialiased`}
       >
           <Providers>

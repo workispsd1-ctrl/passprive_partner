@@ -307,7 +307,7 @@ export default function RestaurantTimingsPage() {
                       type="button"
                       onClick={() => saveRow(row)}
                       disabled={busy || !dirty}
-                      className="rounded-xl bg-[#771FA8] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-[#771FA8]/35 disabled:text-white/80"
+                      className="rounded-xl bg-[#FF4800] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-[#FF4800]/35 disabled:text-white/80"
                     >
                       {savingDay === row.day_of_week ? "Saving..." : "Save"}
                     </button>

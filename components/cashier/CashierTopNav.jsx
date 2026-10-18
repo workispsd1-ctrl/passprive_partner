@@ -95,11 +95,11 @@ export default function CashierTopNav() {
       <div className="px-4 sm:px-5 py-4 flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="h-12 w-12 rounded-xl overflow-hidden border border-slate-200 bg-[#F4E7D1] flex items-center justify-center shrink-0">
+            <div className="h-12 w-12 rounded-xl overflow-hidden border border-slate-200 bg-[#FFF7F4] flex items-center justify-center shrink-0">
               {profile.restaurant_logo ? (
                 <img src={profile.restaurant_logo} alt="Restaurant logo" className="h-full w-full object-cover" />
               ) : (
-                <span className="text-lg font-bold text-[#771FA8]">R</span>
+                <span className="text-lg font-bold text-[#FF4800]">R</span>
               )}
             </div>
             <div className="min-w-0">

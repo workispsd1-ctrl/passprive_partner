@@ -1154,7 +1154,7 @@ export default function PartnerCataloguePage() {
         <Card
           title={
             <div className="flex items-center gap-2">
-              {isServiceStore ? <BriefcaseBusiness className="h-5 w-5 text-sky-600" /> : <Boxes className="h-5 w-5 text-[#771FA8]" />}
+              {isServiceStore ? <BriefcaseBusiness className="h-5 w-5 text-sky-600" /> : <Boxes className="h-5 w-5 text-[#FF4800]" />}
               <span>{selectedSectionLabel}</span>
             </div>
           }
@@ -1249,8 +1249,8 @@ export default function PartnerCataloguePage() {
                       type="button"
                       onClick={handleSaveCategory}
                       disabled={savingCategory}
-                      className="inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white shadow-lg shadow-[rgba(119,31,168,0.28)] disabled:opacity-60"
-                      style={{ background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)" }}
+                      className="inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white shadow-lg shadow-[rgba(255,72,0,0.28)] disabled:opacity-60"
+                      style={{ background: "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)" }}
                     >
                       {savingCategory ? <Loader2 className="h-4 w-4 animate-spin" /> : editingCategoryId ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                       {editingCategoryId ? "Save Category" : "Create Category"}
@@ -1435,7 +1435,7 @@ export default function PartnerCataloguePage() {
                                   className="mt-4 inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-white disabled:opacity-60"
                                   style={{
                                     background:
-                                      "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
+                                      "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)",
                                   }}
                                 >
                                   {savingItem ? (
@@ -1750,8 +1750,8 @@ export default function PartnerCataloguePage() {
                     type="button"
                     onClick={handleSaveItem}
                     disabled={savingItem || !sortedCategories.length}
-                    className="inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white shadow-lg shadow-[rgba(119,31,168,0.28)] disabled:opacity-60"
-                    style={{ background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)" }}
+                    className="inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white shadow-lg shadow-[rgba(255,72,0,0.28)] disabled:opacity-60"
+                    style={{ background: "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)" }}
                   >
                     {savingItem ? <Loader2 className="h-4 w-4 animate-spin" /> : editingItemId ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                     {editingItemId ? "Save Item" : currentItemIsImageOnly ? "Add Catalogue Entry" : "Add Product"}
@@ -1849,7 +1849,7 @@ export default function PartnerCataloguePage() {
                   className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-white disabled:opacity-60"
                   style={{
                     background:
-                      "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
+                      "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)",
                   }}
                 >
                   {savingServiceMenuAssets ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}

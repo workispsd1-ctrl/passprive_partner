@@ -187,13 +187,28 @@ const SignInPage = () => {
         {step === "signIn" && (
           <div className="w-full lg:w-auto px-4 py-8 lg:p-0">
             <div className="mb-8">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="h-12 w-12 overflow-hidden rounded-2xl bg-[#FF4800] flex items-center justify-center shadow-md shrink-0">
+                  <Image
+                    src="/passprive-logo-white.png"
+                    alt="PassPrive Logo"
+                    width={28}
+                    height={28}
+                    priority
+                    className="h-7 w-7 object-contain shrink-0"
+                  />
+                </div>
+                <span className="text-2xl font-bold tracking-wide text-[#FF4800]">
+                  Passprivé
+                </span>
+              </div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">
                 Partner Portal Login
               </h1>
               <p className="text-gray-600">
                 Sign in to access your partner or restaurant staff dashboard.
               </p>
-              <a href="/staff-pin" className="mt-2 inline-block text-sm font-semibold text-[#771FA8] underline underline-offset-2">
+              <a href="/staff-pin" className="mt-2 inline-block text-sm font-semibold text-[#FF4800] hover:text-[#D43B00] underline underline-offset-2">
                 Staff PIN Login
               </a>
             </div>
@@ -218,7 +233,7 @@ const SignInPage = () => {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 text-gray-600"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-[#FF4800] focus:border-[#FF4800] placeholder-gray-400 text-gray-600"
                   placeholder="Enter your partner email"
                   required
                 />
@@ -240,7 +255,7 @@ const SignInPage = () => {
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 text-gray-600"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-[#FF4800] focus:border-[#FF4800] placeholder-gray-400 text-gray-600"
                     required
                   />
 
@@ -263,7 +278,7 @@ const SignInPage = () => {
                     type="checkbox"
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
-                    className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                    className="h-4 w-4 text-[#FF4800] border-gray-300 rounded focus:ring-[#FF4800]"
                   />
                   <label
                     htmlFor="remember-me"
@@ -277,7 +292,7 @@ const SignInPage = () => {
                   <button
                     type="button"
                     onClick={() => setStep("forgotPassword")}
-                    className="font-medium text-indigo-600 hover:text-indigo-500 cursor-pointer"
+                    className="font-medium text-[#FF4800] hover:text-[#D43B00] cursor-pointer"
                   >
                     Forgot Password?
                   </button>
@@ -288,7 +303,7 @@ const SignInPage = () => {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="cursor-pointer pointer-cursor w-full bg-indigo-600 text-white py-3 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                  className="cursor-pointer w-full bg-[linear-gradient(91.59deg,#FF4800_2.56%,#FFA680_97.05%)] text-white py-3 px-4 rounded-lg shadow-[0_10px_24px_rgba(255,72,0,0.35)] hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#FF4800] disabled:opacity-50 font-semibold"
                 >
                   {isLoading ? "Signing in..." : "Sign In"}
                 </button>

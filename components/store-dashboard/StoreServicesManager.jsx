@@ -691,9 +691,9 @@ export default function StoreServicesManager({ storeId, storeType }) {
                   ) : null}
                   <button
                     type="button"
-                    className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-white shadow-lg shadow-[rgba(119,31,168,0.28)] disabled:opacity-60"
+                    className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-white shadow-lg shadow-[rgba(255,72,0,0.28)] disabled:opacity-60"
                     style={{
-                      background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
+                      background: "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)",
                     }}
                     onClick={saveSelectedCategories}
                     disabled={savingCategories}
@@ -715,7 +715,7 @@ export default function StoreServicesManager({ storeId, storeType }) {
                         key={category.id}
                         className={[
                           "flex cursor-pointer items-start gap-3 rounded-2xl border p-3 transition",
-                          checked ? "border-[#771FA8] bg-[rgba(119,31,168,0.05)]" : "border-gray-200 bg-white hover:bg-gray-50",
+                          checked ? "border-[#FF4800] bg-[rgba(119,31,168,0.05)]" : "border-gray-200 bg-white hover:bg-gray-50",
                         ].join(" ")}
                       >
                         <input
@@ -789,7 +789,7 @@ export default function StoreServicesManager({ storeId, storeType }) {
                     key={row.service.id}
                     className={[
                       "overflow-hidden rounded-2xl border",
-                      isActive ? "border-[#771FA8]" : "border-gray-200",
+                      isActive ? "border-[#FF4800]" : "border-gray-200",
                     ].join(" ")}
                   >
                     <div className="flex flex-col gap-3 bg-white p-4 md:flex-row md:items-center md:justify-between">
@@ -814,7 +814,7 @@ export default function StoreServicesManager({ storeId, storeType }) {
                           className={[
                             "inline-flex h-9 items-center gap-2 rounded-full border px-3 text-xs font-semibold",
                             isActive
-                              ? "border-[#771FA8] bg-[rgba(119,31,168,0.08)] text-[#5B1685]"
+                              ? "border-[#FF4800] bg-[rgba(119,31,168,0.08)] text-[#D43B00]"
                               : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
                           ].join(" ")}
                         >
@@ -925,7 +925,7 @@ export default function StoreServicesManager({ storeId, storeType }) {
                             type="button"
                             className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-white disabled:opacity-60"
                             style={{
-                              background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
+                              background: "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)",
                             }}
                             disabled={savingItem}
                             onClick={saveItem}

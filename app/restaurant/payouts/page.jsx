@@ -37,7 +37,7 @@ function CardShell({ title, right, children }) {
 function StatMini({ title, value, icon: Icon, tone = "slate", helper = "" }) {
   const toneMap = {
     slate: "bg-slate-50 text-slate-700 border-slate-200",
-    orange: "bg-[#F4E7D1] text-[#771FA8] border-[rgba(119,31,168,0.18)]",
+    orange: "bg-[#FFF7F4] text-[#FF4800] border-[#FFE2D6]",
     emerald: "bg-emerald-50 text-emerald-700 border-emerald-200",
     indigo: "bg-indigo-50 text-indigo-700 border-indigo-200",
   };
@@ -141,14 +141,14 @@ function RequestPayoutModal({
         </div>
 
         <div className="p-6 space-y-4">
-          <div className="rounded-2xl border border-[rgba(119,31,168,0.18)] bg-[#F4E7D1] p-4">
-            <div className="text-xs text-[#771FA8]">Amount You Are Requesting</div>
+          <div className="rounded-2xl border border-[#FFE2D6] bg-[#FFF7F4] p-4">
+            <div className="text-xs text-[#FF4800]">Amount You Are Requesting</div>
             <div className="mt-1">
               <Amount
                 value={amount}
                 className="inline-flex items-baseline gap-1"
-                currencyClassName="text-xs font-semibold uppercase tracking-wide text-[#771FA8]"
-                valueClassName="text-2xl font-bold text-[#5B1685]"
+                currencyClassName="text-xs font-semibold uppercase tracking-wide text-[#FF4800]"
+                valueClassName="text-2xl font-bold text-[#D43B00]"
               />
             </div>
           </div>
@@ -206,8 +206,8 @@ function RequestPayoutModal({
             type="button"
             onClick={onConfirm}
             disabled={requesting}
-            className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 shadow-lg shadow-[rgba(119,31,168,0.28)] disabled:opacity-60"
-            style={{ background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)" }}
+            className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 shadow-lg shadow-[rgba(255,72,0,0.28)] disabled:opacity-60"
+            style={{ background: "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)" }}
           >
             {requesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CircleDollarSign className="h-4 w-4" />}
             {requesting ? "Sending..." : "Confirm Request"}
@@ -730,8 +730,8 @@ export default function RestaurantPartnerPayoutsPage() {
               Export
             </button>
             <button
-              className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 shadow-lg shadow-[rgba(119,31,168,0.28)] disabled:opacity-60"
-              style={{ background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)" }}
+              className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 shadow-lg shadow-[rgba(255,72,0,0.28)] disabled:opacity-60"
+              style={{ background: "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)" }}
               type="button"
               onClick={handleOpenRequestModal}
               disabled={loading || requesting || !canRequestPayout}

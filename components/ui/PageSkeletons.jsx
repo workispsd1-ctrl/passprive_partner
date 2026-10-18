@@ -3,7 +3,7 @@ export function SkeletonBlock({ className = "" }) {
     <div
       className={`skeleton-shimmer rounded-2xl border ${className}`}
       style={{
-        backgroundColor: "rgba(119, 31, 168, 0.08)",
+        backgroundColor: "rgba(255, 72, 0, 0.08)",
         borderColor: "rgba(119, 31, 168, 0.1)",
       }}
     />

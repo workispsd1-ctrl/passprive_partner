@@ -161,20 +161,20 @@ export default function BearerOrderNotifier() {
 
   return (
     <div className="fixed inset-0 z-[95] flex items-end justify-center bg-black/40 p-4 sm:items-center">
-      <div className="w-full max-w-sm rounded-2xl border border-[#771FA8]/30 bg-[#F4E7D1] p-5 shadow-2xl">
+      <div className="w-full max-w-sm rounded-2xl border border-[#FF4800]/30 bg-[#FFF7F4] p-5 shadow-2xl">
         <div className="mb-3 flex items-center gap-3">
-          <div className={`flex h-11 w-11 items-center justify-center rounded-xl border ${isReady ? "border-emerald-300 bg-emerald-100" : "border-[#771FA8]/25 bg-[#771FA8]/10"}`}>
-            {isReady ? <CheckCircle2 className="h-5 w-5 text-emerald-700" /> : <Bell className="h-5 w-5 text-[#771FA8]" />}
+          <div className={`flex h-11 w-11 items-center justify-center rounded-xl border ${isReady ? "border-emerald-300 bg-emerald-100" : "border-[#FF4800]/25 bg-[#FF4800]/10"}`}>
+            {isReady ? <CheckCircle2 className="h-5 w-5 text-emerald-700" /> : <Bell className="h-5 w-5 text-[#FF4800]" />}
           </div>
           <div className="flex-1">
             <div className="text-lg font-bold text-[#3B0764]">{isReady ? "Ready to Serve!" : "New Order"}</div>
             <div className="text-sm text-[#7C3AED]">Table {top.tableNo}</div>
           </div>
-          {queue.length > 1 ? <span className="rounded-lg bg-[#771FA8]/10 px-2 py-1 text-xs font-semibold text-[#6B21A8]">+{queue.length - 1}</span> : null}
+          {queue.length > 1 ? <span className="rounded-lg bg-[#FF4800]/10 px-2 py-1 text-xs font-semibold text-[#6B21A8]">+{queue.length - 1}</span> : null}
         </div>
 
         {top.items.length > 0 ? (
-          <div className="mb-3 max-h-40 overflow-y-auto rounded-xl border border-[#771FA8]/15 bg-white/70 divide-y divide-[#771FA8]/10">
+          <div className="mb-3 max-h-40 overflow-y-auto rounded-xl border border-[#FF4800]/15 bg-white/70 divide-y divide-[#FF4800]/10">
             {top.items.map((it, idx) => (
               <div key={idx} className="flex items-center gap-2 px-3 py-2 text-sm">
                 <span className="w-6 text-right font-semibold text-[#6B21A8]">{Number(it.qty ?? it.quantity ?? 1)}×</span>
@@ -186,7 +186,7 @@ export default function BearerOrderNotifier() {
 
         {isClaim ? (
           <div className="flex gap-2">
-            <button type="button" onClick={dismiss} className="h-11 rounded-xl border border-[#771FA8]/30 bg-white/60 px-4 text-sm font-semibold text-[#6B21A8]">Dismiss</button>
+            <button type="button" onClick={dismiss} className="h-11 rounded-xl border border-[#FF4800]/30 bg-white/60 px-4 text-sm font-semibold text-[#6B21A8]">Dismiss</button>
             <button type="button" onClick={() => takeTable(top.tableNo)} className="h-11 flex-1 rounded-xl bg-[#6B21A8] text-sm font-semibold text-white">Take Table {top.tableNo}</button>
           </div>
         ) : (

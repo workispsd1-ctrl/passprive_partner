@@ -46,8 +46,8 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
     [
       "flex items-center gap-3 lg:gap-4 rounded-xl px-3 lg:px-4 py-2 lg:py-2.5 transition-all w-full text-left",
       active
-        ? "text-[#2b1940] shadow-[0px_20px_50px_0px_rgba(119,31,168,0.12)] border border-[rgba(119,31,168,0.18)]"
-        : "text-[#737791] hover:bg-gray-50",
+        ? "bg-[linear-gradient(91.59deg,#FF4800_2.56%,#FFA680_97.05%)] text-white shadow-[0_10px_18px_rgba(255,72,0,0.18)]"
+        : "text-[#737791] hover:bg-gradient-to-r hover:from-[#FFF0EB] hover:to-[#FFE2D6] hover:text-[#FF4800]",
     ].join(" ");
 
   const itemStyle = (active) => ({
@@ -55,11 +55,6 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
     fontWeight: active ? 600 : 500,
     lineHeight: "140%",
     fontFamily: "Satoshi, sans-serif",
-    ...(active
-      ? {
-          background: "#F4E7D1",
-        }
-      : {}),
   });
 
   return (

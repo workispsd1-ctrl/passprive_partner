@@ -63,19 +63,12 @@ function statusPill(status) {
   return "bg-slate-100 text-slate-700";
 }
 
-function KpiCard({ title, value, subtitle, icon: Icon, tone = "violet", onClick }) {
-  const tones = {
-    violet: "from-violet-500 to-fuchsia-500",
-    blue: "from-blue-500 to-cyan-500",
-    green: "from-emerald-500 to-teal-500",
-    orange: "from-orange-500 to-amber-500",
-    pink: "from-pink-500 to-rose-500",
-  };
+function KpiCard({ title, value, subtitle, icon: Icon, onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="w-full rounded-3xl border border-slate-200 bg-white p-4 shadow-sm min-h-[142px] flex items-center text-left hover:border-violet-300 transition"
+      className="w-full rounded-3xl border border-slate-200 bg-white p-4 shadow-sm min-h-[142px] flex items-center text-left hover:border-[#FF4800]/40 transition cursor-pointer"
     >
       <div className="flex w-full items-center justify-between gap-4">
         <div>
@@ -83,7 +76,7 @@ function KpiCard({ title, value, subtitle, icon: Icon, tone = "violet", onClick 
           <p className="mt-2 text-3xl font-bold text-slate-900 leading-none">{value}</p>
           <p className="mt-1.5 text-sm text-slate-500">{subtitle}</p>
         </div>
-        <div className={`h-11 w-11 rounded-xl bg-gradient-to-br ${tones[tone]} text-white flex items-center justify-center shadow-sm`}>
+        <div className="h-11 w-11 rounded-xl bg-[linear-gradient(91.59deg,#FF4800_2.56%,#FFA680_97.05%)] text-white flex items-center justify-center shadow-md">
           <Icon className="h-5.5 w-5.5" />
         </div>
       </div>

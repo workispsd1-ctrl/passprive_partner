@@ -17,9 +17,9 @@ import { useRouter } from "next/navigation";
 import { useDashboard } from "@/lib/store-partner/useDashboard";
 import { useStores } from "@/lib/store-partner/useStores";
 
-const THEME_BG = "#F4E7D1";
-const THEME_ACCENT = "#771FA899";
-const THEME_ACCENT_SOLID = "#771FA8";
+const THEME_BG = "#FFF7F4";
+const THEME_ACCENT = "rgba(255,72,0,0.4)";
+const THEME_ACCENT_SOLID = "#FF4800";
 
 function StatCard({ title, value, change, changeType, icon: Icon }) {
   const up = changeType === "up";
@@ -474,10 +474,10 @@ export default function StorePartnerDashboardPage() {
 
             <Link
               href={selectedStoreId ? `/store-partner/offers/create?store_id=${selectedStoreId}` : "/store-partner/offers/create"}
-              className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 shadow-lg shadow-[rgba(119,31,168,0.28)]"
+              className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 shadow-lg shadow-[rgba(255,72,0,0.28)]"
               style={{
                 background:
-                  "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
+                  "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)",
               }}
             >
               <Sparkles className="h-4 w-4" />

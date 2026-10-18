@@ -21,8 +21,8 @@ const tabs = [
 
 const tabStyles = {
   "/restaurant/bearer/floor": {
-    active: "border-[#771FA8] bg-[#771FA8] text-white",
-    idle:   "border-[#771FA8]/30 bg-[#771FA8]/10 text-[#771FA8] hover:bg-[#771FA8]/15",
+    active: "border-[#FF4800] bg-[linear-gradient(91.59deg,#FF4800_2.56%,#FFA680_97.05%)] text-white",
+    idle:   "border-[#FF4800]/30 bg-[#FF4800]/10 text-[#FF4800] hover:bg-[#FF4800]/15",
   },
   "/restaurant/bearer/table-orders": {
     active: "border-emerald-700 bg-emerald-600 text-white",
@@ -131,7 +131,7 @@ export default function BearerTopbar() {
         {/* Top row: logo + name + actions */}
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="h-12 w-12 rounded-xl overflow-hidden border border-slate-200 bg-[#F4E7D1] flex items-center justify-center shrink-0">
+            <div className="h-12 w-12 rounded-xl overflow-hidden border border-slate-200 bg-[#FFF7F4] flex items-center justify-center shrink-0">
               {profile.restaurant_logo ? (
                 <img
                   src={profile.restaurant_logo}
@@ -139,7 +139,7 @@ export default function BearerTopbar() {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <span className="text-lg font-bold text-[#771FA8]">B</span>
+                <span className="text-lg font-bold text-[#FF4800]">B</span>
               )}
             </div>
             <div className="min-w-0">

@@ -593,7 +593,7 @@ export default function KitchenDashboard() {
   return (
     <div className="space-y-4">
       {orderAlert ? (
-        <div className="fixed right-6 top-20 z-50 w-72 rounded-lg border bg-[#F4E7D1] p-3 shadow-2xl">
+        <div className="fixed right-6 top-20 z-50 w-72 rounded-lg border bg-[#FFF7F4] p-3 shadow-2xl">
           <div className="text-sm font-semibold text-slate-900">{orderAlert.message}</div>
           <div className="mt-2 text-xs text-slate-700 space-y-1">
             <div>Table: {orderAlert.tableNo}</div>

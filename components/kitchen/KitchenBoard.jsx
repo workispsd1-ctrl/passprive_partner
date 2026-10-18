@@ -200,12 +200,12 @@ export default function KitchenBoard() {
     const action = nextMap[l];
     const back = backMap[l];
     const busy = busyId.startsWith(`${o.id}:`);
-    const laneColor = lanes.find((x) => x.key === l)?.color || "#771FA8";
+    const laneColor = lanes.find((x) => x.key === l)?.color || "#FF4800";
     return (
       <div className={`rounded-2xl border bg-white p-4 shadow-sm border-l-4 ${leftBorder(mins, l === "READY")}`}>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <span className="inline-flex h-10 min-w-12 items-center justify-center rounded-xl px-2 text-sm font-bold" style={{ background: isPickup ? "#F59E0B18" : "#771FA814", color: isPickup ? "#B45309" : "#771FA8" }}>
+            <span className="inline-flex h-10 min-w-12 items-center justify-center rounded-xl px-2 text-sm font-bold" style={{ background: isPickup ? "#F59E0B18" : "#FF480014", color: isPickup ? "#B45309" : "#FF4800" }}>
               {isPickup ? (o.pickup_code || "PICK") : (Number(o.table_no) > 0 ? `T${o.table_no}` : "—")}
             </span>
             <div>
@@ -224,7 +224,7 @@ export default function KitchenBoard() {
           ) : (
             items.map((it, idx) => (
               <div key={idx} className={`flex items-center gap-3 px-3 py-2 ${idx > 0 ? "border-t border-slate-100" : ""}`}>
-                <span className="min-w-8 text-base font-bold text-[#771FA8]">{it.qty}×</span>
+                <span className="min-w-8 text-base font-bold text-[#FF4800]">{it.qty}×</span>
                 <span className="flex-1 text-sm font-semibold text-slate-800">{it.name}</span>
               </div>
             ))
@@ -268,9 +268,9 @@ export default function KitchenBoard() {
           const active = board === b.key;
           const c = b.key === "tables" ? orders.length : pickups.length;
           return (
-            <button key={b.key} type="button" onClick={() => { setBoard(b.key); setLane("NEW"); }} className={`flex flex-1 items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-bold ${active ? "border-[#771FA8] bg-[#771FA8] text-white" : "border-slate-200 bg-white text-slate-700"}`}>
+            <button key={b.key} type="button" onClick={() => { setBoard(b.key); setLane("NEW"); }} className={`flex flex-1 items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-bold ${active ? "border-[#FF4800] bg-[#FF4800] text-white" : "border-slate-200 bg-white text-slate-700"}`}>
               {b.label}
-              <span className={`inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-xs ${active ? "bg-white/25 text-white" : "bg-[#771FA8]/10 text-[#771FA8]"}`}>{c}</span>
+              <span className={`inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-xs ${active ? "bg-white/25 text-white" : "bg-[#FF4800]/10 text-[#FF4800]"}`}>{c}</span>
             </button>
           );
         })}

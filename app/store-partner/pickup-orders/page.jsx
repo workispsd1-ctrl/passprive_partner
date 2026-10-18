@@ -442,7 +442,7 @@ export default function StorePartnerOrdersPage() {
                       onClick={() => setSelectedOrderId(String(o.id))}
                       className={`w-full text-left rounded-2xl border p-4 ${
                         String(selectedOrderId) === String(o.id)
-                          ? "border-[rgba(119,31,168,0.18)] bg-[#F4E7D1]"
+                          ? "border-[#FFE2D6] bg-[#FFF7F4]"
                           : "border-gray-200 bg-white hover:bg-gray-50"
                       }`}
                     >

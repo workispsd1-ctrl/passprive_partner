@@ -99,7 +99,7 @@ export default function CashierPickupOrdersPage() {
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between gap-3">
           <div className="font-semibold text-slate-900">{o.order_number || `#${String(o.id).slice(0, 8).toUpperCase()}`}</div>
-          {o.pickup_code ? <span className="rounded-lg border border-[#771FA8]/30 bg-[#771FA8]/10 px-2 py-1 text-xs font-bold tracking-wide text-[#771FA8]">{o.pickup_code}</span> : null}
+          {o.pickup_code ? <span className="rounded-lg border border-[#FF4800]/30 bg-[#FF4800]/10 px-2 py-1 text-xs font-bold tracking-wide text-[#FF4800]">{o.pickup_code}</span> : null}
         </div>
         <div className="mt-1 text-sm text-slate-500">{o.customer_name || "Guest"}{o.customer_phone ? ` · ${o.customer_phone}` : ""}</div>
         <div className="mt-3 flex flex-wrap items-center gap-2">

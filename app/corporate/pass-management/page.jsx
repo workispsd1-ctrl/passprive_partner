@@ -68,8 +68,8 @@ export default function PassManagementPage() {
       id: "deluxe", 
       name: "Deluxe", 
       description: "Medium valued pass", 
-      color: "bg-blue-100 text-blue-800",
-      iconColor: "text-blue-600",
+      color: "bg-blue-100 text-[#FF4800]",
+      iconColor: "text-[#FF4800]",
       iconBg: "bg-blue-50",
       textIcon: "⭐",
       icon: (
@@ -82,8 +82,8 @@ export default function PassManagementPage() {
       id: "super-deluxe", 
       name: "Super Deluxe", 
       description: "High valued pass", 
-      color: "bg-purple-100 text-purple-800",
-      iconColor: "text-purple-600",
+      color: "bg-[#FFF7F4] text-[#FF4800] border border-[#FFE2D6]",
+      iconColor: "text-[#FF4800]",
       iconBg: "bg-purple-50",
       textIcon: "👑",
       icon: (
@@ -667,8 +667,8 @@ export default function PassManagementPage() {
         <div className="bg-white rounded-xl p-5 lg:p-6 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-[#737791]">Total Passes</h3>
-            <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
-              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-10 h-10 rounded-full bg-[#FFF7F4] flex items-center justify-center">
+              <svg className="w-5 h-5 text-[#FF4800]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
               </svg>
             </div>
@@ -706,8 +706,8 @@ export default function PassManagementPage() {
         <div className="bg-white rounded-xl p-5 lg:p-6 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-[#737791]">Pass Types</h3>
-            <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center">
-              <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-10 h-10 rounded-full bg-[#FFF7F4] flex items-center justify-center">
+              <svg className="w-5 h-5 text-[#FF4800]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
               </svg>
             </div>
@@ -715,8 +715,8 @@ export default function PassManagementPage() {
           <div className="text-2xl lg:text-3xl font-bold text-[#151D48]">3</div>
           <div className="mt-2 text-xs text-[#737791]">
             <span className="text-green-700">{passClassicActive} Classic</span> • 
-            <span className="text-blue-700"> {passDeluxeActive} Deluxe</span> • 
-            <span className="text-purple-700"> {passSuperDeluxeActive} Super</span>
+            <span className="text-[#FF4800]"> {passDeluxeActive} Deluxe</span> • 
+            <span className="text-[#FF4800]"> {passSuperDeluxeActive} Super</span>
           </div>
         </div>
       </div>
@@ -729,7 +729,7 @@ export default function PassManagementPage() {
               onClick={() => setFilter("all")}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filter === "all"
-                  ? "bg-[#5D5FEF] text-white"
+                  ? "bg-[#FF4800] text-white"
                   : "bg-gray-100 text-[#737791] hover:bg-gray-200"
               }`}
             >
@@ -739,7 +739,7 @@ export default function PassManagementPage() {
               onClick={() => setFilter("active")}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filter === "active"
-                  ? "bg-[#5D5FEF] text-white"
+                  ? "bg-[#FF4800] text-white"
                   : "bg-gray-100 text-[#737791] hover:bg-gray-200"
               }`}
             >
@@ -749,7 +749,7 @@ export default function PassManagementPage() {
               onClick={() => setFilter("expired")}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filter === "expired"
-                  ? "bg-[#5D5FEF] text-white"
+                  ? "bg-[#FF4800] text-white"
                   : "bg-gray-100 text-[#737791] hover:bg-gray-200"
               }`}
             >
@@ -761,7 +761,7 @@ export default function PassManagementPage() {
             <button
               onClick={handleDownloadExcel}
               disabled={filteredPasses.length === 0}
-              className="flex items-center gap-2 px-4 py-2 border border-[#5D5FEF] text-[#5D5FEF] rounded-lg text-sm font-medium hover:bg-[#5D5FEF] hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2 border border-[#5D5FEF] text-[#FF4800] rounded-lg text-sm font-medium hover:bg-[#FF4800] hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -770,7 +770,7 @@ export default function PassManagementPage() {
             </button>
             <button
               onClick={() => setShowCreateForm(!showCreateForm)}
-              className="flex items-center gap-2 px-4 py-2 bg-[#5D5FEF] text-white rounded-lg text-sm font-medium hover:bg-[#4D4FDF] transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-[#FF4800] text-white rounded-lg text-sm font-medium hover:bg-[#4D4FDF] transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -845,7 +845,7 @@ export default function PassManagementPage() {
                   }}
                   className={`flex-1 py-2.5 px-4 rounded-md text-sm font-medium transition-all ${
                     uploadMode === "manual"
-                      ? "bg-white text-[#5D5FEF] shadow-sm"
+                      ? "bg-white text-[#FF4800] shadow-sm"
                       : "text-gray-600 hover:text-gray-900"
                   }`}
                 >
@@ -864,7 +864,7 @@ export default function PassManagementPage() {
                   }}
                   className={`flex-1 py-2.5 px-4 rounded-md text-sm font-medium transition-all ${
                     uploadMode === "excel"
-                      ? "bg-white text-[#5D5FEF] shadow-sm"
+                      ? "bg-white text-[#FF4800] shadow-sm"
                       : "text-gray-600 hover:text-gray-900"
                   }`}
                 >
@@ -1006,14 +1006,14 @@ export default function PassManagementPage() {
               {uploadMode === "excel" && (
                 <div className="space-y-4">
                   {/* Download Template */}
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="bg-[#FFF7F4] border border-[#FFE2D6] rounded-lg p-4">
                     <div className="flex items-start gap-3">
-                      <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5 text-[#FF4800] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-blue-900 mb-2">Excel Format Required:</p>
-                        <ul className="text-xs text-blue-800 space-y-1 mb-3">
+                        <p className="text-sm font-medium text-gray-900 mb-2">Excel Format Required:</p>
+                        <ul className="text-xs text-[#FF4800] space-y-1 mb-3">
                           <li>• <strong>Employee Name</strong>: Full name of employee</li>
                           <li>• <strong>Employee Email</strong>: Valid email address</li>
                           <li>• <strong>Pass Type</strong>: Classic, Deluxe, or Super Deluxe</li>
@@ -1021,7 +1021,7 @@ export default function PassManagementPage() {
                         </ul>
                         <button
                           onClick={downloadSampleTemplate}
-                          className="text-sm font-medium text-blue-600 hover:text-blue-700 underline"
+                          className="text-sm font-medium text-[#FF4800] hover:text-[#FF4800] underline"
                         >
                           Download Sample Template
                         </button>
@@ -1100,7 +1100,7 @@ export default function PassManagementPage() {
                                 <td className="px-3 py-2 text-gray-900">{row["Employee Name"]}</td>
                                 <td className="px-3 py-2 text-gray-600 text-xs">{row["Employee Email"]}</td>
                                 <td className="px-3 py-2">
-                                  <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                  <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-[#FF4800]">
                                     {row["Pass Type"]}
                                   </span>
                                 </td>
@@ -1114,14 +1114,14 @@ export default function PassManagementPage() {
                   )}
 
                   {/* Email notification info */}
-                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                  <div className="bg-[#FFF7F4] border border-[#FFE2D6] rounded-lg p-4">
                     <div className="flex items-start gap-3">
-                      <svg className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5 text-[#FF4800] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                       </svg>
                       <div>
                         <p className="text-sm font-medium text-purple-900 mb-1">Email Notification</p>
-                        <p className="text-xs text-purple-700">Passes will be automatically emailed to each employee with their unique pass code and redemption instructions.</p>
+                        <p className="text-xs text-[#FF4800]">Passes will be automatically emailed to each employee with their unique pass code and redemption instructions.</p>
                       </div>
                     </div>
                   </div>
@@ -1154,7 +1154,7 @@ export default function PassManagementPage() {
               <button
                 onClick={uploadMode === "manual" ? handleCreatePasses : handleBulkPassGeneration}
                 disabled={loading || processingUpload || (uploadMode === "excel" && excelData.length === 0)}
-                className="px-6 py-2.5 bg-[#5D5FEF] text-white rounded-lg text-sm font-medium hover:bg-[#4D4FDF] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-6 py-2.5 bg-[#FF4800] text-white rounded-lg text-sm font-medium hover:bg-[#4D4FDF] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {loading ? (
                   <>
@@ -1199,7 +1199,7 @@ export default function PassManagementPage() {
               {filter === "all" && (
                 <button
                   onClick={() => setShowCreateForm(true)}
-                  className="px-6 py-2.5 bg-[#5D5FEF] text-white rounded-lg text-sm font-medium hover:bg-[#4D4FDF] transition-colors"
+                  className="px-6 py-2.5 bg-[#FF4800] text-white rounded-lg text-sm font-medium hover:bg-[#4D4FDF] transition-colors"
                 >
                   Generate First Passes
                 </button>
@@ -1239,7 +1239,7 @@ export default function PassManagementPage() {
                     <tr key={pass.id} className="hover:bg-gray-50">
                       <td className="px-4 lg:px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <code className="text-sm font-mono font-semibold text-[#5D5FEF] bg-indigo-50 px-2 py-1 rounded">
+                          <code className="text-sm font-mono font-semibold text-[#FF4800] bg-indigo-50 px-2 py-1 rounded">
                             {pass.code}
                           </code>
                         </div>
@@ -1276,7 +1276,7 @@ export default function PassManagementPage() {
                               : pass.status === "disabled"
                               ? "bg-gray-100 text-gray-800"
                               : pass.status === "redeemed"
-                              ? "bg-blue-100 text-blue-800"
+                              ? "bg-blue-100 text-[#FF4800]"
                               : "bg-red-100 text-red-800"
                           }`}
                         >
@@ -1293,7 +1293,7 @@ export default function PassManagementPage() {
                         <div className="flex items-center gap-2"  >
                           <button
                             onClick={() => handleCopyCode(pass.code)}
-                            className="text-[#5D5FEF] hover:text-[#4D4FDF] font-medium flex items-center gap-1"
+                            className="text-[#FF4800] hover:text-[#4D4FDF] font-medium flex items-center gap-1"
                             title="Copy code"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1325,12 +1325,12 @@ export default function PassManagementPage() {
       </div>
 
       {/* Info Box */}
-      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+      <div className="mt-6 p-4 bg-[#FFF7F4] border border-[#FFE2D6] rounded-lg">
         <div className="flex gap-3">
-          <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 text-[#FF4800] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <div className="text-sm text-blue-800">
+          <div className="text-sm text-[#FF4800]">
             <p className="font-semibold mb-1">How Employee Passes Work:</p>
             <ul className="space-y-1 list-disc list-inside">
               <li>Generate passes in three types: Classic, Deluxe, or Super Deluxe</li>

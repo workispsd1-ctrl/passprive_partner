@@ -106,7 +106,7 @@ export default function KitchenTopbar() {
         {/* Top row: logo + name + actions */}
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="h-12 w-12 rounded-xl overflow-hidden border border-slate-200 bg-[#F4E7D1] flex items-center justify-center shrink-0">
+            <div className="h-12 w-12 rounded-xl overflow-hidden border border-slate-200 bg-[#FFF7F4] flex items-center justify-center shrink-0">
               {profile.restaurant_logo ? (
                 <img
                   src={profile.restaurant_logo}
@@ -114,7 +114,7 @@ export default function KitchenTopbar() {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <span className="text-lg font-bold text-[#771FA8]">K</span>
+                <span className="text-lg font-bold text-[#FF4800]">K</span>
               )}
             </div>
             <div className="min-w-0">

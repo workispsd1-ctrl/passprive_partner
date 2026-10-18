@@ -163,7 +163,7 @@ export default function StaffPinPage() {
               value={pin}
               onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
               placeholder="Enter 4-6 digit PIN"
-              className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-[#771FA8]"
+              className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-[#FF4800]"
             />
           </label>
 
@@ -173,7 +173,7 @@ export default function StaffPinPage() {
             type="submit"
             disabled={!isPaired || loading || pairing}
             className="h-11 w-full rounded-xl text-sm font-semibold text-white disabled:opacity-60"
-            style={{ background: "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)" }}
+            style={{ background: "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)" }}
           >
             {loading ? "Signing in..." : "Login with PIN"}
           </button>

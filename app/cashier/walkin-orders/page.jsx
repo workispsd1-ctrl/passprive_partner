@@ -115,7 +115,7 @@ export default function CashierWalkInOrdersPage() {
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <span className="inline-flex h-9 min-w-10 items-center justify-center rounded-xl bg-[#771FA8]/10 px-2 text-sm font-bold text-[#771FA8]">{Number(o.table_no) > 0 ? `T${o.table_no}` : "—"}</span>
+            <span className="inline-flex h-9 min-w-10 items-center justify-center rounded-xl bg-[#FF4800]/10 px-2 text-sm font-bold text-[#FF4800]">{Number(o.table_no) > 0 ? `T${o.table_no}` : "—"}</span>
             <div>
               <div className="text-sm font-semibold text-slate-900">#{String(o.id).slice(0, 6).toUpperCase()}</div>
               <div className="text-xs text-slate-500">{o.customer_name || "Walk-in"}</div>

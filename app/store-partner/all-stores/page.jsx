@@ -54,7 +54,7 @@ function Pill({ children, tone = "gray" }) {
 function StatMini({ title, value, icon: Icon, tone = "slate" }) {
   const toneMap = {
     slate: "bg-slate-50 text-slate-700 border-slate-200",
-    orange: "bg-[#F4E7D1] text-[#771FA8] border-[rgba(119,31,168,0.18)]",
+    orange: "bg-[#FFF7F4] text-[#FF4800] border-[#FFE2D6]",
     emerald: "bg-emerald-50 text-emerald-700 border-emerald-200",
     indigo: "bg-indigo-50 text-indigo-700 border-indigo-200",
   };
@@ -320,10 +320,10 @@ export default function StorePartnerAllStoresPage() {
             </button>
 
             <button
-              className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 shadow-lg shadow-[rgba(119,31,168,0.28)]"
+              className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 shadow-lg shadow-[rgba(255,72,0,0.28)]"
               style={{
                 background:
-                  "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
+                  "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)",
               }}
               type="button"
               onClick={onAddStore}
@@ -468,10 +468,10 @@ export default function StorePartnerAllStoresPage() {
                 Try changing filters, or add your first store.
               </div>
               <button
-                className="mt-4 h-10 rounded-full px-4 text-sm font-semibold text-white shadow-lg shadow-[rgba(119,31,168,0.28)]"
+                className="mt-4 h-10 rounded-full px-4 text-sm font-semibold text-white shadow-lg shadow-[rgba(255,72,0,0.28)]"
                 style={{
                   background:
-                    "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
+                    "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)",
                 }}
                 type="button"
                 onClick={onAddStore}

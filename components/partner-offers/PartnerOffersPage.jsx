@@ -792,7 +792,7 @@ export function PartnerOffersPage({ partnerEntityType = "STORE" }) {
                   </div>
                   <div className="mt-3 flex items-center gap-2 text-lg font-semibold text-gray-900">
                     {partnerEntityType === "STORE" ? (
-                      <Store className="h-5 w-5 text-[#771FA8]" />
+                      <Store className="h-5 w-5 text-[#FF4800]" />
                     ) : (
                       <UtensilsCrossed className="h-5 w-5 text-emerald-600" />
                     )}

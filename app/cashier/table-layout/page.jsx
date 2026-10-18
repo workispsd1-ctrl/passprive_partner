@@ -513,7 +513,7 @@ export default function CashierTableLayoutPage() {
                     onDropOnTable(tableNo, sourceTableNo);
                   }}
                   onClick={() => setDetailTableNo(tableNo)}
-                  className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-2xl border-2 shadow-sm ${dragOver ? "ring-4 ring-[#771FA8]/40" : ""} ${dragTableNo === tableNo ? "cursor-grabbing" : "cursor-grab"}`}
+                  className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-2xl border-2 shadow-sm ${dragOver ? "ring-4 ring-[#FF4800]/40" : ""} ${dragTableNo === tableNo ? "cursor-grabbing" : "cursor-grab"}`}
                   style={{
                     left: `${renderPosX}%`,
                     top: `${renderPosY}%`,

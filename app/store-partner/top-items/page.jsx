@@ -161,7 +161,7 @@ export default function TopItemsPage() {
         <Card
           title={
             <div className="flex items-center gap-2">
-              <Star className="h-5 w-5 text-[#771FA8]" />
+              <Star className="h-5 w-5 text-[#FF4800]" />
               <span>Top Items</span>
             </div>
           }
@@ -171,10 +171,10 @@ export default function TopItemsPage() {
               type="button"
               onClick={saveItems}
               disabled={loading || saving || !selectedStoreId}
-              className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-white shadow-lg shadow-[rgba(119,31,168,0.28)] disabled:opacity-60"
+              className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-white shadow-lg shadow-[rgba(255,72,0,0.28)] disabled:opacity-60"
               style={{
                 background:
-                  "linear-gradient(90deg, #771FA8 0%, rgba(119,31,168,0.78) 50%, #5B1685 100%)",
+                  "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)",
               }}
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}

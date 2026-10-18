@@ -267,7 +267,7 @@ export default function StoreTimingsPage() {
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#771FA8]/15 bg-[#F4E7D1] px-3 py-1 text-xs font-semibold text-[#771FA8]">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#FF4800]/15 bg-[#FFF7F4] px-3 py-1 text-xs font-semibold text-[#FF4800]">
               <Clock3 className="h-3.5 w-3.5" />
               Store Timings
             </div>
@@ -387,7 +387,7 @@ export default function StoreTimingsPage() {
                       type="button"
                       onClick={() => saveRow(row)}
                       disabled={busy || !dirty}
-                      className="rounded-xl bg-[#771FA8] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-[#771FA8]/35 disabled:text-white/80"
+                      className="rounded-xl bg-[#FF4800] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-[#FF4800]/35 disabled:text-white/80"
                     >
                       {savingDay === row.day_of_week ? "Saving..." : "Save"}
                     </button>
