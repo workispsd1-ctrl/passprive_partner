@@ -52,10 +52,10 @@ async function getOwnerRestaurant(token, requestedRestaurantId = "") {
 
   if (restErr) return { error: restErr.message || "Failed to resolve restaurant", status: 400 };
   const ownedIds = new Set((ownerRestaurants || []).map((r) => String(r.id || "")).filter(Boolean));
-  if (reqId && ownedIds.has(reqId)) return { restaurantId: reqId, ownerUserId: userId };
+  if (reqId && ownedIds.has(reqId)) return { restaurantId: reqId, ownerUserId: userId, isMaster: true };
   if (!reqId && ownedIds.size > 0) {
     const firstOwned = ownerRestaurants[0];
-    if (firstOwned?.id) return { restaurantId: firstOwned.id, ownerUserId: userId };
+    if (firstOwned?.id) return { restaurantId: firstOwned.id, ownerUserId: userId, isMaster: true };
   }
 
   const { data: staffRows, error: staffErr } = await admin
@@ -187,6 +187,13 @@ export async function POST(request) {
     const phone = String(body?.phone || "").trim() || null;
     const role = normalizeStaffRole(body?.role);
     const pin = validatePin(body?.pin);
+
+    if (role === "restaurant_admin" && !owner.isMaster) {
+      return NextResponse.json(
+        { ok: false, error: "Only the master account can create branch admin logins." },
+        { status: 403 }
+      );
+    }
 
     if (!full_name) {
       return NextResponse.json({ ok: false, error: "Full name is required." }, { status: 400 });

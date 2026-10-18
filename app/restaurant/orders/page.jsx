@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { fetchMyRestaurants } from "@/lib/restaurant-partner/activeRestaurant";
 
 const STATUS_FLOW = [
   "NEW",
@@ -12,8 +13,8 @@ const STATUS_FLOW = [
   "CANCELLED",
 ];
 
-function inr(v) {
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(
+function murMoney(v) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "MUR" }).format(
     Number(v || 0)
   );
 }
@@ -153,19 +154,15 @@ export default function PartnerOrdersPage() {
       return;
     }
 
-    const { data, error: rErr } = await supabaseBrowser
-      .from("restaurants")
-      .select("id,name")
-      .eq("owner_user_id", userId)
-      .order("name", { ascending: true });
-
-    if (rErr) {
-      setError(rErr.message || "Failed to load restaurants");
+    let list = [];
+    try {
+      list = await fetchMyRestaurants();
+    } catch (rErr) {
+      setError(rErr?.message || "Failed to load restaurants");
       setLoading(false);
       return;
     }
 
-    const list = data || [];
     setRestaurants(list);
     ownedRestaurantIdsRef.current = new Set(list.map((x) => x.id));
 
@@ -322,7 +319,7 @@ export default function PartnerOrdersPage() {
                   </div>
 
                   <div className="text-right">
-                    <p className="text-sm font-semibold text-slate-900">{inr(o.total_amount)}</p>
+                    <p className="text-sm font-semibold text-slate-900">{murMoney(o.total_amount)}</p>
                     <p className="text-xs text-slate-500 mt-1">Payment: {o.payment_status}</p>
                     <p className="text-xs mt-1">
                       <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">

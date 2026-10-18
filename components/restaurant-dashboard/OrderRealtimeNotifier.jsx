@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { fetchMyRestaurants } from "@/lib/restaurant-partner/activeRestaurant";
 import { showToast } from "@/components/restaurant-dashboard/useToast";
 
 export default function OrderRealtimeNotifier() {
@@ -54,14 +55,7 @@ export default function OrderRealtimeNotifier() {
         if (userErr) throw userErr;
         if (!userRes?.user?.id || !active) return;
 
-        const userId = userRes.user.id;
-
-        const { data: myRestaurants, error: restErr } = await supabaseBrowser
-          .from("restaurants")
-          .select("id")
-          .eq("owner_user_id", userId);
-
-        if (restErr) throw restErr;
+        const myRestaurants = await fetchMyRestaurants();
         if (!active) return;
 
         restaurantIdsRef.current = new Set((myRestaurants || []).map((r) => String(r.id)));

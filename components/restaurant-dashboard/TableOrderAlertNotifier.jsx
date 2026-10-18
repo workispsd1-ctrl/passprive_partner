@@ -22,9 +22,9 @@ const TABLE_ORDER_FIELDS = [
 function money(n) {
   const num = Number(n);
   if (!Number.isFinite(num)) return "—";
-  return new Intl.NumberFormat("en-IN", {
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "INR",
+    currency: "MUR",
     maximumFractionDigits: 2,
   }).format(num);
 }
@@ -33,7 +33,8 @@ function fmtDateTime(value) {
   if (!value) return "-";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return String(value);
-  return new Intl.DateTimeFormat("en-IN", {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Indian/Mauritius",
     day: "2-digit",
     month: "long",
     year: "numeric",

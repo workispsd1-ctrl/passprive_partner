@@ -51,7 +51,7 @@ function safeMenu(raw) {
 function money(n) {
   const num = Number(n);
   if (!Number.isFinite(num)) return "—";
-  return new Intl.NumberFormat("en-IN", {
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "MUR",
     maximumFractionDigits: 2,

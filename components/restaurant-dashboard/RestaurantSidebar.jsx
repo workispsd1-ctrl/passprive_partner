@@ -21,9 +21,11 @@ import {
   UserRound,
   X,
   Crown,
+  Building2,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchOwnedRestaurantStatus } from "@/lib/restaurantData";
+import { resolveActiveRestaurant, selectRestaurant } from "@/lib/restaurant-partner/activeRestaurant";
 
 const THEME_BG = "#F4E7D1";
 const THEME_ACCENT = "#771FA899";
@@ -31,6 +33,7 @@ const THEME_ACCENT_SOLID = "#771FA8";
 
 const nav = [
   { label: "Dashboard", href: "/restaurant/dashboard", icon: LayoutDashboard },
+  { label: "Branches", href: "/restaurant/branches", icon: Building2, masterOnly: true },
   { label: "Bookings", href: "/restaurant/bookings", icon: CalendarCheck },
     { label: "Staff", href: "/restaurant/staff", icon: UserRound },
   { label: "QR Orders", href: "/restaurant/table-orders", icon: QrCode, key: "table_orders", premium: true },
@@ -150,12 +153,32 @@ export default function RestaurantSidebar({ collapsed = false }) {
     return `restaurant_pickup_orders_last_seen_${restaurantId}`;
   }, [restaurantId]);
 
+  const [branches, setBranches] = useState([]);
+  const [activeBranchId, setActiveBranchId] = useState("");
+  const [isMaster, setIsMaster] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    resolveActiveRestaurant()
+      .then(({ list, active, isMaster: master }) => {
+        if (!mounted) return;
+        setBranches(list);
+        setActiveBranchId(active?.id ? String(active.id) : "");
+        setIsMaster(master);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const filteredNav = useMemo(() => {
     return nav.filter((item) => {
+      if (item.masterOnly) return isMaster;
       if (item.premium) return tablesSubscribed === true;
       return true;
     });
-  }, [tablesSubscribed]);
+  }, [tablesSubscribed, isMaster]);
 
   useEffect(() => {
     let mounted = true;
@@ -445,6 +468,23 @@ export default function RestaurantSidebar({ collapsed = false }) {
         </nav>
 
         <div className={`shrink-0 border-t border-gray-200 ${collapsed ? "p-3" : "p-4"} space-y-3`}>
+          {!collapsed && branches.length > 1 ? (
+            <div className="rounded-2xl border border-gray-200 bg-white p-4">
+              <div className="text-sm font-semibold">Branch</div>
+              <select
+                value={activeBranchId}
+                onChange={(e) => selectRestaurant(e.target.value)}
+                className="mt-2 h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
+              >
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                    {b.area || b.city ? ` • ${b.area || b.city}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <div className={`rounded-2xl border border-gray-200 bg-white ${collapsed ? "p-3" : "p-4"}`}>
             <div
               className={`flex gap-3 ${

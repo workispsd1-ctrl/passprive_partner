@@ -24,7 +24,7 @@ export default function PassManagementPage() {
   const passTypeDropdownRef = useRef(null);
   
   // Country code for mobile numbers
-  const [countryCode, setCountryCode] = useState("+1");
+  const [countryCode, setCountryCode] = useState("+230");
 
   const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
@@ -96,6 +96,7 @@ export default function PassManagementPage() {
 
   // Country codes for mobile numbers
   const COUNTRY_CODES = [
+    { code: "+230", country: "Mauritius" },
     { code: "+1", country: "US/Canada" },
     { code: "+44", country: "UK" },
     { code: "+91", country: "India" },

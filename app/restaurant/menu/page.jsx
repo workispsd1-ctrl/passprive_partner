@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import {
-  activateRestaurantSubscription,
+  requestRestaurantSubscription,
   fetchOwnedRestaurantOffersData,
   replaceRestaurantMediaUrls,
   saveRestaurantMenuData,
@@ -34,11 +34,6 @@ import {
 const BUCKET_NAME = "restaurants";
 const BUCKET_ROOT_FOLDER = "menu";
 const MENU_PREMIUM_PRICE = 3000;
-const DEMO_CARD = {
-  number: "4242 4242 4242 4242",
-  expiry: "12/34",
-  cvv: "123",
-};
 
 const EMPTY_MENU = () => ({
   version: 1,
@@ -56,30 +51,11 @@ function uid() {
 function money(n) {
   const num = Number(n);
   if (!Number.isFinite(num)) return "—";
-  return new Intl.NumberFormat("en-IN", {
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "INR",
+    currency: "MUR",
     maximumFractionDigits: 0,
   }).format(num);
-}
-
-function normalizeCardNumber(v) {
-  return String(v || "").replace(/\D/g, "");
-}
-
-function formatCardNumber(v) {
-  const digits = normalizeCardNumber(v).slice(0, 16);
-  return digits.replace(/(.{4})/g, "$1 ").trim();
-}
-
-function formatExpiry(v) {
-  const digits = String(v || "").replace(/\D/g, "").slice(0, 4);
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-}
-
-function formatCvv(v) {
-  return String(v || "").replace(/\D/g, "").slice(0, 4);
 }
 
 function normalizePriceInput(v) {
@@ -211,10 +187,7 @@ export default function RestaurantMenuPage() {
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [unlockingSubscription, setUnlockingSubscription] = useState(false);
   const [paymentError, setPaymentError] = useState("");
-  const [cardName, setCardName] = useState("");
-  const [cardNumber, setCardNumber] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [cardCvv, setCardCvv] = useState("");
+  const [requestSent, setRequestSent] = useState(false);
 
   const [sectionModalOpen, setSectionModalOpen] = useState(false);
   const [editingSectionId, setEditingSectionId] = useState(null);
@@ -409,58 +382,36 @@ export default function RestaurantMenuPage() {
     if (!restaurantId) return false;
 
     try {
-      await activateRestaurantSubscription(supabaseBrowser, restaurantId, "DISCOUNTS", {
+      await requestRestaurantSubscription(supabaseBrowser, restaurantId, "DISCOUNTS", {
         unlockAll: false,
         timeSlot: false,
         repeatRewards: false,
         discounts: true,
       });
     } catch (error) {
-      setSaveError(error.message || "Failed to activate premium subscription.");
+      setPaymentError(error.message || "Failed to send the upgrade request.");
       return false;
     }
 
-    setIsSubscribed(true);
     return true;
   };
 
   const openPayment = () => {
     setPaymentError("");
-    setCardName("");
-    setCardNumber("");
-    setCardExpiry("");
-    setCardCvv("");
+    setRequestSent(false);
     setPaymentModalOpen(true);
   };
 
   const onPayAndUnlock = async () => {
+    if (requestSent) {
+      setPaymentModalOpen(false);
+      return;
+    }
     setPaymentError("");
-    setSaveError("");
-    setInfoMsg("");
-
-    const isDemoNumber = normalizeCardNumber(cardNumber) === normalizeCardNumber(DEMO_CARD.number);
-    const isDemoExpiry = cardExpiry === DEMO_CARD.expiry;
-    const isDemoCvv = cardCvv === DEMO_CARD.cvv;
-    const hasName = cardName.trim().length > 0;
-
-    if (!hasName) {
-      setPaymentError("Enter cardholder name.");
-      return;
-    }
-    if (!isDemoNumber || !isDemoExpiry || !isDemoCvv) {
-      setPaymentError("Use demo card details exactly as shown.");
-      return;
-    }
-
     setUnlockingSubscription(true);
-    await new Promise((r) => setTimeout(r, 1200));
     const ok = await activateSubscriptionDemo();
     setUnlockingSubscription(false);
-
-    if (ok) {
-      setPaymentModalOpen(false);
-      setInfoMsg("Dish Discounts unlocked. Menu premium is now active.");
-    }
+    if (ok) setRequestSent(true);
   };
 
   const uploadFullMenuImageFile = async (file) => {
@@ -881,7 +832,7 @@ export default function RestaurantMenuPage() {
               className="h-10 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 px-4 text-sm font-semibold inline-flex items-center gap-2 border border-amber-700"
             >
               <CreditCard className="h-4 w-4" />
-              Unlock Rs. {MENU_PREMIUM_PRICE}/mo
+              Unlock MUR {MENU_PREMIUM_PRICE}/mo
             </button>
           )}
         </div>
@@ -1196,7 +1147,7 @@ export default function RestaurantMenuPage() {
       <Dialog
         open={paymentModalOpen}
         onClose={() => !unlockingSubscription && setPaymentModalOpen(false)}
-        title="Premium Payment"
+        title="Request Premium"
         footer={
           <div className="flex justify-end gap-2">
             <button
@@ -1213,64 +1164,23 @@ export default function RestaurantMenuPage() {
               onClick={onPayAndUnlock}
               className="h-10 rounded-xl bg-blue-600 hover:bg-blue-500 text-white px-4 text-sm font-semibold disabled:opacity-50"
             >
-              {unlockingSubscription ? "Processing Payment..." : `Pay Rs. ${MENU_PREMIUM_PRICE} & Unlock`}
+              {requestSent ? "Done" : unlockingSubscription ? "Sending..." : `Request MUR ${MENU_PREMIUM_PRICE} plan`}
             </button>
           </div>
         }
       >
         <div className="space-y-4">
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
-            <div className="text-sm font-semibold text-blue-900">Demo Card Details</div>
-            <div className="text-xs text-blue-700 mt-1">
-              {DEMO_CARD.number} | {DEMO_CARD.expiry} | {DEMO_CARD.cvv}
+          {requestSent ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+              Request sent. The PassPrivé team will confirm payment with you and activate Dish Discounts.
             </div>
-          </div>
+          ) : (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+              No card is charged here. Send a request and the PassPrivé team will confirm payment and activate Dish Discounts for this branch.
+            </div>
+          )}
 
           {paymentError ? <div className="text-sm text-red-600">{paymentError}</div> : null}
-
-          <div>
-            <label className="text-sm font-semibold text-gray-700">Cardholder Name</label>
-            <input
-              value={cardName}
-              onChange={(e) => setCardName(e.target.value)}
-              placeholder="Demo User"
-              className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-300"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-semibold text-gray-700">Card Number</label>
-            <input
-              value={cardNumber}
-              onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
-              placeholder="4242 4242 4242 4242"
-              inputMode="numeric"
-              className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-300"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-semibold text-gray-700">Expiry</label>
-              <input
-                value={cardExpiry}
-                onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
-                placeholder="12/34"
-                inputMode="numeric"
-                className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-300"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-semibold text-gray-700">CVV</label>
-              <input
-                value={cardCvv}
-                onChange={(e) => setCardCvv(formatCvv(e.target.value))}
-                placeholder="123"
-                inputMode="numeric"
-                className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-300"
-              />
-            </div>
-          </div>
         </div>
       </Dialog>
 

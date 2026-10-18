@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { UserPlus, Users, Loader2, Eye, Pencil, Trash2, KeyRound, QrCode } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { getActiveRestaurantId } from "@/lib/restaurant-partner/activeRestaurant";
 import { toast } from "sonner";
 
 const ROLE_OPTIONS = [
@@ -72,7 +73,7 @@ export default function RestaurantStaffPage() {
     }
 
     try {
-      const res = await fetch("/api/restaurant/staff", {
+      const res = await fetch(`/api/restaurant/staff?restaurant_id=${encodeURIComponent((await getActiveRestaurantId()) || "")}`, {
         method: "GET",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -87,7 +88,7 @@ export default function RestaurantStaffPage() {
       setSetupUrl(String(json?.setup_url || ""));
       setRestaurantId(String(json?.restaurant_id || ""));
 
-      const devRes = await fetch("/api/restaurant/staff-devices", {
+      const devRes = await fetch(`/api/restaurant/staff-devices?restaurant_id=${encodeURIComponent((await getActiveRestaurantId()) || "")}`, {
         method: "GET",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -126,7 +127,7 @@ export default function RestaurantStaffPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
+        body: JSON.stringify({ restaurant_id: await getActiveRestaurantId(),
           full_name: fullName,
           phone,
           pin,
@@ -169,7 +170,7 @@ export default function RestaurantStaffPage() {
     const res = await fetch("/api/restaurant/staff", {
       method: "PATCH",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ user_id: editingMember.user_id, full_name: editName, phone: editPhone }),
+      body: JSON.stringify({ restaurant_id: await getActiveRestaurantId(), user_id: editingMember.user_id, full_name: editName, phone: editPhone }),
     });
     const json = await res.json();
     if (!res.ok || !json?.ok) {
@@ -194,7 +195,7 @@ export default function RestaurantStaffPage() {
     const res = await fetch("/api/restaurant/staff", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ action: "reset_pin", user_id: member.user_id, pin: nextPin }),
+      body: JSON.stringify({ restaurant_id: await getActiveRestaurantId(), action: "reset_pin", user_id: member.user_id, pin: nextPin }),
     });
     const json = await res.json();
     if (!res.ok || !json?.ok) {
@@ -214,7 +215,7 @@ export default function RestaurantStaffPage() {
     const res = await fetch("/api/restaurant/staff", {
       method: "DELETE",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ user_id: member.user_id }),
+      body: JSON.stringify({ restaurant_id: await getActiveRestaurantId(), user_id: member.user_id }),
     });
     const json = await res.json();
     if (!res.ok || !json?.ok) {
@@ -236,7 +237,7 @@ export default function RestaurantStaffPage() {
       const res = await fetch("/api/restaurant/staff-devices", {
         method: "DELETE",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ device_id: deviceId }),
+        body: JSON.stringify({ restaurant_id: await getActiveRestaurantId(), device_id: deviceId }),
       });
       const json = await res.json();
       if (!res.ok || !json?.ok) throw new Error(json?.error || "Failed to revoke device.");

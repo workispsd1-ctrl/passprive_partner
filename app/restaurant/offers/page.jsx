@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import {
-  activateRestaurantSubscription,
+  requestRestaurantSubscription,
   fetchOwnedRestaurantOffersData,
   replaceRestaurantOffers,
 } from "@/lib/restaurantData";
@@ -34,12 +34,6 @@ const WEEK_DAYS = [
   { key: "SAT", label: "Sat" },
   { key: "SUN", label: "Sun" },
 ];
-
-const DEMO_CARD = {
-  number: "4242 4242 4242 4242",
-  expiry: "12/34",
-  cvv: "123",
-};
 
 const PREMIUM_PRICING = {
   timeSlotOffers: 2000,
@@ -93,8 +87,8 @@ const PREMIUM_PLANS = [
   },
 ];
 
-function formatInr(value) {
-  return `MUR ${Number(value).toLocaleString("en-IN")}`;
+function formatMur(value) {
+  return `MUR ${Number(value).toLocaleString("en-US")}`;
 }
 
 function uid() {
@@ -118,25 +112,6 @@ function toTimeInputValue(date) {
   const h = String(date.getHours()).padStart(2, "0");
   const m = String(date.getMinutes()).padStart(2, "0");
   return `${h}:${m}`;
-}
-
-/* ----------------------------
-   CARD HELPERS
------------------------------*/
-function normalizeCardNumber(v) {
-  return String(v || "").replace(/\D/g, "");
-}
-function formatCardNumber(v) {
-  const digits = normalizeCardNumber(v).slice(0, 16);
-  return digits.replace(/(.{4})/g, "$1 ").trim();
-}
-function formatExpiry(v) {
-  const digits = String(v || "").replace(/\D/g, "").slice(0, 4);
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-}
-function formatCvv(v) {
-  return String(v || "").replace(/\D/g, "").slice(0, 4);
 }
 
 /* ----------------------------
@@ -482,10 +457,7 @@ export default function OffersPage() {
   const [selectedPlan, setSelectedPlan] = useState(PLAN_KEY.ALL);
   const [paying, setPaying] = useState(false);
   const [paymentError, setPaymentError] = useState("");
-  const [cardName, setCardName] = useState("");
-  const [cardNumber, setCardNumber] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [cardCvv, setCardCvv] = useState("");
+  const [requestSent, setRequestSent] = useState(false);
 
   const [lastError, setLastError] = useState("");
   const [nowTick, setNowTick] = useState(Date.now());
@@ -616,51 +588,32 @@ export default function OffersPage() {
     const subscribedPlan = nextAccess.unlockAll ? PLAN_KEY.ALL : planKey;
 
     try {
-      await activateRestaurantSubscription(supabaseBrowser, restaurantId, subscribedPlan, nextAccess);
+      await requestRestaurantSubscription(supabaseBrowser, restaurantId, subscribedPlan, nextAccess);
     } catch (error) {
-      setPaymentError(error.message || "Failed to activate premium.");
+      setPaymentError(error.message || "Failed to send the upgrade request.");
       return false;
     }
 
-    setPremiumAccess(nextAccess);
     return true;
   }
 
   function openPayment(plan = PLAN_KEY.ALL) {
     setSelectedPlan(plan);
     setPaymentError("");
-    setCardName("");
-    setCardNumber("");
-    setCardExpiry("");
-    setCardCvv("");
+    setRequestSent(false);
     setOpenPaymentModal(true);
   }
 
   async function onPayAndUnlock() {
+    if (requestSent) {
+      setOpenPaymentModal(false);
+      return;
+    }
     setPaymentError("");
-
-    const isDemoNumber = normalizeCardNumber(cardNumber) === normalizeCardNumber(DEMO_CARD.number);
-    const isDemoExpiry = cardExpiry === DEMO_CARD.expiry;
-    const isDemoCvv = cardCvv === DEMO_CARD.cvv;
-
-    if (!cardName.trim()) {
-      setPaymentError("Enter cardholder name.");
-      return;
-    }
-    if (!isDemoNumber || !isDemoExpiry || !isDemoCvv) {
-      setPaymentError("Use demo card details exactly to unlock premium.");
-      return;
-    }
-
     setPaying(true);
-    await new Promise((r) => setTimeout(r, 900));
     const ok = await activatePremiumSubscription(selectedPlan);
     setPaying(false);
-
-    if (ok) {
-      setOpenPaymentModal(false);
-      await loadData();
-    }
+    if (ok) setRequestSent(true);
   }
 
   function ensurePremium(kind) {
@@ -920,7 +873,7 @@ export default function OffersPage() {
               onClick={() => openPayment(planForKind(kind))}
               className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-100 cursor-pointer"
             >
-              Unlock {formatInr(PREMIUM_PLANS.find((p) => p.key === planForKind(kind))?.price || 0)}/mo
+              Unlock {formatMur(PREMIUM_PLANS.find((p) => p.key === planForKind(kind))?.price || 0)}/mo
             </button>
           ) : kind === OFFER_KIND.VISIT ? (
             <button
@@ -1038,9 +991,9 @@ export default function OffersPage() {
           <p className="text-xs text-slate-500">Partner Offer Center</p>
           <p className="text-3xl font-semibold text-slate-900 mt-1">{activeOffers.length} active campaigns</p>
           <p className="text-sm text-slate-600 mt-2">
-            Time Slot Offers ({formatInr(PREMIUM_PRICING.timeSlotOffers)}/month), Repeat Rewards ({formatInr(PREMIUM_PRICING.repeatRewards)}/month), Dish Discounts ({formatInr(PREMIUM_PRICING.discounts)}/month). Unlock all at{" "}
-            <span className="line-through text-slate-400">{formatInr(PREMIUM_PRICING.unlockAllOriginal)}/month</span>{" "}
-            <span className="font-semibold text-emerald-700">{formatInr(PREMIUM_PRICING.unlockAllOffer)}/month</span>{" "}
+            Time Slot Offers ({formatMur(PREMIUM_PRICING.timeSlotOffers)}/month), Repeat Rewards ({formatMur(PREMIUM_PRICING.repeatRewards)}/month), Dish Discounts ({formatMur(PREMIUM_PRICING.discounts)}/month). Unlock all at{" "}
+            <span className="line-through text-slate-400">{formatMur(PREMIUM_PRICING.unlockAllOriginal)}/month</span>{" "}
+            <span className="font-semibold text-emerald-700">{formatMur(PREMIUM_PRICING.unlockAllOffer)}/month</span>{" "}
             (80% off).
           </p>
           <p className="text-xs mt-2">
@@ -1058,8 +1011,8 @@ export default function OffersPage() {
             >
               <p className="text-sm font-semibold text-emerald-800">Unlock All</p>
               <p className="text-xs mt-1">
-                <span className="line-through text-emerald-700/70">{formatInr(PREMIUM_PRICING.unlockAllOriginal)}</span>{" "}
-                <span className="font-bold">{formatInr(PREMIUM_PRICING.unlockAllOffer)}/mo</span>
+                <span className="line-through text-emerald-700/70">{formatMur(PREMIUM_PRICING.unlockAllOriginal)}</span>{" "}
+                <span className="font-bold">{formatMur(PREMIUM_PRICING.unlockAllOffer)}/mo</span>
               </p>
             </button>
 
@@ -1069,7 +1022,7 @@ export default function OffersPage() {
               className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-left hover:bg-slate-50 disabled:opacity-50"
             >
               <p className="text-sm font-semibold text-slate-900">Time Slot Offers</p>
-              <p className="text-xs mt-1 text-slate-600">{formatInr(PREMIUM_PRICING.timeSlotOffers)}/mo</p>
+              <p className="text-xs mt-1 text-slate-600">{formatMur(PREMIUM_PRICING.timeSlotOffers)}/mo</p>
             </button>
 
             <button
@@ -1078,7 +1031,7 @@ export default function OffersPage() {
               className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-left hover:bg-slate-50 disabled:opacity-50"
             >
               <p className="text-sm font-semibold text-slate-900">Repeat Rewards</p>
-              <p className="text-xs mt-1 text-slate-600">{formatInr(PREMIUM_PRICING.repeatRewards)}/mo</p>
+              <p className="text-xs mt-1 text-slate-600">{formatMur(PREMIUM_PRICING.repeatRewards)}/mo</p>
             </button>
 
             <button
@@ -1087,7 +1040,7 @@ export default function OffersPage() {
               className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-left hover:bg-slate-50 disabled:opacity-50"
             >
               <p className="text-sm font-semibold text-slate-900">Dish Discounts</p>
-              <p className="text-xs mt-1 text-slate-600">{formatInr(PREMIUM_PRICING.discounts)}/mo</p>
+              <p className="text-xs mt-1 text-slate-600">{formatMur(PREMIUM_PRICING.discounts)}/mo</p>
             </button>
           </div>
         </div>
@@ -1112,7 +1065,7 @@ export default function OffersPage() {
           <div className="absolute inset-0 bg-black/40" onClick={() => !paying && setOpenPaymentModal(false)} />
           <div className="relative mx-auto w-full max-w-2xl rounded-2xl bg-white border border-slate-200 shadow-xl overflow-hidden">
             <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
-              <p className="text-sm font-semibold text-slate-900">Premium Subscription Checkout</p>
+              <p className="text-sm font-semibold text-slate-900">Request Premium</p>
               <button onClick={() => !paying && setOpenPaymentModal(false)} className="rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100">
                 Close
               </button>
@@ -1133,8 +1086,8 @@ export default function OffersPage() {
                     >
                       <p className="text-xs font-semibold text-slate-900">{p.title}</p>
                       <p className="text-xs mt-1">
-                        {p.originalPrice ? <span className="line-through text-slate-400 mr-2">{formatInr(p.originalPrice)}/mo</span> : null}
-                        <span className="font-semibold text-emerald-700">{formatInr(p.price)}/mo</span>
+                        {p.originalPrice ? <span className="line-through text-slate-400 mr-2">{formatMur(p.originalPrice)}/mo</span> : null}
+                        <span className="font-semibold text-emerald-700">{formatMur(p.price)}/mo</span>
                       </p>
                     </button>
                   ))}
@@ -1151,57 +1104,19 @@ export default function OffersPage() {
                 </ul>
               </div>
 
-              <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700">
-                Demo card: {DEMO_CARD.number} | {DEMO_CARD.expiry} | {DEMO_CARD.cvv}
-              </div>
+              {requestSent ? (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                  Request sent. The PassPrivé team will confirm payment with you and activate the plan.
+                </div>
+              ) : (
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700">
+                  No card is charged here. Send a request and the PassPrivé team will confirm payment and activate the plan for this branch.
+                </div>
+              )}
 
               {paymentError ? (
                 <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-700">{paymentError}</div>
               ) : null}
-
-              <div>
-                <p className="text-xs text-slate-600 mb-2">Cardholder name</p>
-                <input
-                  value={cardName}
-                  onChange={(e) => setCardName(e.target.value)}
-                  placeholder="Demo User"
-                  className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm outline-none border border-slate-200"
-                />
-              </div>
-
-              <div>
-                <p className="text-xs text-slate-600 mb-2">Card number</p>
-                <input
-                  value={cardNumber}
-                  onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
-                  placeholder="4242 4242 4242 4242"
-                  inputMode="numeric"
-                  className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm outline-none border border-slate-200"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-xs text-slate-600 mb-2">Expiry</p>
-                  <input
-                    value={cardExpiry}
-                    onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
-                    placeholder="12/34"
-                    inputMode="numeric"
-                    className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm outline-none border border-slate-200"
-                  />
-                </div>
-                <div>
-                  <p className="text-xs text-slate-600 mb-2">CVV</p>
-                  <input
-                    value={cardCvv}
-                    onChange={(e) => setCardCvv(formatCvv(e.target.value))}
-                    placeholder="123"
-                    inputMode="numeric"
-                    className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm outline-none border border-slate-200"
-                  />
-                </div>
-              </div>
             </div>
 
             <div className="px-6 py-5 border-t border-slate-200 flex justify-end gap-3 bg-white">
@@ -1213,7 +1128,7 @@ export default function OffersPage() {
                 disabled={paying}
                 className="rounded-xl bg-[#DA3224] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
               >
-                {paying ? "Processing..." : `Pay ${formatInr(selectedPlanObj.price)} & Unlock`}
+                {requestSent ? "Done" : paying ? "Sending..." : `Request ${formatMur(selectedPlanObj.price)}/mo plan`}
               </button>
             </div>
           </div>

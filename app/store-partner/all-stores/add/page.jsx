@@ -52,6 +52,11 @@ export default function AddStoreBranchPage() {
     description: "",
     is_active: true,
     is_featured: false,
+    brn: "",
+    registered_name: "",
+    authorised_contact_name: "",
+    authorised_contact_phone: "",
+    authorised_contact_email: "",
   });
 
   const canSubmit = useMemo(() => {
@@ -164,6 +169,8 @@ export default function AddStoreBranchPage() {
         website: form.website?.trim() || null,
         is_active: !!form.is_active,
         is_featured: !!form.is_featured,
+        brn: form.brn.toUpperCase().replace(/\s+/g, "") || null,
+        registered_name: form.registered_name.trim() || null,
       });
 
       if (storeErr) {
@@ -191,12 +198,25 @@ export default function AddStoreBranchPage() {
             website: form.website?.trim() || null,
             is_active: !!form.is_active,
             is_featured: !!form.is_featured,
+            brn: form.brn.toUpperCase().replace(/\s+/g, "") || null,
+            registered_name: form.registered_name.trim() || null,
           });
           if (retry.error) throw retry.error;
         } else {
           throw storeErr;
         }
       }
+
+      const { error: contactErr } = await supabaseBrowser.from("merchant_contacts").upsert(
+        {
+          store_id: storeId,
+          authorised_contact_name: form.authorised_contact_name.trim() || null,
+          authorised_contact_phone: form.authorised_contact_phone.trim() || null,
+          authorised_contact_email: form.authorised_contact_email.trim() || null,
+        },
+        { onConflict: "store_id" }
+      );
+      if (contactErr) throw contactErr;
 
       const { error: memberErr } = await supabaseBrowser.from("store_members").insert([
         { store_id: storeId, user_id: ownerUserId, role: "outletowner" },
@@ -322,6 +342,14 @@ export default function AddStoreBranchPage() {
                 <Field label="Store Contact Email" value={form.email} onChange={set("email")} disabled={loading} placeholder="store@brand.com" />
 
                 <Field label="Website" value={form.website} onChange={set("website")} disabled={loading} placeholder="https://brand.com" />
+
+                <Field label="BRN (Business Registration Number)" value={form.brn} onChange={set("brn")} disabled={loading} placeholder="C07012345" />
+                <Field label="Registered Name" value={form.registered_name} onChange={set("registered_name")} disabled={loading} placeholder="Legal company name, as on bills" />
+
+                <Field label="Authorised Contact Name" value={form.authorised_contact_name} onChange={set("authorised_contact_name")} disabled={loading} placeholder="Full name" />
+                <Field label="Authorised Contact Phone" value={form.authorised_contact_phone} onChange={set("authorised_contact_phone")} disabled={loading} placeholder="+230 5xxxxxxx" />
+
+                <Field label="Authorised Contact Email" value={form.authorised_contact_email} onChange={set("authorised_contact_email")} disabled={loading} placeholder="owner@brand.com" />
               </div>
 
               <div className="mt-5">

@@ -12,9 +12,11 @@ import {
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { getActiveRestaurantId } from "@/lib/restaurant-partner/activeRestaurant";
 
 const TITLE_MAP = {
   "/restaurant/dashboard": "Dashboard",
+  "/restaurant/branches": "Branches",
   "/restaurant/bookings": "Bookings",
   "/restaurant/menu": "Menu",
   "/restaurant/offers": "Offers",
@@ -127,14 +129,9 @@ export default function RestaurantTopbar({ collapsed = false, onToggleSidebar })
 
       if (!userRow || !["restaurantpartner", "restaurant_admin"].includes(String(userRow.role || "").toLowerCase())) return;
 
-      const { data: restaurant } = await supabaseBrowser
-        .from("restaurants")
-        .select("id")
-        .eq("owner_user_id", user.id)
-        .single();
-
-      if (isMounted && restaurant?.id) {
-        setRestaurantId(restaurant.id);
+      const activeId = await getActiveRestaurantId();
+      if (isMounted && activeId) {
+        setRestaurantId(activeId);
       }
     };
 
@@ -577,7 +574,7 @@ export default function RestaurantTopbar({ collapsed = false, onToggleSidebar })
 
                             <div className="text-right">
                               <div className="text-xs font-semibold text-gray-900">
-                                ₹{Number(o.total_amount || 0)}
+                                MUR {Number(o.total_amount || 0).toLocaleString("en-US")}
                               </div>
                               <div className="text-xs text-gray-500">
                                 {o.pickup_code ? `Code: ${o.pickup_code}` : "Pickup"}

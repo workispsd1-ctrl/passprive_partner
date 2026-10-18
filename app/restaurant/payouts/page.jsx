@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { fetchMyRestaurants } from "@/lib/restaurant-partner/activeRestaurant";
 import {
   Wallet,
   Download,
@@ -420,15 +421,7 @@ export default function RestaurantPartnerPayoutsPage() {
         const userId = sess?.session?.user?.id;
         if (!userId) throw new Error("Please sign in to view payouts.");
 
-        const restaurantRes = await supabaseBrowser
-          .from("restaurants")
-          .select("id,name")
-          .eq("owner_user_id", userId)
-          .order("name", { ascending: true });
-
-        if (restaurantRes.error) throw restaurantRes.error;
-
-        const myRestaurants = restaurantRes.data || [];
+        const myRestaurants = await fetchMyRestaurants();
         const restaurantIds = myRestaurants.map((r) => r.id);
 
         if (!cancelled) setRestaurants(myRestaurants);

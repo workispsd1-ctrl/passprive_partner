@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { resolveActiveRestaurant } from "@/lib/restaurant-partner/activeRestaurant";
 import { Bell, Phone, Hash, ArrowLeft } from "lucide-react";
 
 const STATUS = {
@@ -232,31 +233,8 @@ export default function TableOrdersPage() {
       return;
     }
 
-    const ownerRes = await supabaseBrowser
-      .from("restaurants")
-      .select("id,name")
-      .eq("owner_user_id", user.id)
-      .limit(1)
-      .maybeSingle();
-
-    let restaurant = ownerRes?.data || null;
-    if (!restaurant?.id) {
-      const staffRes = await supabaseBrowser
-        .from("restaurant_staff")
-        .select("restaurant_id")
-        .eq("user_id", user.id)
-        .limit(1)
-        .maybeSingle();
-      const staffRid = staffRes?.data?.restaurant_id;
-      if (staffRid) {
-        const staffRestaurantRes = await supabaseBrowser
-          .from("restaurants")
-          .select("id,name")
-          .eq("id", staffRid)
-          .maybeSingle();
-        restaurant = staffRestaurantRes?.data || null;
-      }
-    }
+    const { active } = await resolveActiveRestaurant();
+    const restaurant = active ? { id: active.id, name: active.name } : null;
 
     if (!restaurant?.id) {
       setError("Restaurant not found for this account.");

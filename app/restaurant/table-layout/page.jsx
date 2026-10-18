@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Save, Plus, Trash2, Table2 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { getActiveRestaurantId } from "@/lib/restaurant-partner/activeRestaurant";
 import { toast } from "sonner";
 
 const SHAPES = ["circle", "square", "rectangle"];
@@ -80,23 +81,8 @@ export default function RestaurantTableLayoutPage() {
     } = await supabaseBrowser.auth.getUser();
     if (error || !user) throw new Error("Please sign in again.");
 
-    const ownerRes = await supabaseBrowser
-      .from("restaurants")
-      .select("id")
-      .eq("owner_user_id", user.id)
-      .limit(1)
-      .maybeSingle();
-
-    if (!ownerRes.error && ownerRes.data?.id) return ownerRes.data.id;
-
-    const staffRes = await supabaseBrowser
-      .from("restaurant_staff")
-      .select("restaurant_id")
-      .eq("user_id", user.id)
-      .limit(1)
-      .maybeSingle();
-
-    if (!staffRes.error && staffRes.data?.restaurant_id) return staffRes.data.restaurant_id;
+    const rid = await getActiveRestaurantId();
+    if (rid) return rid;
 
     throw new Error("Restaurant not found for this account.");
   };

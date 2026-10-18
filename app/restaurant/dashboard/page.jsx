@@ -621,7 +621,7 @@ export default function RestaurantDashboardPage() {
                           <td className="px-4 py-2 font-semibold text-slate-800">T{o.table_no || "—"}</td>
                           <td className="px-4 py-2 text-slate-700">{o.customer_name || "Guest"}</td>
                           <td className="px-4 py-2 font-semibold text-slate-900">
-                            {Number(o.total_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                            {Number(o.total_amount || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                           </td>
                           <td className="px-4 py-2">
                             <TableStatusBadge status={st} />
@@ -792,7 +792,7 @@ function OrderCard({ orderNo, customer, total, status, pickupCode }) {
       <div className="mt-1 text-xs text-gray-600">
         {customer || "Customer"} {pickupCode ? `• Code: ${pickupCode}` : ""}
       </div>
-      <div className="mt-1 text-sm font-semibold text-gray-900">₹ {Number(total || 0).toLocaleString("en-IN")}</div>
+      <div className="mt-1 text-sm font-semibold text-gray-900">MUR {Number(total || 0).toLocaleString("en-US")}</div>
     </div>
   );
 }

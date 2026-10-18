@@ -18,16 +18,17 @@ export const displayValidTill = (validDate: string, validTime?: string) => {
     date = convertToValidTillISO(validDate, validTime ?? "");
   }
 
-  const formattedDate = date.toLocaleDateString("en-CA", {
+  const formattedDate = date.toLocaleDateString("en-GB", {
+    timeZone: "Indian/Mauritius",
     month: "long",
     day: "numeric",
     year: "numeric",
   });
 
-  const dayName = date.toLocaleDateString("en-CA", { weekday: "long" });
+  const dayName = date.toLocaleDateString("en-GB", { timeZone: "Indian/Mauritius", weekday: "long" });
   
-  const formattedTime = date.toLocaleTimeString("en-CA", {
-    timeZone: "America/Toronto",
+  const formattedTime = date.toLocaleTimeString("en-GB", {
+    timeZone: "Indian/Mauritius",
     hour: "2-digit",
     minute: "2-digit",
     hour12: true,

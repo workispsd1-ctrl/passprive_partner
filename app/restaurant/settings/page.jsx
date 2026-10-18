@@ -537,7 +537,6 @@ export default function Page() {
     if (!canEditPayment) return false;
     if (!paymentForm.legal_business_name.trim()) return false;
     if (!paymentForm.payout_method) return false;
-    if (paymentForm.payout_method === "UPI" && !paymentForm.payout_upi_id.trim()) return false;
     if (
       paymentForm.payout_method === "BANK_TRANSFER" &&
       (!paymentForm.account_number.trim() || !paymentForm.beneficiary_name.trim())
@@ -788,7 +787,7 @@ export default function Page() {
 
             <div>
               <Label>Phone</Label>
-              <Input value={phone} onChange={setPhone} placeholder="+91…" />
+              <Input value={phone} onChange={setPhone} placeholder="+230…" />
             </div>
 
             <div className="md:col-span-2">
@@ -989,7 +988,6 @@ export default function Page() {
                 className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-60"
               >
                 <option value="BANK_TRANSFER">BANK_TRANSFER</option>
-                <option value="UPI">UPI</option>
                 <option value="MANUAL">MANUAL</option>
               </select>
             </div>
@@ -1025,16 +1023,6 @@ export default function Page() {
             </div>
 
             <div>
-              <Label>IFSC</Label>
-              <Input
-                value={paymentForm.ifsc}
-                onChange={(v) => setPaymentForm((p) => ({ ...p, ifsc: v }))}
-                placeholder="IFSC"
-                disabled={!canEditPayment}
-              />
-            </div>
-
-            <div>
               <Label>IBAN</Label>
               <Input
                 value={paymentForm.iban}
@@ -1055,16 +1043,6 @@ export default function Page() {
             </div>
 
             <div>
-              <Label>Payout UPI ID</Label>
-              <Input
-                value={paymentForm.payout_upi_id}
-                onChange={(v) => setPaymentForm((p) => ({ ...p, payout_upi_id: v }))}
-                placeholder="name@upi"
-                disabled={!canEditPayment}
-              />
-            </div>
-
-            <div>
               <Label>Tax label</Label>
               <select
                 value={paymentForm.tax_id_label}
@@ -1073,7 +1051,6 @@ export default function Page() {
                 className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-60"
               >
                 <option value="VAT">VAT</option>
-                <option value="GST">GST</option>
                 <option value="BRN">BRN</option>
                 <option value="TIN">TIN</option>
                 <option value="OTHER">OTHER</option>

@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { fetchMyRestaurants } from "@/lib/restaurant-partner/activeRestaurant";
 import { Megaphone, Loader2 } from "lucide-react";
 
 function Card({ title, subtitle, children }) {
@@ -76,13 +77,7 @@ export default function RestaurantAdsRequestPage() {
           return;
         }
 
-        const { data, error } = await supabaseBrowser
-          .from("restaurants")
-          .select("id,name,city,is_active")
-          .eq("owner_user_id", userId)
-          .order("name", { ascending: true });
-
-        if (error) throw error;
+        const data = await fetchMyRestaurants();
 
         if (!cancelled) {
           setRestaurants(data || []);

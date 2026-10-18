@@ -321,7 +321,6 @@ export default function StorePartnerSettingsPage() {
     if (!canEditPayment) return false;
     if (!paymentForm.legal_business_name.trim()) return false;
     if (!paymentForm.payout_method) return false;
-    if (paymentForm.payout_method === "UPI" && !paymentForm.payout_upi_id.trim()) return false;
     if (
       paymentForm.payout_method === "BANK_TRANSFER" &&
       (!paymentForm.account_number.trim() || !paymentForm.beneficiary_name.trim())
@@ -493,10 +492,8 @@ export default function StorePartnerSettingsPage() {
         ["Beneficiary Name", paymentForm.beneficiary_name],
         ["Bank Name", paymentForm.bank_name],
         ["Account Number", paymentForm.account_number],
-        ["IFSC", paymentForm.ifsc],
         ["IBAN", paymentForm.iban],
         ["SWIFT", paymentForm.swift],
-        ["Payout UPI ID", paymentForm.payout_upi_id],
         ["Tax Number", paymentForm.tax_id_value],
         ["Billing Email", paymentForm.billing_email],
         ["Billing Phone", paymentForm.billing_phone],
@@ -883,7 +880,6 @@ export default function StorePartnerSettingsPage() {
                       className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
                     >
                       <option value="BANK_TRANSFER">BANK_TRANSFER</option>
-                      <option value="UPI">UPI</option>
                       <option value="MANUAL">MANUAL</option>
                     </select>
                   </Field>
@@ -912,14 +908,6 @@ export default function StorePartnerSettingsPage() {
                     />
                   </Field>
 
-                  <Field label="IFSC">
-                    <input
-                      value={paymentForm.ifsc}
-                      onChange={(e) => setPaymentForm((p) => ({ ...p, ifsc: e.target.value }))}
-                      className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                    />
-                  </Field>
-
                   <Field label="IBAN">
                     <input
                       value={paymentForm.iban}
@@ -932,14 +920,6 @@ export default function StorePartnerSettingsPage() {
                     <input
                       value={paymentForm.swift}
                       onChange={(e) => setPaymentForm((p) => ({ ...p, swift: e.target.value }))}
-                      className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
-                    />
-                  </Field>
-
-                  <Field label="Payout UPI ID">
-                    <input
-                      value={paymentForm.payout_upi_id}
-                      onChange={(e) => setPaymentForm((p) => ({ ...p, payout_upi_id: e.target.value }))}
                       className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
                     />
                   </Field>

@@ -11,6 +11,7 @@ import {
   Eye,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { getActiveRestaurantId } from "@/lib/restaurant-partner/activeRestaurant";
 
 const PAGE_SIZE = 10;
 const BOOKING_SELECT_FIELDS = `
@@ -68,7 +69,8 @@ function formatBookingDate(value) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat("en-IN", {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Indian/Mauritius",
     day: "2-digit",
     month: "long",
     year: "numeric",
@@ -86,7 +88,8 @@ function formatBookingDateTime(value) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat("en-IN", {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Indian/Mauritius",
     day: "2-digit",
     month: "long",
     year: "numeric",
@@ -141,14 +144,9 @@ export default function RestaurantBookingsPage() {
 
     if (!["restaurantpartner", "restaurant_admin"].includes(String(userRow?.role || "").toLowerCase())) return;
 
-    const { data: restaurant } = await supabaseBrowser
-      .from("restaurants")
-      .select("id, is_active")
-      .eq("owner_user_id", user.id)
-      .single();
-
-    if (restaurant?.id) {
-      setRestaurantId(restaurant.id);
+    const activeId = await getActiveRestaurantId();
+    if (activeId) {
+      setRestaurantId(activeId);
     }
   };
 

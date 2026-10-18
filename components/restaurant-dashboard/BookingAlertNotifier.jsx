@@ -28,7 +28,8 @@ function formatDate(value) {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat("en-IN", {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Indian/Mauritius",
     day: "2-digit",
     month: "long",
     year: "numeric",
@@ -44,7 +45,8 @@ function formatDateTime(value) {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat("en-IN", {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Indian/Mauritius",
     day: "2-digit",
     month: "long",
     year: "numeric",

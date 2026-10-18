@@ -211,7 +211,7 @@ export default function Page() {
   const [contactPerson, setContactPerson] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [countryCode, setCountryCode] = useState("+91");
+  const [countryCode, setCountryCode] = useState("+230");
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
@@ -486,6 +486,7 @@ export default function Page() {
                   className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-200 max-h-60 overflow-y-auto"
                   style={{ minWidth: '160px' }}
                 >
+                  <option value="+230">🇲🇺 +230 Mauritius</option>
                   <option value="+1">🇺🇸 +1 USA</option>
                   <option value="+44">🇬🇧 +44 UK</option>
                   <option value="+91">🇮🇳 +91 India</option>
@@ -514,7 +515,6 @@ export default function Page() {
                   <option value="+94">🇱🇰 +94 Sri Lanka</option>
                   <option value="+880">🇧🇩 +880 Bangladesh</option>
                   <option value="+977">🇳🇵 +977 Nepal</option>
-                  <option value="+230">🇲🇺 +230 Mauritius</option>
                   <option value="+254">🇰🇪 +254 Kenya</option>
                   <option value="+234">🇳🇬 +234 Nigeria</option>
                   <option value="+20">🇪🇬 +20 Egypt</option>
