@@ -176,11 +176,11 @@ export default function RestaurantSidebar({ collapsed = false }) {
 
   const filteredNav = useMemo(() => {
     return nav.filter((item) => {
-      if (item.masterOnly) return isMaster;
+      if (item.masterOnly) return isMaster && branches.length > 1;
       if (item.premium) return tablesSubscribed === true;
       return true;
     });
-  }, [tablesSubscribed, isMaster]);
+  }, [tablesSubscribed, isMaster, branches.length]);
 
   useEffect(() => {
     let mounted = true;

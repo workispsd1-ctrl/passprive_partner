@@ -35,7 +35,10 @@ const BOOKING_SELECT_FIELDS = `
   read,
   customer_booking_number,
   created_at,
-  updated_at
+  updated_at,
+  proposed_date,
+  proposed_time,
+  proposed_at
 `;
 
 function normalizeBookingStatus(status) {
@@ -49,6 +52,7 @@ function getBookingStatusLabel(status) {
 
   const labels = {
     pending: "Pending",
+    proposed: "New time proposed",
     payment_successful: "Paid",
     payment_successfull: "Paid",
     confirmed: "Confirmed",
@@ -58,6 +62,20 @@ function getBookingStatusLabel(status) {
   };
 
   return labels[normalized] || (status ? String(status) : "—");
+}
+
+function displayStatus(booking) {
+  const normalized = normalizeBookingStatus(booking?.status);
+  return normalized === "pending" && booking?.proposed_at ? "proposed" : normalized;
+}
+
+function proposedLabel(booking) {
+  if (displayStatus(booking) !== "proposed" || !booking?.proposed_date) return null;
+  const [hours, minutes] = String(booking.proposed_time || "").slice(0, 5).split(":").map(Number);
+  const time = Number.isFinite(hours)
+    ? `${hours % 12 || 12}:${String(minutes || 0).padStart(2, "0")} ${hours >= 12 ? "PM" : "AM"}`
+    : formatBookingTime(booking.proposed_time);
+  return `${formatBookingDate(booking.proposed_date)}, ${time}`;
 }
 
 function needsRestaurantDecision(status) {
@@ -345,6 +363,11 @@ export default function RestaurantBookingsPage() {
                     <div className="text-xs text-gray-500">
                       {String(b.booking_time).slice(0, 5)} • {b.duration_minutes} mins • Received: {formatBookingDateTime(b.created_at)}
                     </div>
+                    {displayStatus(b) === "proposed" && (
+                      <div className="mt-1 text-xs font-semibold text-[#B83400]">
+                        Proposed: {proposedLabel(b)} • waiting for guest
+                      </div>
+                    )}
                   </td>
 
                   <td className="px-4 py-3">
@@ -366,7 +389,7 @@ export default function RestaurantBookingsPage() {
                   </td>
 
                   <td className="px-4 py-3">
-                    <StatusPill status={b.status} />
+                    <StatusPill status={displayStatus(b)} />
                   </td>
 
                   <td className="px-4 py-3 text-right">
@@ -437,8 +460,11 @@ export default function RestaurantBookingsPage() {
               <DetailRow label="Booking code" value={activeBooking.booking_code} />
               <DetailRow
                 label="Status"
-                value={getBookingStatusLabel(activeBooking.status)}
+                value={getBookingStatusLabel(displayStatus(activeBooking))}
               />
+              {proposedLabel(activeBooking) && (
+                <DetailRow label="Proposed new time" value={proposedLabel(activeBooking)} />
+              )}
               <DetailRow label="Source" value={activeBooking.source} />
               <DetailRow label="Guest name" value={activeBooking.customer_name} />
               <DetailRow label="Phone" value={activeBooking.customer_phone} />
@@ -516,6 +542,7 @@ function StatusPill({ status }) {
 
   const map = {
     pending: ["Pending", "#92400e", "rgba(245,158,11,.15)"],
+    proposed: ["New time proposed", "#B83400", "rgba(255,72,0,.12)"],
     payment_successful: ["Paid", "#92400e", "rgba(245,158,11,.15)"],
     payment_successfull: ["Paid", "#92400e", "rgba(245,158,11,.15)"],
     confirmed: ["Confirmed", "#166534", "rgba(34,197,94,.15)"],

@@ -50,14 +50,23 @@ export async function GET(request) {
     const ids = ctx.owned.map((r) => r.id);
     const { data: staff, error } = await ctx.admin
       .from("restaurant_staff")
-      .select("restaurant_id, user_id, users:user_id(full_name, email)")
+      .select("restaurant_id, user_id")
       .in("restaurant_id", ids)
       .eq("role", "restaurant_admin");
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
 
+    // restaurant_staff.user_id references auth.users, so public.users can't be embedded; look them up separately.
+    const userIds = [...new Set((staff || []).map((row) => row.user_id))];
+    const usersById = new Map();
+    if (userIds.length) {
+      const { data: users, error: usersErr } = await ctx.admin.from("users").select("id, full_name, email").in("id", userIds);
+      if (usersErr) return NextResponse.json({ ok: false, error: usersErr.message }, { status: 400 });
+      (users || []).forEach((u) => usersById.set(u.id, u));
+    }
+
     const adminsByRestaurant = new Map();
     (staff || []).forEach((row) => {
-      const user = Array.isArray(row.users) ? row.users[0] : row.users;
+      const user = usersById.get(row.user_id);
       const list = adminsByRestaurant.get(row.restaurant_id) || [];
       list.push({ user_id: row.user_id, full_name: user?.full_name || null, email: user?.email || null });
       adminsByRestaurant.set(row.restaurant_id, list);
