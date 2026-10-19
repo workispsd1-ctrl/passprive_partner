@@ -23,7 +23,9 @@ import {
   X,
   Crown,
   Building2,
+  Lock,
 } from "lucide-react";
+import { fetchRestaurantPlan, isNavHidden, isRouteLocked } from "@/lib/restaurant-partner/plan";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchOwnedRestaurantStatus } from "@/lib/restaurantData";
 import { resolveActiveRestaurant, selectRestaurant } from "@/lib/restaurant-partner/activeRestaurant";
@@ -158,6 +160,17 @@ export default function RestaurantSidebar({ collapsed = false }) {
   const [branches, setBranches] = useState([]);
   const [activeBranchId, setActiveBranchId] = useState("");
   const [isMaster, setIsMaster] = useState(false);
+  const [plan, setPlan] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    fetchRestaurantPlan()
+      .then((info) => mounted && setPlan(info.plan))
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -175,12 +188,16 @@ export default function RestaurantSidebar({ collapsed = false }) {
   }, []);
 
   const filteredNav = useMemo(() => {
-    return nav.filter((item) => {
-      if (item.masterOnly) return isMaster && branches.length > 1;
-      if (item.premium) return tablesSubscribed === true;
-      return true;
-    });
-  }, [tablesSubscribed, isMaster, branches.length]);
+    return nav
+      .filter((item) => {
+        if (isNavHidden(plan, item.href)) return false;
+        if (item.masterOnly) return isMaster && branches.length > 1;
+        // Locked plans still see premium pages (read-only) so they know what they're missing.
+        if (item.premium) return tablesSubscribed === true || isRouteLocked(plan, item.href);
+        return true;
+      })
+      .map((item) => ({ ...item, locked: isRouteLocked(plan, item.href) }));
+  }, [tablesSubscribed, isMaster, branches.length, plan]);
 
   useEffect(() => {
     let mounted = true;
@@ -434,7 +451,9 @@ export default function RestaurantSidebar({ collapsed = false }) {
                   {!collapsed ? (
                     <>
                       <span className="truncate">{item.label}</span>
-                      {item.premium ? (
+                      {item.locked ? (
+                        <Lock className="h-3.5 w-3.5 shrink-0" style={{ color: active ? "#FFFFFF" : "#9CA3AF" }} aria-label="Locked" />
+                      ) : item.premium ? (
                         <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-1.5 py-0.5 text-[9px] font-semibold text-green-700">
                           <Crown className="h-2.5 w-2.5" />
                           Premium
@@ -518,6 +537,7 @@ export default function RestaurantSidebar({ collapsed = false }) {
             {!collapsed && statusSaving ? <div className="text-xs text-amber-600 mt-2">Saving status...</div> : null}
           </div>
 
+          {isNavHidden(plan, "/restaurant/offers") ? null : (
           <Link href="/restaurant/offers" className="block">
             <div
               className={`rounded-2xl border ${collapsed ? "p-3" : "p-4"}`}
@@ -544,6 +564,7 @@ export default function RestaurantSidebar({ collapsed = false }) {
               )}
             </div>
           </Link>
+          )}
         </div>
       </aside>
 

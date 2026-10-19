@@ -6,10 +6,36 @@ import RestaurantSidebar from "./RestaurantSidebar";
 import RestaurantTopbar from "./RestaurantTopbar";
 import BookingAlertNotifier from "./BookingAlertNotifier";
 import TableOrderAlertNotifier from "./TableOrderAlertNotifier";
+import LockedPage from "./LockedPage";
+import { fetchRestaurantPlan, isRouteLocked } from "@/lib/restaurant-partner/plan";
 
 export default function RestaurantShell({ children }) {
   const pathname = usePathname();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [planInfo, setPlanInfo] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    fetchRestaurantPlan()
+      .then((info) => mounted && setPlanInfo(info))
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const locked = isRouteLocked(planInfo?.plan, pathname);
+  const content = locked ? (
+    <LockedPage
+      plan={planInfo.plan}
+      restaurantId={planInfo.restaurantId}
+      showDeals={planInfo.plan === "deals" && pathname === "/restaurant/dashboard"}
+    >
+      {children}
+    </LockedPage>
+  ) : (
+    children
+  );
   const sidebarPrefLoadedRef = useRef(false);
   const isRoleStandalone =
     pathname?.startsWith("/restaurant/kitchen") || pathname?.startsWith("/restaurant/bearer");
@@ -52,7 +78,7 @@ export default function RestaurantShell({ children }) {
             collapsed={sidebarCollapsed}
             onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
           />
-          <main className="px-4 sm:px-6 lg:px-8 py-6">{children}</main>
+          <main className="px-4 sm:px-6 lg:px-8 py-6">{content}</main>
         </div>
       </div>
     </div>

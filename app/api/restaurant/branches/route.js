@@ -123,6 +123,7 @@ export async function POST(request) {
         cost_for_two: brand.cost_for_two || null,
         merchant_plan: "free",
         service_level: "discoverable",
+        deals_enabled: false,
       })
       .select("id, name, area, city, is_active")
       .single();
