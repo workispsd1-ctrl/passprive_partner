@@ -21,7 +21,6 @@ import {
   Table2,
   UserRound,
   X,
-  Crown,
   Building2,
   Lock,
 } from "lucide-react";
@@ -40,8 +39,8 @@ const nav = [
   { label: "Bookings", href: "/restaurant/bookings", icon: CalendarCheck },
     { label: "Staff", href: "/restaurant/staff", icon: UserRound },
   { label: "POS Terminals", href: "/restaurant/pos", icon: MonitorSmartphone },
-  { label: "QR Orders", href: "/restaurant/table-orders", icon: QrCode, key: "table_orders", premium: true },
-  { label: "Table Layout", href: "/restaurant/table-layout", icon: Table2, premium: true },
+  { label: "QR Orders", href: "/restaurant/table-orders", icon: QrCode, key: "table_orders" },
+  { label: "Table Layout", href: "/restaurant/table-layout", icon: Table2 },
 
   //{ label: "Pickup Orders", href: "/restaurant/orders", icon: Soup, key: "pickup_orders", premium: true },
   { label: "Menu", href: "/restaurant/menu", icon: UtensilsCrossed },
@@ -136,7 +135,6 @@ export default function RestaurantSidebar({ collapsed = false }) {
   const [restaurantName, setRestaurantName] = useState("Restaurant");
   const [restaurantLogo, setRestaurantLogo] = useState("");
   const [isActive, setIsActive] = useState(true);
-  const [tablesSubscribed, setTablesSubscribed] = useState(false);
 
   const [statusLoading, setStatusLoading] = useState(true);
   const [statusSaving, setStatusSaving] = useState(false);
@@ -192,12 +190,10 @@ export default function RestaurantSidebar({ collapsed = false }) {
       .filter((item) => {
         if (isNavHidden(plan, item.href)) return false;
         if (item.masterOnly) return isMaster && branches.length > 1;
-        // Locked plans still see premium pages (read-only) so they know what they're missing.
-        if (item.premium) return tablesSubscribed === true || isRouteLocked(plan, item.href);
         return true;
       })
       .map((item) => ({ ...item, locked: isRouteLocked(plan, item.href) }));
-  }, [tablesSubscribed, isMaster, branches.length, plan]);
+  }, [isMaster, branches.length, plan]);
 
   useEffect(() => {
     let mounted = true;
@@ -222,7 +218,6 @@ export default function RestaurantSidebar({ collapsed = false }) {
         setRestaurantName(data.restaurantName || "Restaurant");
         setRestaurantLogo(data.restaurantLogo || "");
         setIsActive(Boolean(data.isActive));
-        setTablesSubscribed(Boolean(data.hasSubscription));
       } catch {
         if (!mounted) return;
       }
@@ -453,11 +448,6 @@ export default function RestaurantSidebar({ collapsed = false }) {
                       <span className="truncate">{item.label}</span>
                       {item.locked ? (
                         <Lock className="h-3.5 w-3.5 shrink-0" style={{ color: active ? "#FFFFFF" : "#9CA3AF" }} aria-label="Locked" />
-                      ) : item.premium ? (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-1.5 py-0.5 text-[9px] font-semibold text-green-700">
-                          <Crown className="h-2.5 w-2.5" />
-                          Premium
-                        </span>
                       ) : null}
                     </>
                   ) : null}

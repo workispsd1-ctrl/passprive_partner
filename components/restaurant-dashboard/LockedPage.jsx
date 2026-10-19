@@ -5,6 +5,12 @@ import Link from "next/link";
 import { Lock, Tag } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
+const PLAN_LABELS = {
+  discoverable: "Discoverable only",
+  deals: "Discoverable + Deals",
+  booking: "Discoverable + Book a table",
+};
+
 // Shows a page as a read-only preview: visible, but nothing inside can be clicked, typed or focused.
 export default function LockedPage({ plan, restaurantId, showDeals, children }) {
   return (
@@ -17,8 +23,8 @@ export default function LockedPage({ plan, restaurantId, showDeals, children }) 
           <div>
             <div className="text-sm font-semibold text-gray-900">This feature is locked on your plan</div>
             <div className="text-xs text-gray-600">
-              You&apos;re on {plan === "deals" ? "Discoverable + Deals" : "Discoverable only"}. This is a preview of what
-              you get with bookings and payments. Contact Pass Privé to upgrade.
+              You&apos;re on {PLAN_LABELS[plan] || "a limited plan"}. This is a preview of what you get when you
+              upgrade. Contact Pass Privé to unlock it.
             </div>
           </div>
         </div>

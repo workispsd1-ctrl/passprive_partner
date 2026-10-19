@@ -19,13 +19,10 @@ import {
   Copy,
   Download,
   ExternalLink,
-  Lock,
-  LockOpen,
-  CreditCard,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { fetchRestaurantPlan, hasMenuCatalogue } from "@/lib/restaurant-partner/plan";
 import {
-  requestRestaurantSubscription,
   fetchOwnedRestaurantOffersData,
   replaceRestaurantMediaUrls,
   saveRestaurantMenuData,
@@ -33,7 +30,6 @@ import {
 
 const BUCKET_NAME = "restaurants";
 const BUCKET_ROOT_FOLDER = "menu";
-const MENU_PREMIUM_PRICE = 3000;
 
 const EMPTY_MENU = () => ({
   version: 1,
@@ -184,10 +180,6 @@ export default function RestaurantMenuPage() {
   const [tableLayouts, setTableLayouts] = useState([]);
   const [selectedQrTable, setSelectedQrTable] = useState("");
 
-  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [unlockingSubscription, setUnlockingSubscription] = useState(false);
-  const [paymentError, setPaymentError] = useState("");
-  const [requestSent, setRequestSent] = useState(false);
 
   const [sectionModalOpen, setSectionModalOpen] = useState(false);
   const [editingSectionId, setEditingSectionId] = useState(null);
@@ -279,9 +271,8 @@ export default function RestaurantMenuPage() {
         return;
       }
 
-      const menuUnlocked =
-        restaurant?.premiumAccess?.unlockAll === true ||
-        restaurant?.premiumAccess?.discounts === true;
+      const { plan } = await fetchRestaurantPlan().catch(() => ({ plan: null }));
+      const menuUnlocked = hasMenuCatalogue(plan);
 
       setRestaurantId(restaurant.restaurantId);
       setIsSubscribed(Boolean(menuUnlocked));
@@ -376,42 +367,6 @@ export default function RestaurantMenuPage() {
     }
 
     return;
-  };
-
-  const activateSubscriptionDemo = async () => {
-    if (!restaurantId) return false;
-
-    try {
-      await requestRestaurantSubscription(supabaseBrowser, restaurantId, "DISCOUNTS", {
-        unlockAll: false,
-        timeSlot: false,
-        repeatRewards: false,
-        discounts: true,
-      });
-    } catch (error) {
-      setPaymentError(error.message || "Failed to send the upgrade request.");
-      return false;
-    }
-
-    return true;
-  };
-
-  const openPayment = () => {
-    setPaymentError("");
-    setRequestSent(false);
-    setPaymentModalOpen(true);
-  };
-
-  const onPayAndUnlock = async () => {
-    if (requestSent) {
-      setPaymentModalOpen(false);
-      return;
-    }
-    setPaymentError("");
-    setUnlockingSubscription(true);
-    const ok = await activateSubscriptionDemo();
-    setUnlockingSubscription(false);
-    if (ok) setRequestSent(true);
   };
 
   const uploadFullMenuImageFile = async (file) => {
@@ -806,38 +761,7 @@ export default function RestaurantMenuPage() {
         )}
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="inline-flex items-center gap-2 text-gray-900 font-semibold">
-              {isSubscribed ? <LockOpen className="h-4 w-4 text-emerald-600" /> : <Lock className="h-4 w-4" />}
-              {isSubscribed ? "Premium Table Catalogue Unlocked" : "Premium Table Catalogue Locked"}
-            </div>
-            <div className="mt-2 text-sm text-gray-600">
-              {isSubscribed
-                ? "Premium is active. QR, sections, and items are enabled."
-                : "Unlock premium to use QR with menu images."}
-            </div>
-          </div>
-
-          {isSubscribed ? (
-            <div className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 h-10 text-sm font-semibold text-emerald-700">
-              <LockOpen className="h-4 w-4" />
-              Premium Unlocked
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={openPayment}
-              className="h-10 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 px-4 text-sm font-semibold inline-flex items-center gap-2 border border-amber-700"
-            >
-              <CreditCard className="h-4 w-4" />
-              Unlock MUR {MENU_PREMIUM_PRICE}/mo
-            </button>
-          )}
-        </div>
-      </div>
-
+      {isSubscribed ? (
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className="xl:col-span-2 rounded-2xl border border-gray-200 bg-white p-4">
           <div className="text-2xl font-bold text-gray-900">Menu</div>
@@ -933,17 +857,9 @@ export default function RestaurantMenuPage() {
         </div>
       </div>
 
-      {!isSubscribed ? (
-        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
-          <div className="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">
-            <Lock className="h-4 w-4" />
-            Catalogue Hidden (Dish Discounts Premium Required)
-          </div>
-          <div className="mt-2 text-xs text-gray-500">
-            Premium controls QR/menu-image access and catalogue editing.
-          </div>
-        </div>
-      ) : (
+      ) : null}
+
+      {!isSubscribed ? null : (
         <div className="grid grid-cols-12 gap-4">
           <div className="col-span-12 lg:col-span-4">
             <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
@@ -1143,46 +1059,6 @@ export default function RestaurantMenuPage() {
           </div>
         </div>
       )}
-
-      <Dialog
-        open={paymentModalOpen}
-        onClose={() => !unlockingSubscription && setPaymentModalOpen(false)}
-        title="Request Premium"
-        footer={
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              disabled={unlockingSubscription}
-              onClick={() => setPaymentModalOpen(false)}
-              className="h-10 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 px-4 text-sm font-semibold disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={unlockingSubscription}
-              onClick={onPayAndUnlock}
-              className="h-10 rounded-xl bg-blue-600 hover:bg-blue-500 text-white px-4 text-sm font-semibold disabled:opacity-50"
-            >
-              {requestSent ? "Done" : unlockingSubscription ? "Sending..." : `Request MUR ${MENU_PREMIUM_PRICE} plan`}
-            </button>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          {requestSent ? (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-              Request sent. The PassPrivé team will confirm payment with you and activate Dish Discounts.
-            </div>
-          ) : (
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
-              No card is charged here. Send a request and the PassPrivé team will confirm payment and activate Dish Discounts for this branch.
-            </div>
-          )}
-
-          {paymentError ? <div className="text-sm text-red-600">{paymentError}</div> : null}
-        </div>
-      </Dialog>
 
       <Dialog
         open={sectionModalOpen}
