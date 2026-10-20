@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { NOT_IN_PLAN, restaurantHasPlan } from "@/lib/server/plan";
 
 function serverClient() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
@@ -48,6 +49,7 @@ async function resolveStaff(token) {
     restaurantId = ownerRow?.id || null;
   }
   if (!restaurantId) return { error: "No restaurant found for this account.", status: 403 };
+  if (!(await restaurantHasPlan(admin, restaurantId))) return { error: NOT_IN_PLAN, status: 403 };
 
   return {
     userId,

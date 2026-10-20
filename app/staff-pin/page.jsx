@@ -1,137 +1,140 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
-const DEVICE_KEY = "staff_device_id";
+// The pairing token the server gave this device. Only its hash is stored on the server.
+const TOKEN_KEY = "passprive_device_token";
+const NAME_KEY = "passprive_device_merchant";
 
-function getDeviceId() {
-  const existing = localStorage.getItem(DEVICE_KEY);
-  if (existing) return existing;
-  const created = `dev_${crypto.randomUUID()}`;
-  localStorage.setItem(DEVICE_KEY, created);
-  return created;
+const MESSAGES = {
+  invalid_code: "That code is wrong or has expired. Ask the owner for a new one.",
+  device_not_paired: "This device is no longer linked. Enter a new pairing code.",
+  wrong_pin: "Wrong PIN.",
+  not_in_plan: "Staff logins aren't included in this restaurant's service.",
+};
+
+function readStored(key) {
+  try {
+    return localStorage.getItem(key) || "";
+  } catch {
+    return "";
+  }
+}
+
+function writeStored(key, value) {
+  try {
+    if (value) localStorage.setItem(key, value);
+    else localStorage.removeItem(key);
+  } catch {}
+}
+
+function messageFor(json) {
+  if (json?.error === "locked" && json?.locked_until) {
+    return `Too many wrong PINs. Try again after ${new Date(json.locked_until).toLocaleTimeString()}.`;
+  }
+  return MESSAGES[json?.error] || "Something went wrong. Please try again.";
+}
+
+async function postJson(url, body) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => null);
+  return json && typeof json === "object" ? json : { ok: false };
 }
 
 export default function StaffPinPage() {
   const router = useRouter();
-  const params = useSearchParams();
-  const [deviceId, setDeviceId] = useState("");
-  const [restaurantId, setRestaurantId] = useState("");
+  const [ready, setReady] = useState(false);
+  const [deviceToken, setDeviceToken] = useState("");
+  const [merchantName, setMerchantName] = useState("");
+  const [code, setCode] = useState("");
   const [pin, setPin] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [pairing, setPairing] = useState(true);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const queryRestaurantId = params.get("restaurant_id") || "";
 
   useEffect(() => {
-    let mounted = true;
+    setDeviceToken(readStored(TOKEN_KEY));
+    setMerchantName(readStored(NAME_KEY));
+    setReady(true);
+  }, []);
 
-    async function initPairing() {
-      try {
-        setPairing(true);
-        const devId = getDeviceId();
-        if (!mounted) return;
-        setDeviceId(devId);
+  function forgetDevice() {
+    writeStored(TOKEN_KEY, "");
+    writeStored(NAME_KEY, "");
+    setDeviceToken("");
+    setMerchantName("");
+    setPin("");
+  }
 
-        if (queryRestaurantId) {
-          const pairRes = await fetch("/api/staff/device-pair", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "pair", restaurant_id: queryRestaurantId, device_id: devId }),
-          });
-          const pairJson = await pairRes.json();
-          if (!pairRes.ok || !pairJson?.ok) {
-            throw new Error(pairJson?.error || "Failed to pair device.");
-          }
-          if (mounted) setRestaurantId(String(pairJson?.restaurant_id || queryRestaurantId));
-          return;
-        }
-
-        const res = await fetch("/api/staff/device-pair", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "resolve", device_id: devId }),
-        });
-        const json = await res.json();
-        if (!res.ok || !json?.ok) {
-          throw new Error(json?.error || "Unable to resolve paired restaurant.");
-        }
-        if (mounted) setRestaurantId(String(json?.restaurant_id || ""));
-      } catch (err) {
-        if (mounted) setError(err?.message || "Unable to initialize pairing.");
-      } finally {
-        if (mounted) setPairing(false);
-      }
-    }
-
-    initPairing();
-
-    return () => {
-      mounted = false;
-    };
-  }, [queryRestaurantId]);
-
-  const isPaired = useMemo(() => Boolean(restaurantId), [restaurantId]);
-
-  const onClearPair = async () => {
-    setError("");
-    try {
-      if (deviceId) {
-        await fetch("/api/staff/device-pair", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "unpair", device_id: deviceId }),
-        });
-      }
-    } finally {
-      setRestaurantId("");
-    }
-  };
-
-  const onLogin = async (e) => {
+  async function onPair(e) {
     e.preventDefault();
     setError("");
-    if (!restaurantId) {
-      setError("Scan the restaurant QR first.");
-      return;
-    }
-
-    if (!/^\d{4,6}$/.test(pin)) {
-      setError("Enter a valid 4-6 digit PIN.");
-      return;
-    }
-
-    setLoading(true);
-
+    setBusy(true);
     try {
-      const checkRes = await fetch("/api/staff/pin-login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ restaurant_id: restaurantId, pin, device_id: deviceId }),
+      const json = await postJson("/api/pos/pair", {
+        code: code.trim(),
+        device_model: navigator.userAgent.slice(0, 80),
+        app_version: "staff-web",
       });
-
-      const checkJson = await checkRes.json();
-      if (!checkRes.ok || !checkJson?.ok || !checkJson?.email) {
-        throw new Error(checkJson?.error || "Invalid PIN.");
+      if (!json.ok || !json.device_token) {
+        setError(messageFor(json));
+        return;
       }
-
-      const { data, error: signErr } = await supabaseBrowser.auth.signInWithPassword({
-        email: checkJson.email,
-        password: pin,
-      });
-
-      if (signErr || !data?.session) {
-        throw new Error(signErr?.message || "Unable to sign in.");
-      }
-
-      router.replace("/callback");
-    } catch (err) {
-      setError(err?.message || "Login failed.");
+      writeStored(TOKEN_KEY, json.device_token);
+      writeStored(NAME_KEY, json.merchant_name || "");
+      setDeviceToken(json.device_token);
+      setMerchantName(json.merchant_name || "");
+      setCode("");
+    } catch {
+      setError("Something went wrong. Please try again.");
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
+  }
+
+  async function onLogin(e) {
+    e.preventDefault();
+    setError("");
+    if (!/^\d{4,6}$/.test(pin)) {
+      setError("Enter your 4-6 digit PIN.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const json = await postJson("/api/staff/pin-login", { device_token: deviceToken, pin });
+      if (!json.ok || !json.access_token) {
+        if (json.error === "device_not_paired") forgetDevice();
+        setPin("");
+        setError(messageFor(json));
+        return;
+      }
+      const { error: sessionErr } = await supabaseBrowser.auth.setSession({
+        access_token: json.access_token,
+        refresh_token: json.refresh_token,
+      });
+      if (sessionErr) {
+        setError("Something went wrong. Please try again.");
+        return;
+      }
+      router.replace("/callback");
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const paired = Boolean(deviceToken);
+  const inputClass =
+    "h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-[#FF4800]";
+  const primaryButton = {
+    className: "h-11 w-full rounded-xl text-sm font-semibold text-white disabled:opacity-60",
+    style: { background: "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)" },
   };
 
   return (
@@ -139,53 +142,61 @@ export default function StaffPinPage() {
       <div className="mx-auto w-full max-w-md rounded-3xl border border-[rgba(119,31,168,.15)] bg-white p-6 shadow-sm">
         <h1 className="text-2xl font-semibold text-gray-900">Staff PIN Login</h1>
         <p className="mt-1 text-sm text-gray-600">
-          {pairing
-            ? "Checking device pairing..."
-            : isPaired
-              ? "Device paired. Enter PIN to continue."
-              : "Scan restaurant QR to pair this device first."}
+          {!ready
+            ? "Loading..."
+            : paired
+              ? `Linked to ${merchantName || "your restaurant"}. Enter your PIN.`
+              : "Link this device once with the pairing code from the owner's POS Terminals page."}
         </p>
 
-        {!pairing && !isPaired ? (
-          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            QR pairing required. Ask admin to open Restaurant Staff page and scan the setup QR.
-          </div>
+        {ready && !paired ? (
+          <form className="mt-5 space-y-4" onSubmit={onPair}>
+            <label className="block space-y-1.5">
+              <span className="text-xs font-semibold text-gray-600">Pairing code</span>
+              <input
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 9))}
+                placeholder="ABCD-EFGH"
+                autoCapitalize="characters"
+                autoComplete="off"
+                className={`${inputClass} font-mono tracking-widest`}
+              />
+            </label>
+            {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+            <button type="submit" disabled={busy || code.replace(/-/g, "").length < 8} {...primaryButton}>
+              {busy ? "Linking..." : "Link this device"}
+            </button>
+          </form>
         ) : null}
 
-       
-
-        <form className="mt-5 space-y-4" onSubmit={onLogin}>
-          <label className="block space-y-1.5">
-            <span className="text-xs font-semibold text-gray-600">PIN</span>
-            <input
-              type="password"
-              inputMode="numeric"
-              value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              placeholder="Enter 4-6 digit PIN"
-              className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-[#FF4800]"
-            />
-          </label>
-
-          {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-
-          <button
-            type="submit"
-            disabled={!isPaired || loading || pairing}
-            className="h-11 w-full rounded-xl text-sm font-semibold text-white disabled:opacity-60"
-            style={{ background: "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)" }}
-          >
-            {loading ? "Signing in..." : "Login with PIN"}
-          </button>
-
-          <button
-            type="button"
-            onClick={onClearPair}
-            className="h-11 w-full rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-700"
-          >
-            Use Different Restaurant QR
-          </button>
-        </form>
+        {ready && paired ? (
+          <form className="mt-5 space-y-4" onSubmit={onLogin}>
+            <label className="block space-y-1.5">
+              <span className="text-xs font-semibold text-gray-600">PIN</span>
+              <input
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="Enter 4-6 digit PIN"
+                className={inputClass}
+              />
+            </label>
+            {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+            <button type="submit" disabled={busy} {...primaryButton}>
+              {busy ? "Signing in..." : "Login with PIN"}
+            </button>
+            <button
+              type="button"
+              onClick={forgetDevice}
+              disabled={busy}
+              className="h-11 w-full rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-700"
+            >
+              Unlink this device
+            </button>
+          </form>
+        ) : null}
       </div>
     </div>
   );

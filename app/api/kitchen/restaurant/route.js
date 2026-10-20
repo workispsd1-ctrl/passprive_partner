@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { NOT_IN_PLAN, restaurantHasPlan } from "@/lib/server/plan";
 
 function serverClient() {
   return createClient(
@@ -91,6 +92,9 @@ export async function GET(request) {
 
     if (!restaurantRow?.id) {
       return NextResponse.json({ ok: false, error: "Restaurant not found." }, { status: 404 });
+    }
+    if (!(await restaurantHasPlan(admin, restaurantRow.id))) {
+      return NextResponse.json({ ok: false, error: NOT_IN_PLAN }, { status: 403 });
     }
 
     return NextResponse.json({

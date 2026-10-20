@@ -146,6 +146,11 @@ function PublicRestaurantMenuContent() {
   const tableFromQr = String(searchParams.get("table") || "").trim();
   const returnSessionId = String(searchParams.get("session_id") || "").trim();
   const returnOutcome = String(searchParams.get("outcome") || "").trim().toLowerCase();
+  // Secret per-table key from the table's QR link; the server needs it to read or add to the order.
+  // After a card payment the gateway sends the diner back without it, so it is kept for this tab.
+  const tableKey = String(
+    searchParams.get("key") || (typeof window !== "undefined" ? sessionStorage.getItem("public_menu_table_key") : "") || ""
+  ).trim();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -177,6 +182,19 @@ function PublicRestaurantMenuContent() {
   const [billReady, setBillReady] = useState(false);
   const [activeOrderSnapshot, setActiveOrderSnapshot] = useState(null);
   const reconcileRanRef = useRef(false);
+
+  function orderRequest(body) {
+    return fetch("/api/public-menu/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        restaurant_id: restaurantId,
+        table_no: Number(tableFromQr || tableNo),
+        key: tableKey,
+        ...body,
+      }),
+    });
+  }
   const clearCurrentOrderState = () => {
     if (typeof window !== "undefined") {
       const tableForKey = tableFromQr || tableNo || "";
@@ -290,11 +308,7 @@ function PublicRestaurantMenuContent() {
       try {
         let openOrder = null;
         if (orderSessionId) {
-          const bySessionRes = await fetch("/api/public-menu/orders", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "find_open_by_session", session_id: orderSessionId }),
-          });
+          const bySessionRes = await orderRequest({ action: "find_open_by_session", session_id: orderSessionId });
           const bySessionJson = await bySessionRes.json();
           if (bySessionRes.ok && bySessionJson?.ok && bySessionJson?.order?.id) {
             openOrder = bySessionJson.order;
@@ -302,15 +316,11 @@ function PublicRestaurantMenuContent() {
         }
 
         if (!openOrder) {
-          const byTableRes = await fetch("/api/public-menu/orders", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+          const byTableRes = await orderRequest({
               action: "find_open_by_table",
               restaurant_id: restaurantId,
               table_no: parsedTableNo,
-            }),
-          });
+            });
           const byTableJson = await byTableRes.json();
           if (byTableRes.ok && byTableJson?.ok && byTableJson?.order?.id) {
             openOrder = byTableJson.order;
@@ -322,11 +332,7 @@ function PublicRestaurantMenuContent() {
         if (openOrder?.id) {
           let normalizedOpenOrder = openOrder;
           try {
-            const fullRes = await fetch("/api/public-menu/orders", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "get_status", order_id: String(openOrder.id || "") }),
-            });
+            const fullRes = await orderRequest({ action: "get_status", order_id: String(openOrder.id || "") });
             const fullJson = await fullRes.json();
             if (fullRes.ok && fullJson?.ok && fullJson?.order?.id) {
               normalizedOpenOrder = fullJson.order;
@@ -368,11 +374,7 @@ function PublicRestaurantMenuContent() {
     let cancelled = false;
     const clearPersistedOrder = () => clearCurrentOrderState();
     const poll = async () => {
-      const res = await fetch("/api/public-menu/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "get_status", order_id: orderRecordId }),
-      });
+      const res = await orderRequest({ action: "get_status", order_id: orderRecordId });
       const json = await res.json();
       if (cancelled) return;
       if (!res.ok || !json?.ok) return;
@@ -606,11 +608,7 @@ function PublicRestaurantMenuContent() {
       // Final guard: never append items to a paid/closed order.
       if (nextTargetOrderId) {
         try {
-          const currentRes = await fetch("/api/public-menu/orders", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "get_status", order_id: nextTargetOrderId }),
-          });
+          const currentRes = await orderRequest({ action: "get_status", order_id: nextTargetOrderId });
           const currentJson = await currentRes.json();
           const currentOrder = currentRes.ok && currentJson?.ok ? currentJson?.order : null;
           const currentBooking = String(currentOrder?.booking_status || "").toUpperCase();
@@ -665,26 +663,18 @@ function PublicRestaurantMenuContent() {
         source: "public_menu",
       };
 
-      const upsertRes = await fetch("/api/public-menu/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const upsertRes = await orderRequest({
           action: "upsert",
           target_order_id: nextTargetOrderId || null,
           payload: commonPayload,
           bill_ready: billReady,
-        }),
-      });
+        });
       const upsertJson = await upsertRes.json();
       if (!upsertRes.ok || !upsertJson?.ok) throw new Error(upsertJson?.error || "Failed to save order.");
       const savedOrderId = String(upsertJson?.order_id || orderRecordId || "");
       if (savedOrderId && savedOrderId !== orderRecordId) setOrderRecordId(savedOrderId);
       if (savedOrderId) {
-        const statusRes = await fetch("/api/public-menu/orders", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "get_status", order_id: savedOrderId }),
-        });
+        const statusRes = await orderRequest({ action: "get_status", order_id: savedOrderId });
         const statusJson = await statusRes.json();
         if (statusRes.ok && statusJson?.ok && statusJson?.order?.id) {
           const latestOrder = statusJson.order;
@@ -729,11 +719,7 @@ function PublicRestaurantMenuContent() {
 
     try {
       if (mode === "TABLE") {
-        const markCashRes = await fetch("/api/public-menu/orders", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "mark_cash", order_id: orderId }),
-        });
+        const markCashRes = await orderRequest({ action: "mark_cash", order_id: orderId });
         const markCashJson = await markCashRes.json();
         if (!markCashRes.ok || !markCashJson?.ok) {
           throw new Error(markCashJson?.error || "Failed to mark counter payment.");
@@ -753,15 +739,15 @@ function PublicRestaurantMenuContent() {
       const subtotal = Number(activeOrderSnapshot?.subtotal_amount || 0);
       const tax = Number(activeOrderSnapshot?.tax_amount || 0);
       const total = Number(activeOrderSnapshot?.total_amount || 0);
-      const customerName = String(activeOrderSnapshot?.customer_name || "Guest");
-      const customerPhone = String(activeOrderSnapshot?.customer_phone || "");
+      const payerName = enrollLoyalty ? customerName.trim() || "Guest" : "Guest";
+      const payerPhone = enrollLoyalty ? normalizeMauritiusPhone(customerPhone) : "";
       const orderNotes = String(activeOrderSnapshot?.notes || notes || "");
 
       const payload = {
         restaurant_id: trimmedRestaurantId,
         table_no: parsedTableNo,
-        customer_name: customerName,
-        customer_phone: customerPhone,
+        customer_name: payerName,
+        customer_phone: payerPhone,
         notes: [orderNotes, `OrderRecord:${orderId}`].filter(Boolean).join(" | "),
         items: orderItems.map((it) => ({
           item_id: String(it?.item_id || it?.id || it?.name || ""),
@@ -790,6 +776,7 @@ function PublicRestaurantMenuContent() {
       sessionStorage.setItem("public_menu_tracking_id", trackingId);
       sessionStorage.setItem("public_menu_restaurant_id", trimmedRestaurantId);
       sessionStorage.setItem("public_menu_table_no", String(parsedTableNo));
+      sessionStorage.setItem("public_menu_table_key", tableKey);
 
       setPaymentStatus("PENDING");
       setPaymentFinalizeError("");
@@ -899,7 +886,7 @@ function PublicRestaurantMenuContent() {
 
   useEffect(() => {
     if (!returnSessionId && !returnOutcome) return;
-    const base = `/public-menu?id=${encodeURIComponent(restaurantId)}&table=${encodeURIComponent(tableFromQr || tableNo || "")}`;
+    const base = `/public-menu?id=${encodeURIComponent(restaurantId)}&table=${encodeURIComponent(tableFromQr || tableNo || "")}&key=${encodeURIComponent(tableKey)}`;
     window.history.pushState({ publicMenuSafe: true }, "", window.location.href);
     const onPop = () => {
       window.history.replaceState({ publicMenuSafe: true }, "", base);

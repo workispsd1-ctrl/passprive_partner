@@ -150,10 +150,14 @@ export default function BookingAlertNotifier() {
     clearEscalationTimer();
     escalationTimerRef.current = window.setTimeout(async () => {
       try {
+        const { data } = await supabaseBrowser.auth.getSession();
         await fetch("/api/restaurant/bookings/escalate", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ booking }),
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${data?.session?.access_token || ""}`,
+          },
+          body: JSON.stringify({ booking_id: booking?.id }),
         });
       } catch (error) {
         console.error("[BookingAlertNotifier] Escalation call failed:", error);

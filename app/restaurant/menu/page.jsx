@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import QRCode from "qrcode";
 import {
   Plus,
   Trash2,
@@ -309,7 +310,7 @@ export default function RestaurantMenuPage() {
     (async () => {
       const { data, error } = await supabaseBrowser
         .from("restaurant_table_layouts")
-        .select("id, table_no, label")
+        .select("id, table_no, label, qr_key")
         .eq("restaurant_id", restaurantId)
         .order("table_no", { ascending: true });
       if (cancelled) return;
@@ -682,22 +683,34 @@ export default function RestaurantMenuPage() {
     a.click();
   };
 
+  // Each table's QR carries that table's secret key; without it the menu is view-only.
   const getTableMenuUrl = (tableNo) => {
     if (!restaurantId || typeof window === "undefined") return "";
-    return `${window.location.origin}/public-menu?id=${restaurantId}&table=${encodeURIComponent(String(tableNo))}`;
-  };
-
-  const qrForUrl = (url) => {
-    if (!url) return "";
-    return `https://api.qrserver.com/v1/create-qr-code/?size=340x340&data=${encodeURIComponent(url)}`;
+    const table = tableLayouts.find((t) => String(t.table_no) === String(tableNo));
+    if (!table?.qr_key) return "";
+    return `${window.location.origin}/public-menu?id=${restaurantId}&table=${encodeURIComponent(String(tableNo))}&key=${encodeURIComponent(table.qr_key)}`;
   };
 
   const selectedTableUrl = useMemo(() => {
     if (!selectedQrTable) return "";
     return getTableMenuUrl(selectedQrTable);
-  }, [selectedQrTable, restaurantId]);
+  }, [selectedQrTable, restaurantId, tableLayouts]);
 
-  const selectedTableQrSrc = useMemo(() => qrForUrl(selectedTableUrl), [selectedTableUrl]);
+  // Drawn in the browser: table links contain a secret key, so they never go to a QR web service.
+  const [selectedTableQrSrc, setSelectedTableQrSrc] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedTableUrl) {
+      setSelectedTableQrSrc("");
+      return;
+    }
+    QRCode.toDataURL(selectedTableUrl, { width: 340, margin: 1 })
+      .then((src) => !cancelled && setSelectedTableQrSrc(src))
+      .catch(() => !cancelled && setSelectedTableQrSrc(""));
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTableUrl]);
 
   if (loading) {
     return (

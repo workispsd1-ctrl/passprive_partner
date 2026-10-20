@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { createClient } from "@supabase/supabase-js";
+import { issueSession, serviceClient } from "@/lib/server/deviceSession";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 const ERROR_STATUS = { device_not_paired: 401, wrong_pin: 401, locked: 423, pin_not_set: 409 };
@@ -9,15 +9,9 @@ function reply(body, status = 200) {
   return NextResponse.json(body, { status, headers: NO_STORE });
 }
 
-function client(key) {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
-
 export async function POST(request) {
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceKey) return reply({ ok: false, error: "server_misconfigured" }, 500);
+  const admin = serviceClient();
+  if (!admin) return reply({ ok: false, error: "server_misconfigured" }, 500);
 
   let body;
   try {
@@ -31,7 +25,6 @@ export async function POST(request) {
   if (!/^[a-f0-9]{64}$/.test(deviceToken)) return reply({ ok: false, error: "device_not_paired" }, 401);
   if (!/^\d{4,6}$/.test(pin)) return reply({ ok: false, error: "wrong_pin" }, 401);
 
-  const admin = client(serviceKey);
   const { data, error } = await admin.rpc("pos_pin_login", { p_device_token: deviceToken, p_pin: pin });
   if (error) return reply({ ok: false, error: "server_error" }, 500);
   if (!data?.ok) {
@@ -58,16 +51,8 @@ export async function POST(request) {
     if (attachErr) return reply({ ok: false, error: "server_error" }, 500);
   }
 
-  const { data: link, error: linkErr } = await admin.auth.admin.generateLink({ type: "magiclink", email });
-  const tokenHash = link?.properties?.hashed_token;
-  if (linkErr || !tokenHash) return reply({ ok: false, error: "server_error" }, 500);
-
-  const { data: verified, error: verifyErr } = await client(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY).auth.verifyOtp({
-    type: "magiclink",
-    token_hash: tokenHash,
-  });
-  const session = verified?.session;
-  if (verifyErr || !session) return reply({ ok: false, error: "server_error" }, 500);
+  const session = await issueSession(admin, email);
+  if (!session) return reply({ ok: false, error: "server_error" }, 500);
 
   return reply({
     ok: true,

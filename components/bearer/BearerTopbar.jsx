@@ -68,11 +68,7 @@ export default function BearerTopbar() {
         const token = sessionData?.session?.access_token;
         if (!token) { router.push("/sign-in"); return; }
 
-        const deviceId = localStorage.getItem("staff_device_id") || "";
-        const url = new URL("/api/bearer/profile", window.location.origin);
-        if (deviceId) url.searchParams.set("device_id", deviceId);
-
-        const res = await fetch(url.toString(), {
+        const res = await fetch("/api/bearer/profile", {
           headers: { Authorization: `Bearer ${token}` },
         });
         const payload = await res.json();

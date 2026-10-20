@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { randomBytes } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
+import { NOT_IN_PLAN, restaurantHasPlan } from "@/lib/server/plan";
 
 const STAFF_ROLE_OPTIONS = new Set(["restaurant_admin", "restaurant_cashier", "restaurant_kitchen", "restaurant_bearer"]);
 
@@ -42,8 +44,13 @@ async function getOwnerRestaurant(token, requestedRestaurantId = "") {
   if (userErr || !userRes?.user?.id) return { error: "Unauthorized", status: 401 };
   const userId = userRes.user.id;
 
-  const reqId = normalizeUuid(requestedRestaurantId);
+  const owner = await resolveOwnerRestaurant(supabase, admin, userId, normalizeUuid(requestedRestaurantId));
+  if (owner.error) return owner;
+  if (!(await restaurantHasPlan(admin, owner.restaurantId))) return { error: NOT_IN_PLAN, status: 403 };
+  return owner;
+}
 
+async function resolveOwnerRestaurant(supabase, admin, userId, reqId) {
   const ownerQuery = supabase
     .from("restaurants")
     .select("id")
@@ -81,10 +88,22 @@ function validatePin(pin) {
   return value;
 }
 
+// Messages raised by staff_set_pin (weak or duplicate PIN) are safe to show; anything else is not.
+function pinError(error) {
+  if (error?.code === "P0001") return error.message;
+  console.error("[restaurant-staff] set PIN failed", error);
+  return "Could not save the PIN. Please try again.";
+}
+
+async function removeNewStaff(admin, userId) {
+  await admin.from("users").delete().eq("id", userId);
+  await admin.auth.admin.deleteUser(userId).catch(() => {});
+}
+
 function createSyntheticEmail(restaurantId, role) {
   const slug = String(restaurantId || "").replace(/-/g, "").slice(0, 12);
   const tag = role.replace("restaurant_", "");
-  const unique = Math.random().toString(36).slice(2, 8);
+  const unique = randomBytes(4).toString("hex");
   return `staff-${slug}-${tag}-${unique}@staff.passprive.local`;
 }
 
@@ -138,8 +157,7 @@ export async function GET(request) {
       phone: userMap[m.user_id]?.phone || "-",
     }));
 
-    const setupUrl = `${new URL(request.url).origin}/staff-pin?restaurant_id=${owner.restaurantId}`;
-    return NextResponse.json({ ok: true, members, setup_url: setupUrl, restaurant_id: owner.restaurantId });
+    return NextResponse.json({ ok: true, members, restaurant_id: owner.restaurantId });
   } catch (error) {
     console.error("GET /api/restaurant/staff error:", error);
     return NextResponse.json({ ok: false, error: error?.message || "Unknown error" }, { status: 500 });
@@ -170,15 +188,27 @@ export async function POST(request) {
 
       const { data: staffRow } = await admin
         .from("restaurant_staff")
-        .select("id")
+        .select("id, role")
         .eq("restaurant_id", owner.restaurantId)
         .eq("user_id", userId)
         .maybeSingle();
 
       if (!staffRow) return NextResponse.json({ ok: false, error: "Staff member not found" }, { status: 404 });
 
-      const { error: pinErr } = await admin.auth.admin.updateUserById(userId, { password: pin });
-      if (pinErr) return NextResponse.json({ ok: false, error: pinErr.message }, { status: 400 });
+      // A new PIN lets whoever set it sign in as that person, so admin PINs are master-only, like creating them.
+      if (staffRow.role === "restaurant_admin" && !owner.isMaster && userId !== owner.ownerUserId) {
+        return NextResponse.json(
+          { ok: false, error: "Only the master account can reset a branch admin's PIN." },
+          { status: 403 }
+        );
+      }
+
+      const { error: pinErr } = await admin.rpc("staff_set_pin", {
+        p_restaurant_id: owner.restaurantId,
+        p_user_id: userId,
+        p_pin: pin,
+      });
+      if (pinErr) return NextResponse.json({ ok: false, error: pinError(pinErr) }, { status: 400 });
 
       return NextResponse.json({ ok: true });
     }
@@ -205,9 +235,10 @@ export async function POST(request) {
 
     const email = createSyntheticEmail(owner.restaurantId, role);
 
+    // The account password is random and never shown: staff only sign in with their PIN on a paired device.
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
       email,
-      password: pin,
+      password: randomBytes(32).toString("hex"),
       email_confirm: true,
       user_metadata: { full_name: full_name || null, phone, role: roleDisplay(role) },
     });
@@ -238,7 +269,20 @@ export async function POST(request) {
       created_by: owner.ownerUserId,
     });
 
-    if (staffInsertErr) return NextResponse.json({ ok: false, error: staffInsertErr.message }, { status: 400 });
+    if (staffInsertErr) {
+      await removeNewStaff(admin, newUserId);
+      return NextResponse.json({ ok: false, error: staffInsertErr.message }, { status: 400 });
+    }
+
+    const { error: pinErr } = await admin.rpc("staff_set_pin", {
+      p_restaurant_id: owner.restaurantId,
+      p_user_id: newUserId,
+      p_pin: pin,
+    });
+    if (pinErr) {
+      await removeNewStaff(admin, newUserId);
+      return NextResponse.json({ ok: false, error: pinError(pinErr) }, { status: 400 });
+    }
 
     return NextResponse.json({ ok: true, user_id: newUserId, role });
   } catch (error) {

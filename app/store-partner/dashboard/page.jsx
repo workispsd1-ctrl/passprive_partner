@@ -352,7 +352,7 @@ export default function StorePartnerDashboardPage() {
       return;
     }
 
-    router.push("/store-partner/payouts");
+    router.push("/store-partner/transactions");
   };
 
   const stats = useMemo(

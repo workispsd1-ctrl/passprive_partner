@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { NOT_IN_PLAN, restaurantHasPlan } from "@/lib/server/plan";
 
 export function serverClient() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
@@ -63,6 +64,7 @@ export async function resolveCashierRestaurant(token) {
     .maybeSingle();
 
   if (!restaurant?.id) return { error: "Restaurant not found", status: 404 };
+  if (!(await restaurantHasPlan(admin, restaurant.id))) return { error: NOT_IN_PLAN, status: 403 };
 
   return {
     userId,

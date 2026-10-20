@@ -1,101 +1,53 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { issueSession, serviceClient } from "@/lib/server/deviceSession";
+import { readJson, reply, serverError } from "../_terminal";
 
-function serverClient() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
-    auth: { persistSession: false },
-  });
-}
+const ERROR_STATUS = { device_not_paired: 401, wrong_pin: 401, locked: 423 };
 
-function adminClient() {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key) return null;
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, key, { auth: { persistSession: false } });
-}
-
-function normalizeRole(role) {
-  const value = String(role || "").toLowerCase();
-  if (value === "cashier") return "restaurant_cashier";
-  return value;
-}
-
+// Staff sign in on a device the owner paired from the POS Terminals page. The device sends its
+// pairing token and the staff member's own PIN; the PIN check and lockout run in the database.
 export async function POST(request) {
+  const body = await readJson(request);
+  const deviceToken = String(body.device_token || "");
+  const pin = String(body.pin || "");
+  if (!/^[a-f0-9]{64}$/.test(deviceToken)) return reply({ ok: false, error: "device_not_paired" }, 401);
+  if (!/^\d{4,6}$/.test(pin)) return reply({ ok: false, error: "wrong_pin" }, 401);
+
   try {
-    const body = await request.json();
-    const restaurantId = String(body?.restaurant_id || "").trim();
-    const pin = String(body?.pin || "").trim();
-    const deviceId = String(body?.device_id || "").trim();
+    const admin = serviceClient();
+    if (!admin) return serverError("SUPABASE_SERVICE_ROLE_KEY is missing");
 
-    if (!restaurantId) {
-      return NextResponse.json({ ok: false, error: "restaurant_id is required" }, { status: 400 });
+    const { data, error } = await admin.rpc("staff_pin_login", { p_device_token: deviceToken, p_pin: pin });
+    if (error) return serverError(error);
+    if (!data?.ok) {
+      return reply(
+        { ok: false, error: data?.error || "wrong_pin", locked_until: data?.locked_until || null },
+        ERROR_STATUS[data?.error] || 401
+      );
     }
 
-    if (!/^\d{4,6}$/.test(pin)) {
-      return NextResponse.json({ ok: false, error: "PIN must be 4-6 digits." }, { status: 400 });
+    const { data: restaurant, error: restErr } = await admin
+      .from("restaurants")
+      .select("service_level")
+      .eq("id", data.restaurant_id)
+      .maybeSingle();
+    if (restErr) return serverError(restErr);
+    if (!["booking", "payments"].includes(String(restaurant?.service_level || "").toLowerCase())) {
+      return reply({ ok: false, error: "not_in_plan" }, 403);
     }
 
-    const supabase = serverClient();
-    const admin = adminClient();
-    if (!admin) return NextResponse.json({ ok: false, error: "SUPABASE_SERVICE_ROLE_KEY is missing." }, { status: 500 });
+    const { data: found, error: findErr } = await admin.auth.admin.getUserById(data.user_id);
+    if (findErr || !found?.user?.email) return serverError(findErr || "staff user has no email");
 
-    if (deviceId) {
-      const { data: paired, error: pairErr } = await admin
-        .from("restaurant_staff_devices")
-        .select("device_id")
-        .eq("device_id", deviceId)
-        .eq("restaurant_id", restaurantId)
-        .eq("is_active", true)
-        .maybeSingle();
+    const session = await issueSession(admin, found.user.email);
+    if (!session) return serverError("could not issue staff session");
 
-      if (pairErr) return NextResponse.json({ ok: false, error: pairErr.message }, { status: 400 });
-      if (!paired?.device_id) {
-        return NextResponse.json({ ok: false, error: "This device is not paired for this restaurant." }, { status: 403 });
-      }
-    }
-
-    const { data: members, error: staffErr } = await admin
-      .from("restaurant_staff")
-      .select("user_id, role")
-      .eq("restaurant_id", restaurantId);
-
-    if (staffErr) return NextResponse.json({ ok: false, error: staffErr.message }, { status: 400 });
-
-    const userIds = (members || []).map((m) => m.user_id).filter(Boolean);
-    if (!userIds.length) {
-      return NextResponse.json({ ok: false, error: "No staff users found for this restaurant." }, { status: 404 });
-    }
-
-    const { data: usersRows, error: usersErr } = await admin
-      .from("users")
-      .select("id, email, role")
-      .in("id", userIds);
-
-    if (usersErr) return NextResponse.json({ ok: false, error: usersErr.message }, { status: 400 });
-
-    const roleByUser = new Map((members || []).map((m) => [m.user_id, normalizeRole(m.role)]));
-
-    for (const row of usersRows || []) {
-      const email = String(row?.email || "").trim().toLowerCase();
-      if (!email) continue;
-
-      const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
-        email,
-        password: pin,
-      });
-
-      if (!signInErr && signInData?.session && signInData?.user) {
-        return NextResponse.json({
-          ok: true,
-          email,
-          role: roleByUser.get(row.id) || normalizeRole(row?.role),
-          access_token: signInData.session.access_token,
-          refresh_token: signInData.session.refresh_token,
-        });
-      }
-    }
-
-    return NextResponse.json({ ok: false, error: "Invalid PIN for this restaurant." }, { status: 401 });
+    return reply({
+      ok: true,
+      role: data.role,
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+    });
   } catch (error) {
-    return NextResponse.json({ ok: false, error: error?.message || "Unknown error" }, { status: 500 });
+    return serverError(error);
   }
 }

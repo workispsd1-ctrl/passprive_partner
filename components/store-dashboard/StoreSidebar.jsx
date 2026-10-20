@@ -10,12 +10,10 @@ import {
   Boxes,
   Clock3,
   MessageSquareText,
-  Wallet,
   Settings,
   Store,
   ShoppingCart,
   Loader2,
-  Megaphone,
   X,
   AlertTriangle,
   Check,
@@ -49,8 +47,6 @@ const baseNav = [
   { label: "Offers", href: "/store-partner/offers", icon: Tag },
   { label: "Timings", href: "/store-partner/timings", icon: Clock3 },
   // { label: "Reviews", href: "/store-partner/reviews", icon: MessageSquareText },
-  { label: "Payouts", href: "/store-partner/payouts", icon: Wallet },
-  { label: "Ads & Boost", href: "/store-partner/add-request", icon: Megaphone },
   { label: "Settings", href: "/store-partner/settings", icon: Settings },
 ];
 

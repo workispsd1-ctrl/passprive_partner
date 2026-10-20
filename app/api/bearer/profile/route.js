@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { NOT_IN_PLAN, restaurantHasPlan } from "@/lib/server/plan";
 
 function serverClient() {
   return createClient(
@@ -24,8 +25,6 @@ export async function GET(request) {
     if (!token) {
       return NextResponse.json({ ok: false, error: "Missing auth token" }, { status: 401 });
     }
-
-    const deviceId = request.nextUrl.searchParams.get("device_id");
 
     const supabase = serverClient();
     const admin = adminClient();
@@ -56,25 +55,11 @@ export async function GET(request) {
     }
 
     const restaurantId = staffRow.restaurant_id;
-
-    // 2. Check device if provided
-    let isDeviceAuthorized = true;
-    if (deviceId) {
-      const { data: deviceRow, error: deviceErr } = await admin
-        .from("restaurant_staff_devices")
-        .select("is_active")
-        .eq("device_id", deviceId)
-        .eq("restaurant_id", restaurantId)
-        .maybeSingle();
-
-      if (deviceErr) {
-        console.error("Device check error:", deviceErr);
-      } else if (!deviceRow || !deviceRow.is_active) {
-        isDeviceAuthorized = false;
-      }
+    if (!(await restaurantHasPlan(admin, restaurantId))) {
+      return NextResponse.json({ ok: false, error: NOT_IN_PLAN }, { status: 403 });
     }
 
-    // 3. Get restaurant, layouts, and current stats
+    // 2. Get restaurant, layouts, and current stats
     const [
       { data: restaurantRow, error: restaurantErr }, 
       { data: userRow, error: profileErr },
@@ -149,7 +134,7 @@ export async function GET(request) {
       },
       operator_name: userRow?.full_name || "Staff",
       staff_role: staffRow.role,
-      is_device_authorized: isDeviceAuthorized,
+      is_device_authorized: true,
       table_layouts: layoutRows || [],
       stats: stats
     });

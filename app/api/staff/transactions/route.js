@@ -1,11 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-function adminClient() {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key) return null;
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, key, { auth: { persistSession: false } });
-}
+import { readJson, requireTerminal, serverError } from "../_terminal";
 
 function startOfDayUTC(d) {
   const x = new Date(d);
@@ -23,38 +17,11 @@ const INVALID_STATUSES = ["VERIFIED_FAILED", "ERROR"];
 
 export async function POST(request) {
   try {
-    const body = await request.json();
-    const restaurantId = String(body?.restaurant_id || "").trim();
-    const deviceId = String(body?.device_id || "").trim();
+    const ctx = await requireTerminal(request);
+    if (ctx.error) return ctx.error;
+    const { admin, restaurantId } = ctx;
+    const body = await readJson(request);
     const range = String(body?.range || "30").trim();
-
-    if (!restaurantId || !deviceId) {
-      return NextResponse.json(
-        { ok: false, error: "restaurant_id and device_id are required" },
-        { status: 400 }
-      );
-    }
-
-    const admin = adminClient();
-    if (!admin) {
-      return NextResponse.json(
-        { ok: false, error: "SUPABASE_SERVICE_ROLE_KEY is missing." },
-        { status: 500 }
-      );
-    }
-
-    const { data: deviceRow, error: deviceErr } = await admin
-      .from("restaurant_staff_devices")
-      .select("device_id")
-      .eq("device_id", deviceId)
-      .eq("restaurant_id", restaurantId)
-      .eq("is_active", true)
-      .maybeSingle();
-
-    if (deviceErr) return NextResponse.json({ ok: false, error: deviceErr.message }, { status: 400 });
-    if (!deviceRow?.device_id) {
-      return NextResponse.json({ ok: false, error: "Device not authorized." }, { status: 403 });
-    }
 
     const seriesDays = range === "7" ? 7 : range === "30" ? 30 : range === "90" ? 90 : null;
     const fromIso = seriesDays ? daysAgoUTC(seriesDays - 1).toISOString() : null;
@@ -71,7 +38,7 @@ export async function POST(request) {
     if (fromIso) query = query.gte("created_at", fromIso);
 
     const { data: rows, error: psErr } = await query;
-    if (psErr) return NextResponse.json({ ok: false, error: psErr.message }, { status: 400 });
+    if (psErr) return serverError(psErr);
 
     const transactions = (rows || []).map((r) => ({
       id: r.tracking_id || String(r.id),
@@ -111,9 +78,6 @@ export async function POST(request) {
       summary: { businessMade, cashReceived, onlineCollected, totalTransactions },
     });
   } catch (error) {
-    return NextResponse.json(
-      { ok: false, error: error?.message || "Unknown error" },
-      { status: 500 }
-    );
+    return serverError(error);
   }
 }

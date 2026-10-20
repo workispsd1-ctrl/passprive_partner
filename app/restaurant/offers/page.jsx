@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import {
-  requestRestaurantSubscription,
   fetchOwnedRestaurantOffersData,
   replaceRestaurantOffers,
 } from "@/lib/restaurantData";
@@ -18,13 +17,6 @@ const OFFER_KIND = {
   DISH: "DISH",
 };
 
-const PLAN_KEY = {
-  ALL: "ALL",
-  TIME_SLOT: "TIME_SLOT",
-  REPEAT_REWARDS: "REPEAT_REWARDS",
-  DISCOUNTS: "DISCOUNTS",
-};
-
 const WEEK_DAYS = [
   { key: "MON", label: "Mon" },
   { key: "TUE", label: "Tue" },
@@ -34,62 +26,6 @@ const WEEK_DAYS = [
   { key: "SAT", label: "Sat" },
   { key: "SUN", label: "Sun" },
 ];
-
-const PREMIUM_PRICING = {
-  timeSlotOffers: 2000,
-  repeatRewards: 5000,
-  discounts: 3000,
-  unlockAllOriginal: 10000,
-  unlockAllOffer: 2000,
-};
-
-const PREMIUM_PLANS = [
-  {
-    key: PLAN_KEY.ALL,
-    title: "Unlock All Premium",
-    price: PREMIUM_PRICING.unlockAllOffer,
-    originalPrice: PREMIUM_PRICING.unlockAllOriginal,
-    unlocks: [OFFER_KIND.TIME_SLOT, OFFER_KIND.VISIT, OFFER_KIND.DISH],
-    description: "Unlock all premium features at MUR 2,000/month (80% off from MUR 10,000).",
-    features: [
-      "Time Slot Offers",
-      "Repeat Rewards",
-      "Dish Discounts",
-      "Single plan to unlock everything",
-    ],
-  },
-  {
-    key: PLAN_KEY.TIME_SLOT,
-    title: "Time Slot Offers",
-    price: PREMIUM_PRICING.timeSlotOffers,
-    originalPrice: null,
-    unlocks: [OFFER_KIND.TIME_SLOT],
-    description: "Run offers for selected days and time windows.",
-    features: ["Day-wise offer schedules", "Time-window targeting", "Peak-hour campaign control"],
-  },
-  {
-    key: PLAN_KEY.REPEAT_REWARDS,
-    title: "Repeat Rewards",
-    price: PREMIUM_PRICING.repeatRewards,
-    originalPrice: null,
-    unlocks: [OFFER_KIND.VISIT],
-    description: "Reward repeat customers by visit milestones.",
-    features: ["Visit-based rewards", "Flat/%/Free item rewards", "Loyalty retention setup"],
-  },
-  {
-    key: PLAN_KEY.DISCOUNTS,
-    title: "Dish Discounts",
-    price: PREMIUM_PRICING.discounts,
-    originalPrice: null,
-    unlocks: [OFFER_KIND.DISH],
-    description: "Create discount offers on specific dishes.",
-    features: ["Dish-level promotions", "Promo-code discounting", "Target specific menu items"],
-  },
-];
-
-function formatMur(value) {
-  return `MUR ${Number(value).toLocaleString("en-US")}`;
-}
 
 function uid() {
   return typeof crypto !== "undefined" && crypto.randomUUID
@@ -396,13 +332,6 @@ function formatOfferLine(o) {
   return [amt, datePart, minBillPart].filter(Boolean).join(" • ");
 }
 
-function planForKind(kind) {
-  if (kind === OFFER_KIND.TIME_SLOT) return PLAN_KEY.TIME_SLOT;
-  if (kind === OFFER_KIND.VISIT) return PLAN_KEY.REPEAT_REWARDS;
-  if (kind === OFFER_KIND.DISH) return PLAN_KEY.DISCOUNTS;
-  return PLAN_KEY.ALL;
-}
-
 /* ----------------------------
    SKELETON
 -----------------------------*/
@@ -442,22 +371,9 @@ export default function OffersPage() {
   const [offers, setOffers] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
 
-  const [premiumAccess, setPremiumAccess] = useState({
-    unlockAll: false,
-    timeSlot: false,
-    repeatRewards: false,
-    discounts: false,
-  });
-
   const [openModal, setOpenModal] = useState(false);
   const [editingOfferId, setEditingOfferId] = useState(null);
   const [formOffer, setFormOffer] = useState(EMPTY_OFFER());
-
-  const [openPaymentModal, setOpenPaymentModal] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState(PLAN_KEY.ALL);
-  const [paying, setPaying] = useState(false);
-  const [paymentError, setPaymentError] = useState("");
-  const [requestSent, setRequestSent] = useState(false);
 
   const [lastError, setLastError] = useState("");
   const [nowTick, setNowTick] = useState(Date.now());
@@ -465,29 +381,11 @@ export default function OffersPage() {
   const todayStr = useMemo(() => toDateInputValue(new Date(nowTick)), [nowTick]);
   const nowTimeStr = useMemo(() => toTimeInputValue(new Date(nowTick)), [nowTick]);
 
-  const isSubscribed = useMemo(
-    () => premiumAccess.unlockAll || premiumAccess.timeSlot || premiumAccess.repeatRewards || premiumAccess.discounts,
-    [premiumAccess]
-  );
-
-  const selectedPlanObj = useMemo(
-    () => PREMIUM_PLANS.find((p) => p.key === selectedPlan) || PREMIUM_PLANS[0],
-    [selectedPlan]
-  );
-
   const currentKind = formOffer.offerKind || inferKind(formOffer);
   const isVisitForm = currentKind === OFFER_KIND.VISIT;
   const isDishForm = currentKind === OFFER_KIND.DISH;
   const slotStartMin = formOffer.startDate === todayStr ? nowTimeStr : "";
   const slotEndMin = formOffer.slotStart || (formOffer.startDate === todayStr ? nowTimeStr : "");
-
-  function hasPremiumForKind(kind) {
-    if (kind === OFFER_KIND.GENERAL) return true;
-    if (kind === OFFER_KIND.TIME_SLOT) return premiumAccess.unlockAll || premiumAccess.timeSlot;
-    if (kind === OFFER_KIND.VISIT) return premiumAccess.unlockAll || premiumAccess.repeatRewards;
-    if (kind === OFFER_KIND.DISH) return premiumAccess.unlockAll || premiumAccess.discounts;
-    return false;
-  }
 
   useEffect(() => {
     loadData();
@@ -524,7 +422,6 @@ export default function OffersPage() {
     if (data) {
       setRestaurantId(data.restaurantId);
       setOffers(normalizeOffers(data.offers).map(normalizeOneOffer));
-      setPremiumAccess(data.premiumAccess);
 
       const sections = Array.isArray(data?.menu?.sections) ? data.menu.sections : [];
       const items = [];
@@ -567,63 +464,7 @@ export default function OffersPage() {
     return true;
   }
 
-  function nextAccessForPlan(current, planKey) {
-    const next = { ...current };
-
-    if (planKey === PLAN_KEY.ALL) {
-      return { unlockAll: true, timeSlot: true, repeatRewards: true, discounts: true };
-    }
-    if (planKey === PLAN_KEY.TIME_SLOT) next.timeSlot = true;
-    if (planKey === PLAN_KEY.REPEAT_REWARDS) next.repeatRewards = true;
-    if (planKey === PLAN_KEY.DISCOUNTS) next.discounts = true;
-
-    if (next.timeSlot && next.repeatRewards && next.discounts) next.unlockAll = true;
-    return next;
-  }
-
-  async function activatePremiumSubscription(planKey) {
-    if (!restaurantId) return false;
-
-    const nextAccess = nextAccessForPlan(premiumAccess, planKey);
-    const subscribedPlan = nextAccess.unlockAll ? PLAN_KEY.ALL : planKey;
-
-    try {
-      await requestRestaurantSubscription(supabaseBrowser, restaurantId, subscribedPlan, nextAccess);
-    } catch (error) {
-      setPaymentError(error.message || "Failed to send the upgrade request.");
-      return false;
-    }
-
-    return true;
-  }
-
-  function openPayment(plan = PLAN_KEY.ALL) {
-    setSelectedPlan(plan);
-    setPaymentError("");
-    setRequestSent(false);
-    setOpenPaymentModal(true);
-  }
-
-  async function onPayAndUnlock() {
-    if (requestSent) {
-      setOpenPaymentModal(false);
-      return;
-    }
-    setPaymentError("");
-    setPaying(true);
-    const ok = await activatePremiumSubscription(selectedPlan);
-    setPaying(false);
-    if (ok) setRequestSent(true);
-  }
-
-  function ensurePremium(kind) {
-    if (hasPremiumForKind(kind)) return true;
-    openPayment(planForKind(kind));
-    return false;
-  }
-
   function openCreate(kind = OFFER_KIND.GENERAL) {
-    if (!ensurePremium(kind)) return;
     setEditingOfferId(null);
     setFormOffer(EMPTY_OFFER(kind));
     setOpenModal(true);
@@ -634,7 +475,6 @@ export default function OffersPage() {
     if (!found) return;
 
     const kind = found.offerKind || inferKind(found);
-    if (!ensurePremium(kind)) return;
 
     setEditingOfferId(id);
 
@@ -740,8 +580,6 @@ export default function OffersPage() {
     const cleaned = sanitizeOffer(formOffer);
     const kind = cleaned.offerKind || inferKind(cleaned) || OFFER_KIND.GENERAL;
 
-    if (!ensurePremium(kind)) return;
-
     if (kind !== OFFER_KIND.VISIT) {
       if (cleaned.startDate && cleaned.startDate < todayStr) return alert("Start date cannot be before today.");
       if (cleaned.endDate && cleaned.endDate < todayStr) return alert("End date cannot be before today.");
@@ -829,7 +667,6 @@ export default function OffersPage() {
     if (!confirm("Delete this offer?")) return;
     const target = offers.find((o) => o.id === id);
     if (!target) return;
-    if (!ensurePremium(target.offerKind || inferKind(target))) return;
 
     const next = offers.filter((o) => o.id !== id);
     setOffers(next);
@@ -839,7 +676,6 @@ export default function OffersPage() {
   async function toggleOfferActive(id) {
     const target = offers.find((o) => o.id === id);
     if (!target) return;
-    if (!ensurePremium(target.offerKind || inferKind(target))) return;
     if ((target.offerKind || inferKind(target)) === OFFER_KIND.VISIT) return;
 
     const next = offers.map((o) => (o.id === id ? { ...o, isActive: !o.isActive } : o));
@@ -857,9 +693,7 @@ export default function OffersPage() {
     [offers]
   );
 
-  function renderSection(title, sectionOffers, kind, hint, premium = false) {
-    const locked = premium && !hasPremiumForKind(kind);
-
+  function renderSection(title, sectionOffers, kind, hint) {
     return (
       <div className="rounded-3xl border border-slate-200 bg-white overflow-hidden shadow-[0_8px_30px_-20px_rgba(15,23,42,0.25)]">
         <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between gap-3">
@@ -868,14 +702,7 @@ export default function OffersPage() {
             <p className="text-sm text-slate-500 mt-0.5">{hint}</p>
           </div>
 
-          {locked ? (
-            <button
-              onClick={() => openPayment(planForKind(kind))}
-              className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-100 cursor-pointer"
-            >
-              Unlock {formatMur(PREMIUM_PLANS.find((p) => p.key === planForKind(kind))?.price || 0)}/mo
-            </button>
-          ) : kind === OFFER_KIND.VISIT ? (
+          {kind === OFFER_KIND.VISIT ? (
             <button
               onClick={() => {
                 if (sectionOffers?.length) openEdit(sectionOffers[0].id);
@@ -895,9 +722,7 @@ export default function OffersPage() {
           )}
         </div>
 
-        {locked ? (
-          <div className="px-6 py-10 text-sm text-slate-500">This section is available for Premium partners only.</div>
-        ) : sectionOffers.length === 0 ? (
+        {sectionOffers.length === 0 ? (
           <div className="px-6 py-10 text-sm text-slate-500">No {title.toLowerCase()} yet.</div>
         ) : (
           <div>
@@ -990,65 +815,12 @@ export default function OffersPage() {
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_8px_30px_-20px_rgba(15,23,42,0.25)]">
           <p className="text-xs text-slate-500">Partner Offer Center</p>
           <p className="text-3xl font-semibold text-slate-900 mt-1">{activeOffers.length} active campaigns</p>
-          <p className="text-sm text-slate-600 mt-2">
-            Time Slot Offers ({formatMur(PREMIUM_PRICING.timeSlotOffers)}/month), Repeat Rewards ({formatMur(PREMIUM_PRICING.repeatRewards)}/month), Dish Discounts ({formatMur(PREMIUM_PRICING.discounts)}/month). Unlock all at{" "}
-            <span className="line-through text-slate-400">{formatMur(PREMIUM_PRICING.unlockAllOriginal)}/month</span>{" "}
-            <span className="font-semibold text-emerald-700">{formatMur(PREMIUM_PRICING.unlockAllOffer)}/month</span>{" "}
-            (80% off).
-          </p>
-          <p className="text-xs mt-2">
-            {isSubscribed ? (
-              <span className="rounded-full bg-emerald-50 text-emerald-700 px-2 py-1">Premium Active</span>
-            ) : (
-              <span className="rounded-full bg-amber-50 text-amber-700 px-2 py-1">Premium Locked</span>
-            )}
-          </p>
-
-          <div className="mt-4 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <button
-              onClick={() => openPayment(PLAN_KEY.ALL)}
-              className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-left hover:bg-emerald-100"
-            >
-              <p className="text-sm font-semibold text-emerald-800">Unlock All</p>
-              <p className="text-xs mt-1">
-                <span className="line-through text-emerald-700/70">{formatMur(PREMIUM_PRICING.unlockAllOriginal)}</span>{" "}
-                <span className="font-bold">{formatMur(PREMIUM_PRICING.unlockAllOffer)}/mo</span>
-              </p>
-            </button>
-
-            <button
-              onClick={() => openPayment(PLAN_KEY.TIME_SLOT)}
-              disabled={hasPremiumForKind(OFFER_KIND.TIME_SLOT)}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-left hover:bg-slate-50 disabled:opacity-50"
-            >
-              <p className="text-sm font-semibold text-slate-900">Time Slot Offers</p>
-              <p className="text-xs mt-1 text-slate-600">{formatMur(PREMIUM_PRICING.timeSlotOffers)}/mo</p>
-            </button>
-
-            <button
-              onClick={() => openPayment(PLAN_KEY.REPEAT_REWARDS)}
-              disabled={hasPremiumForKind(OFFER_KIND.VISIT)}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-left hover:bg-slate-50 disabled:opacity-50"
-            >
-              <p className="text-sm font-semibold text-slate-900">Repeat Rewards</p>
-              <p className="text-xs mt-1 text-slate-600">{formatMur(PREMIUM_PRICING.repeatRewards)}/mo</p>
-            </button>
-
-            <button
-              onClick={() => openPayment(PLAN_KEY.DISCOUNTS)}
-              disabled={hasPremiumForKind(OFFER_KIND.DISH)}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-left hover:bg-slate-50 disabled:opacity-50"
-            >
-              <p className="text-sm font-semibold text-slate-900">Dish Discounts</p>
-              <p className="text-xs mt-1 text-slate-600">{formatMur(PREMIUM_PRICING.discounts)}/mo</p>
-            </button>
-          </div>
         </div>
 
-        {renderSection("General Offers", generalOffers, OFFER_KIND.GENERAL, "Standard campaigns available to every partner", false)}
-        {renderSection("Time Slot Offers", timeSlotOffers, OFFER_KIND.TIME_SLOT, "Day and time-specific premium campaigns", true)}
-        {renderSection("Repeat Rewards", visitOffers, OFFER_KIND.VISIT, "Premium loyalty rewards program for repeat visits", true)}
-        {renderSection("Dish Discounts", dishOffers, OFFER_KIND.DISH, "Premium dish-level discounts on specific menu items", true)}
+        {renderSection("General Offers", generalOffers, OFFER_KIND.GENERAL, "Standard campaigns available to every partner")}
+        {renderSection("Time Slot Offers", timeSlotOffers, OFFER_KIND.TIME_SLOT, "Day and time-specific campaigns")}
+        {renderSection("Repeat Rewards", visitOffers, OFFER_KIND.VISIT, "Loyalty rewards for repeat visits")}
+        {renderSection("Dish Discounts", dishOffers, OFFER_KIND.DISH, "Discounts on specific menu items")}
       </div>
 
       <button
@@ -1059,81 +831,6 @@ export default function OffersPage() {
       >
         +
       </button>
-
-      {openPaymentModal && (
-        <div className="fixed inset-0 z-[90] p-4 sm:p-6">
-          <div className="absolute inset-0 bg-black/40" onClick={() => !paying && setOpenPaymentModal(false)} />
-          <div className="relative mx-auto w-full max-w-2xl rounded-2xl bg-white border border-slate-200 shadow-xl overflow-hidden">
-            <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
-              <p className="text-sm font-semibold text-slate-900">Request Premium</p>
-              <button onClick={() => !paying && setOpenPaymentModal(false)} className="rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100">
-                Close
-              </button>
-            </div>
-
-            <div className="px-6 py-6 space-y-4 max-h-[72vh] overflow-y-auto">
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                <p className="text-sm font-semibold text-amber-900">Select Plan</p>
-                <div className="mt-3 grid sm:grid-cols-2 gap-2">
-                  {PREMIUM_PLANS.map((p) => (
-                    <button
-                      key={p.key}
-                      type="button"
-                      onClick={() => setSelectedPlan(p.key)}
-                      className={`text-left rounded-xl border p-3 ${
-                        selectedPlan === p.key ? "border-slate-900 bg-white" : "border-amber-200 bg-amber-50/50 hover:bg-amber-50"
-                      }`}
-                    >
-                      <p className="text-xs font-semibold text-slate-900">{p.title}</p>
-                      <p className="text-xs mt-1">
-                        {p.originalPrice ? <span className="line-through text-slate-400 mr-2">{formatMur(p.originalPrice)}/mo</span> : null}
-                        <span className="font-semibold text-emerald-700">{formatMur(p.price)}/mo</span>
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-sm font-semibold text-slate-900">Before Payment</p>
-                <p className="text-xs text-slate-600 mt-1">{selectedPlanObj.description}</p>
-                <ul className="mt-2 list-disc pl-5 space-y-1 text-xs text-slate-700">
-                  {selectedPlanObj.features.map((f) => (
-                    <li key={f}>{f}</li>
-                  ))}
-                </ul>
-              </div>
-
-              {requestSent ? (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-                  Request sent. The PassPrivé team will confirm payment with you and activate the plan.
-                </div>
-              ) : (
-                <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700">
-                  No card is charged here. Send a request and the PassPrivé team will confirm payment and activate the plan for this branch.
-                </div>
-              )}
-
-              {paymentError ? (
-                <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-700">{paymentError}</div>
-              ) : null}
-            </div>
-
-            <div className="px-6 py-5 border-t border-slate-200 flex justify-end gap-3 bg-white">
-              <button onClick={() => !paying && setOpenPaymentModal(false)} className="rounded-xl px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
-                Cancel
-              </button>
-              <button
-                onClick={onPayAndUnlock}
-                disabled={paying}
-                className="rounded-xl bg-[#DA3224] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-              >
-                {requestSent ? "Done" : paying ? "Sending..." : `Request ${formatMur(selectedPlanObj.price)}/mo plan`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {openModal && (
         <div className="fixed inset-0 z-[60] p-4 sm:p-6">
@@ -1162,8 +859,7 @@ export default function OffersPage() {
                     value={formOffer.offerKind}
                     onChange={(e) => {
                       const kind = e.target.value;
-                      if (!ensurePremium(kind)) return;
-                      setFormOffer((prev) => ({
+                                        setFormOffer((prev) => ({
                         ...prev,
                         offerKind: kind,
                         weekdays: kind === OFFER_KIND.TIME_SLOT ? prev.weekdays || [] : [],
@@ -1178,12 +874,8 @@ export default function OffersPage() {
                     className="w-full rounded-xl bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
                   >
                     <option value={OFFER_KIND.GENERAL}>General Offer</option>
-                    <option value={OFFER_KIND.TIME_SLOT} disabled={!hasPremiumForKind(OFFER_KIND.TIME_SLOT)}>
-                      Time Slot Offer (Premium)
-                    </option>
-                    <option value={OFFER_KIND.DISH} disabled={!hasPremiumForKind(OFFER_KIND.DISH)}>
-                      Dish Discount (Premium)
-                    </option>
+                    <option value={OFFER_KIND.TIME_SLOT}>Time Slot Offer</option>
+                    <option value={OFFER_KIND.DISH}>Dish Discount</option>
                   </select>
                 </div>
               ) : (

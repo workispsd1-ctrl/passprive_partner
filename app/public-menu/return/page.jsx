@@ -113,7 +113,7 @@ export default function PublicMenuPaymentReturnPage() {
             </button>
           ) : null}
           <Link
-            href={`/public-menu?id=${encodeURIComponent(getStored("public_menu_restaurant_id"))}&table=${encodeURIComponent(getStored("public_menu_table_no"))}`}
+            href={`/public-menu?id=${encodeURIComponent(getStored("public_menu_restaurant_id"))}&table=${encodeURIComponent(getStored("public_menu_table_no"))}&key=${encodeURIComponent(getStored("public_menu_table_key"))}`}
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700"
           >
             Back to Menu

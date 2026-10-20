@@ -21,10 +21,10 @@ export default function LockedPage({ plan, restaurantId, showDeals, children }) 
             <Lock className="h-4 w-4" />
           </span>
           <div>
-            <div className="text-sm font-semibold text-gray-900">This feature is locked on your plan</div>
+            <div className="text-sm font-semibold text-gray-900">This feature isn&apos;t included in your service</div>
             <div className="text-xs text-gray-600">
-              You&apos;re on {PLAN_LABELS[plan] || "a limited plan"}. This is a preview of what you get when you
-              upgrade. Contact Pass Privé to unlock it.
+              Your restaurant is set up for {PLAN_LABELS[plan] || "a limited service"}. This page is shown as a
+              preview only. Contact Pass Privé if you have questions.
             </div>
           </div>
         </div>

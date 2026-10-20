@@ -81,8 +81,22 @@ export async function PATCH(request) {
     const body = await request.json();
     const tables = Array.isArray(body?.tables) ? body.tables : [];
 
+    if (tables.length > 200) return NextResponse.json({ ok: false, error: "Too many tables." }, { status: 400 });
+
+    // Rows are saved by id, so every id sent must already belong to this restaurant. Without this a
+    // cashier could send another restaurant's table id and take that row over.
+    const { data: ownRows, error: ownErr } = await ctx.admin
+      .from("restaurant_table_layouts")
+      .select("id")
+      .eq("restaurant_id", ctx.restaurantId);
+    if (ownErr) return NextResponse.json({ ok: false, error: "Failed to load tables." }, { status: 500 });
+    const ownIds = new Set((ownRows || []).map((r) => String(r.id)));
+    if (tables.some((t) => t?.id && !ownIds.has(String(t.id)))) {
+      return NextResponse.json({ ok: false, error: "One of these tables doesn't belong to your restaurant." }, { status: 403 });
+    }
+
     const rows = tables.map((t, idx) => ({
-      id: t.id,
+      ...(t?.id ? { id: String(t.id) } : {}),
       restaurant_id: ctx.restaurantId,
       table_no: Number(t.table_no || idx + 1),
       label: String(t.label || `T${idx + 1}`),
@@ -92,8 +106,23 @@ export async function PATCH(request) {
       pos_y: Number(t.pos_y || 10),
     }));
 
-    const { error } = await ctx.admin.from("restaurant_table_layouts").upsert(rows, { onConflict: "id" });
-    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+    // Existing tables are updated in place (their QR key is kept); new tables are inserted.
+    const existing = rows.filter((r) => r.id);
+    const added = rows.filter((r) => !r.id);
+    if (existing.length) {
+      const { error } = await ctx.admin.from("restaurant_table_layouts").upsert(existing, { onConflict: "id" });
+      if (error) {
+        console.error("[cashier-table-layout]", error);
+        return NextResponse.json({ ok: false, error: "Could not save tables. Check table numbers are unique." }, { status: 400 });
+      }
+    }
+    if (added.length) {
+      const { error } = await ctx.admin.from("restaurant_table_layouts").insert(added);
+      if (error) {
+        console.error("[cashier-table-layout]", error);
+        return NextResponse.json({ ok: false, error: "Could not save tables. Check table numbers are unique." }, { status: 400 });
+      }
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

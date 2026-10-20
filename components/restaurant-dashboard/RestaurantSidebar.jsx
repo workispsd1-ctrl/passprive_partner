@@ -11,12 +11,10 @@ import {
   Tag,
   Star,
   LineChart,
-  Wallet,
   Receipt,
   Settings,
   Clock3,
   Soup,
-  Megaphone,
   QrCode,
   Table2,
   UserRound,
@@ -49,8 +47,6 @@ const nav = [
   { label: "Analytics", href: "/restaurant/analytics", icon: LineChart },
   { label: "Timings", href: "/restaurant/timings", icon: Clock3 },
   { label: "Transactions", href: "/restaurant/transactions", icon: Receipt },
-  { label: "Payouts", href: "/restaurant/payouts", icon: Wallet },
-  { label: "Ads & Boost", href: "/restaurant/add-request", icon: Megaphone },
   { label: "Settings", href: "/restaurant/settings", icon: Settings },
 ];
 
@@ -260,10 +256,10 @@ export default function RestaurantSidebar({ collapsed = false }) {
       const lastSeenAt = localStorage.getItem(tableOrdersSeenKey) || "1970-01-01T00:00:00.000Z";
 
       const { count, error } = await supabaseBrowser
-        .from("restaurant_bookings")
+        .from("restaurant_table_bookings")
         .select("id", { count: "exact", head: true })
         .eq("restaurant_id", restaurantId)
-        .eq("read", false)
+        .eq("booking_status", "PLACED")
         .gt("created_at", lastSeenAt);
 
       if (!mounted) return;
@@ -309,7 +305,7 @@ export default function RestaurantSidebar({ collapsed = false }) {
         {
           event: "*",
           schema: "public",
-          table: "restaurant_bookings",
+          table: "restaurant_table_bookings",
           filter: `restaurant_id=eq.${restaurantId}`,
         },
         refreshUnreadCounts

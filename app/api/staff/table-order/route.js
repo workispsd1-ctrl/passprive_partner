@@ -1,83 +1,54 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { readJson, reply, requireTerminal, serverError } from "../_terminal";
 
-function adminClient() {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key) return null;
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, key, { auth: { persistSession: false } });
+const STATUSES = ["CONFIRMED", "PREPARING", "SERVED", "COMPLETED", "CANCELLED"];
+const MAX_ITEMS = 100;
+
+function clean(value, max = 120) {
+  return String(value || "").trim().slice(0, max);
 }
 
-function clean(value) {
-  return String(value || "").trim();
+// Prices come from the staff device, as on the cashier screen, so they are only range-checked here.
+function parseItems(items) {
+  if (!Array.isArray(items) || items.length === 0 || items.length > MAX_ITEMS) return null;
+  const parsed = [];
+  for (const item of items) {
+    const price = Number(item?.price);
+    const quantity = Number(item?.quantity ?? 1);
+    const name = clean(item?.name);
+    if (!name || !Number.isFinite(price) || price < 0 || price > 1_000_000) return null;
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 999) return null;
+    parsed.push({ item_id: clean(item?.item_id), name, price: Number(price.toFixed(2)), quantity });
+  }
+  return parsed;
 }
 
+// Table ordering is a pay-bill feature.
 export async function POST(request) {
   try {
-    const body = await request.json();
-    const restaurantId = clean(body?.restaurant_id);
-    const deviceId = clean(body?.device_id);
-    const tableNo = Number(body?.table_no);
-    const items = Array.isArray(body?.items) ? body.items : [];
-    const notes = clean(body?.notes);
+    const ctx = await requireTerminal(request, ["payments"]);
+    if (ctx.error) return ctx.error;
+    const { admin, restaurantId, terminalId } = ctx;
 
-    if (!restaurantId) {
-      return NextResponse.json({ ok: false, error: "restaurant_id is required" }, { status: 400 });
-    }
-    if (!deviceId) {
-      return NextResponse.json({ ok: false, error: "device_id is required" }, { status: 400 });
-    }
-    if (!tableNo || tableNo < 1) {
-      return NextResponse.json({ ok: false, error: "table_no is required" }, { status: 400 });
-    }
-    if (items.length === 0) {
-      return NextResponse.json({ ok: false, error: "Order must have at least one item" }, { status: 400 });
-    }
+    const body = await readJson(request);
+    const tableNo = Number(body.table_no);
+    const orderItems = parseItems(body.items);
+    if (!Number.isInteger(tableNo) || tableNo < 1) return reply({ ok: false, error: "invalid_table" }, 400);
+    if (!orderItems) return reply({ ok: false, error: "invalid_items" }, 400);
 
-    const admin = adminClient();
-    if (!admin) {
-      return NextResponse.json({ ok: false, error: "SUPABASE_SERVICE_ROLE_KEY is missing." }, { status: 500 });
-    }
-
-    // Verify device is paired and active for this restaurant
-    const { data: deviceRow, error: deviceErr } = await admin
-      .from("restaurant_staff_devices")
-      .select("device_id")
-      .eq("device_id", deviceId)
-      .eq("restaurant_id", restaurantId)
-      .eq("is_active", true)
-      .maybeSingle();
-
-    if (deviceErr) return NextResponse.json({ ok: false, error: deviceErr.message }, { status: 400 });
-    if (!deviceRow?.device_id) {
-      return NextResponse.json({ ok: false, error: "Device not authorised for this restaurant." }, { status: 403 });
-    }
-
-    // Build order items in the same shape the cashier UI expects
-    const orderItems = items.map((item) => ({
-      item_id: clean(item?.item_id),
-      name: clean(item?.name),
-      price: Number(item?.price || 0),
-      quantity: Math.max(1, Number(item?.quantity || 1)),
-    }));
-
-    const totalAmount = orderItems.reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0
-    );
-
+    const totalAmount = Number(orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0).toFixed(2));
     const now = new Date().toISOString();
-    const { data: inserted, error: insertErr } = await admin
+    const { data: inserted, error } = await admin
       .from("restaurant_table_bookings")
       .insert({
         restaurant_id: restaurantId,
         table_no: tableNo,
         order_items: orderItems,
-        order_details: { items: orderItems },
+        order_details: { items: orderItems, terminal_id: terminalId },
         total_amount: totalAmount,
         booking_status: "PLACED",
         payment_status: "PENDING",
         source: "staff_pad",
-        notes: notes || null,
+        notes: clean(body.notes, 500) || null,
         customer_name: "Staff Order",
         customer_phone: "",
         created_at: now,
@@ -85,63 +56,39 @@ export async function POST(request) {
       })
       .select("id")
       .single();
+    if (error) return serverError(error);
 
-    if (insertErr) return NextResponse.json({ ok: false, error: insertErr.message }, { status: 400 });
-
-    return NextResponse.json({
-      ok: true,
-      order_id: inserted?.id,
-      total_amount: totalAmount,
-    });
+    return reply({ ok: true, order_id: inserted.id, total_amount: totalAmount });
   } catch (error) {
-    return NextResponse.json({ ok: false, error: error?.message || "Unknown error" }, { status: 500 });
+    return serverError(error);
   }
 }
 
 export async function PATCH(request) {
   try {
-    const body = await request.json();
-    const restaurantId = clean(body?.restaurant_id);
-    const deviceId = clean(body?.device_id);
-    const orderId = clean(body?.order_id);
-    const status = clean(body?.status).toUpperCase();
+    const ctx = await requireTerminal(request, ["payments"]);
+    if (ctx.error) return ctx.error;
+    const { admin, restaurantId } = ctx;
 
-    const ALLOWED = ["CONFIRMED", "PREPARING", "SERVED", "COMPLETED", "CANCELLED"];
-    if (!restaurantId || !deviceId || !orderId) {
-      return NextResponse.json({ ok: false, error: "restaurant_id, device_id and order_id are required" }, { status: 400 });
+    const body = await readJson(request);
+    const orderId = clean(body.order_id, 64);
+    const status = clean(body.status, 20).toUpperCase();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId)) {
+      return reply({ ok: false, error: "invalid_order" }, 400);
     }
-    if (!ALLOWED.includes(status)) {
-      return NextResponse.json({ ok: false, error: `status must be one of: ${ALLOWED.join(", ")}` }, { status: 400 });
-    }
+    if (!STATUSES.includes(status)) return reply({ ok: false, error: "invalid_status" }, 400);
 
-    const admin = adminClient();
-    if (!admin) {
-      return NextResponse.json({ ok: false, error: "SUPABASE_SERVICE_ROLE_KEY is missing." }, { status: 500 });
-    }
-
-    const { data: deviceRow, error: deviceErr } = await admin
-      .from("restaurant_staff_devices")
-      .select("device_id")
-      .eq("device_id", deviceId)
-      .eq("restaurant_id", restaurantId)
-      .eq("is_active", true)
-      .maybeSingle();
-
-    if (deviceErr) return NextResponse.json({ ok: false, error: deviceErr.message }, { status: 400 });
-    if (!deviceRow?.device_id) {
-      return NextResponse.json({ ok: false, error: "Device not authorised." }, { status: 403 });
-    }
-
-    const { error: updateErr } = await admin
+    const { data, error } = await admin
       .from("restaurant_table_bookings")
       .update({ booking_status: status, updated_at: new Date().toISOString() })
       .eq("id", orderId)
-      .eq("restaurant_id", restaurantId);
+      .eq("restaurant_id", restaurantId)
+      .select("id");
+    if (error) return serverError(error);
+    if (!data?.length) return reply({ ok: false, error: "order_not_found" }, 404);
 
-    if (updateErr) return NextResponse.json({ ok: false, error: updateErr.message }, { status: 400 });
-
-    return NextResponse.json({ ok: true });
+    return reply({ ok: true });
   } catch (error) {
-    return NextResponse.json({ ok: false, error: error?.message || "Unknown error" }, { status: 500 });
+    return serverError(error);
   }
 }

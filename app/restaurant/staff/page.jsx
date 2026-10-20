@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { UserPlus, Users, Loader2, Eye, Pencil, Trash2, KeyRound, QrCode } from "lucide-react";
+import Link from "next/link";
+import { UserPlus, Users, Loader2, Eye, Pencil, Trash2, KeyRound, MonitorSmartphone } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { getActiveRestaurantId } from "@/lib/restaurant-partner/activeRestaurant";
 import { toast } from "sonner";
@@ -54,16 +55,10 @@ export default function RestaurantStaffPage() {
   const [editPhone, setEditPhone] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [members, setMembers] = useState([]);
-  const [devices, setDevices] = useState([]);
-  const [loadingDevices, setLoadingDevices] = useState(true);
-  const [revokingDeviceId, setRevokingDeviceId] = useState("");
   const [viewMember, setViewMember] = useState(null);
-  const [setupUrl, setSetupUrl] = useState("");
-  const [restaurantId, setRestaurantId] = useState("");
 
   const loadMembers = async () => {
     setLoadingMembers(true);
-    setLoadingDevices(true);
     const { data: sess } = await supabaseBrowser.auth.getSession();
     const token = sess?.session?.access_token;
     if (!token) {
@@ -80,32 +75,15 @@ export default function RestaurantStaffPage() {
       const json = await res.json();
       if (!res.ok || !json?.ok) {
         setMembers([]);
-        setDevices([]);
         toast.error(json?.error || "Failed to load staff members.");
         return;
       }
       setMembers(json.members || []);
-      setSetupUrl(String(json?.setup_url || ""));
-      setRestaurantId(String(json?.restaurant_id || ""));
-
-      const devRes = await fetch(`/api/restaurant/staff-devices?restaurant_id=${encodeURIComponent((await getActiveRestaurantId()) || "")}`, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const devJson = await devRes.json();
-      if (devRes.ok && devJson?.ok) {
-        setDevices(devJson.devices || []);
-      } else {
-        setDevices([]);
-        toast.error(devJson?.error || "Failed to load paired devices.");
-      }
     } catch {
       setMembers([]);
-      setDevices([]);
       toast.error("Failed to load staff data.");
     } finally {
       setLoadingMembers(false);
-      setLoadingDevices(false);
     }
   };
 
@@ -226,30 +204,6 @@ export default function RestaurantStaffPage() {
     await loadMembers();
   };
 
-  const onRevokeDevice = async (deviceId) => {
-    const yes = window.confirm("Revoke this device? It will require QR scan again.");
-    if (!yes) return;
-    setRevokingDeviceId(deviceId);
-    try {
-      const { data: sess } = await supabaseBrowser.auth.getSession();
-      const token = sess?.session?.access_token;
-      if (!token) return;
-      const res = await fetch("/api/restaurant/staff-devices", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ restaurant_id: await getActiveRestaurantId(), device_id: deviceId }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json?.ok) throw new Error(json?.error || "Failed to revoke device.");
-      toast.success("Device revoked.");
-      await loadMembers();
-    } catch (e) {
-      toast.error(e?.message || "Failed to revoke device.");
-    } finally {
-      setRevokingDeviceId("");
-    }
-  };
-
   const roleLabel = (value) => ROLE_OPTIONS.find((r) => r.value === value)?.label || value;
 
   return (
@@ -291,42 +245,20 @@ export default function RestaurantStaffPage() {
 
         <div className="rounded-2xl border border-gray-200 bg-white p-5">
           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
-            <QrCode className="h-4 w-4" />
-            Staff QR Setup
+            <MonitorSmartphone className="h-4 w-4" />
+            Staff Devices
           </div>
-          <p className="text-xs text-gray-600">New device: scan this QR, then enter PIN. Paired devices need PIN only.</p>
-          {setupUrl ? (
-            <>
-              <img alt="Staff setup QR" className="mt-3 h-40 w-40 rounded-xl border border-gray-200" src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(setupUrl)}`} />
-              <p className="mt-2 text-[11px] break-all text-gray-500">{setupUrl}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => window.open(setupUrl, "_blank", "noopener,noreferrer")}
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                >
-                  Open Link
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(setupUrl);
-                      toast.success("Setup link copied.");
-                    } catch {
-                      toast.error("Unable to copy link.");
-                    }
-                  }}
-                  className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
-                >
-                  Copy Link
-                </button>
-              </div>
-            </>
-          ) : (
-            <div className="mt-3 h-40 w-40 rounded-xl bg-gray-100 animate-pulse" />
-          )}
-          {restaurantId ? <p className="mt-2 text-xs text-gray-500">Restaurant ID: {restaurantId}</p> : null}
+          <ol className="list-decimal space-y-1.5 pl-4 text-xs text-gray-600">
+            <li>On POS Terminals, generate a pairing code.</li>
+            <li>On the staff device, open <span className="font-mono">/staff-pin</span> and enter the code once.</li>
+            <li>Staff then sign in on that device with their own PIN.</li>
+          </ol>
+          <Link
+            href="/restaurant/pos"
+            className="mt-4 inline-flex rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            Go to POS Terminals
+          </Link>
         </div>
       </div>
 
@@ -370,58 +302,6 @@ export default function RestaurantStaffPage() {
             {!loadingMembers && members.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-4 py-6 text-center text-gray-500">No staff members yet.</td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-100 text-sm font-semibold text-gray-900">Paired Devices</div>
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-500">
-            <tr>
-              <th className="px-4 py-2 text-left">Device ID</th>
-              <th className="px-4 py-2 text-left">Last Paired</th>
-              <th className="px-4 py-2 text-left">Status</th>
-              <th className="px-4 py-2 text-right">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loadingDevices ? (
-              [...Array(3)].map((_, idx) => (
-                <tr key={`dev-sk-${idx}`} className="animate-pulse">
-                  <td className="px-4 py-3"><div className="h-4 w-56 rounded bg-gray-200" /></td>
-                  <td className="px-4 py-3"><div className="h-4 w-36 rounded bg-gray-200" /></td>
-                  <td className="px-4 py-3"><div className="h-4 w-16 rounded bg-gray-200" /></td>
-                  <td className="px-4 py-3"><div className="ml-auto h-7 w-24 rounded bg-gray-200" /></td>
-                </tr>
-              ))
-            ) : null}
-            {devices.map((d) => (
-              <tr key={d.id}>
-                <td className="px-4 py-2 font-mono text-xs">{d.device_id}</td>
-                <td className="px-4 py-2">{d.last_paired_at ? new Date(d.last_paired_at).toLocaleString() : "-"}</td>
-                <td className="px-4 py-2">
-                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${d.is_active ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
-                    {d.is_active ? "Active" : "Revoked"}
-                  </span>
-                </td>
-                <td className="px-4 py-2 text-right">
-                  <button
-                    type="button"
-                    disabled={!d.is_active || revokingDeviceId === d.device_id}
-                    onClick={() => onRevokeDevice(d.device_id)}
-                    className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
-                  >
-                    {revokingDeviceId === d.device_id ? "Revoking..." : "Revoke"}
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {!loadingDevices && devices.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-gray-500">No paired devices yet.</td>
               </tr>
             ) : null}
           </tbody>

@@ -212,10 +212,14 @@ export default function BearerTableOrderPage() {
       };
 
       // Use the robust UPSERT API to handle merging items into existing table sessions
+      // Staff send their own session instead of the table QR key; the server prices the items.
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
       const upsertRes = await fetch("/api/public-menu/orders", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token || ""}` },
         body: JSON.stringify({
+          restaurant_id: restaurantId,
+          table_no: Number(tableNo),
           action: "upsert",
           target_order_id: activeOrder?.id || null,
           payload: commonPayload,
