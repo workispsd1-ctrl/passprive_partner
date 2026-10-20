@@ -4,11 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X, Ban } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { areaKindMeta, sortAreas } from "@/lib/restaurant-partner/tableAreas";
 import { toast } from "sonner";
 
 const BLOCK_KEY_PREFIX = "cashier_blocked_tables_";
 const JOIN_KEY_PREFIX = "cashier_joined_tables_";
 const JOIN_SNAP_THRESHOLD_PX = 90;
+const UNASSIGNED_AREA = "__unassigned__";
 
 function sizeForShape(shape) {
   if (shape === "circle") return { w: 132, h: 132 };
@@ -58,6 +60,8 @@ export default function CashierTableLayoutPage() {
   const [restaurantId, setRestaurantId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tables, setTables] = useState([]);
+  const [areas, setAreas] = useState([]);
+  const [activeAreaId, setActiveAreaId] = useState("");
   const [orders, setOrders] = useState([]);
   const [blocked, setBlocked] = useState({});
   const [joinedMap, setJoinedMap] = useState({});
@@ -81,6 +85,31 @@ export default function CashierTableLayoutPage() {
     }
     return map;
   }, [orders]);
+
+  // Each area has its own floor map. Without areas (or before the migration) every table is shown.
+  const areaTabs = useMemo(() => {
+    if (!areas.length) return [];
+    const tabs = areas.map((a) => ({ ...a, count: tables.filter((t) => t.area_id === a.id).length }));
+    const unassigned = tables.filter((t) => !t.area_id).length;
+    if (unassigned) tabs.push({ id: UNASSIGNED_AREA, name: "Unassigned", kind: "other", count: unassigned });
+    return tabs;
+  }, [areas, tables]);
+
+  const visibleTables = useMemo(() => {
+    if (!areaTabs.length) return tables;
+    if (activeAreaId === UNASSIGNED_AREA) return tables.filter((t) => !t.area_id);
+    return tables.filter((t) => t.area_id === activeAreaId);
+  }, [tables, areaTabs, activeAreaId]);
+
+  const activeByArea = useMemo(() => {
+    const map = new Map();
+    for (const t of tables) {
+      if (!activeByTable.has(Number(t.table_no))) continue;
+      const key = t.area_id || UNASSIGNED_AREA;
+      map.set(key, (map.get(key) || 0) + 1);
+    }
+    return map;
+  }, [tables, activeByTable]);
 
   const getJoinEntry = (tableNo) => joinedMap[String(tableNo)] || null;
   const getJoinedSources = (targetNo) =>
@@ -123,7 +152,15 @@ export default function CashierTableLayoutPage() {
       if (!res.ok || !json?.ok) throw new Error(json?.error || "Failed to load table layout.");
 
       setRestaurantId(json?.restaurant_id || null);
-      setTables(Array.isArray(json?.tables) ? json.tables : []);
+      const nextTables = Array.isArray(json?.tables) ? json.tables : [];
+      const nextAreas = sortAreas(Array.isArray(json?.areas) ? json.areas : []);
+      setTables(nextTables);
+      setAreas(nextAreas);
+      setActiveAreaId((prev) => {
+        if (prev === UNASSIGNED_AREA && nextTables.some((t) => !t.area_id)) return prev;
+        if (nextAreas.some((a) => a.id === prev)) return prev;
+        return nextAreas[0]?.id || "";
+      });
       setOrders(Array.isArray(json?.orders) ? json.orders : []);
 
       const raw = window.localStorage.getItem(`${BLOCK_KEY_PREFIX}${json?.restaurant_id || ""}`);
@@ -326,7 +363,7 @@ export default function CashierTableLayoutPage() {
     let nearestTableNo = null;
     let nearestDist = Number.POSITIVE_INFINITY;
 
-    for (const t of tables) {
+    for (const t of visibleTables) {
       const tableNo = Number(t.table_no || 0);
       if (!tableNo || tableNo === fromNo) continue;
       const cx = (Number(t.pos_x || 0) / 100) * rect.width;
@@ -390,7 +427,7 @@ export default function CashierTableLayoutPage() {
 
     let nearestTableNo = null;
     let nearestDist = Number.POSITIVE_INFINITY;
-    for (const t of tables) {
+    for (const t of visibleTables) {
       const tableNo = Number(t.table_no || 0);
       if (!tableNo || tableNo === fromNo) continue;
       const cx = (Number(t.pos_x || 0) / 100) * width;
@@ -412,7 +449,7 @@ export default function CashierTableLayoutPage() {
        
 
         <div className="rounded-2xl border border-slate-200 bg-white p-3">
-          <div className="relative w-full rounded-2xl border border-dashed border-slate-200 bg-slate-50" style={{ minHeight: 560 }}>
+          <div className="relative aspect-[16/10] w-full rounded-2xl border border-dashed border-slate-200 bg-slate-50">
             {Array.from({ length: 8 }).map((_, idx) => (
               <div
                 key={`table-sk-${idx}`}
@@ -439,10 +476,41 @@ export default function CashierTableLayoutPage() {
       
 
       <div className="rounded-xl border border-slate-200 bg-white p-3">
-          <div className="mb-2 text-sm font-semibold text-slate-700">Floor Map</div>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm font-semibold text-slate-700">Floor Map</div>
+            {areaTabs.length ? (
+              <div className="no-scrollbar -mx-3 flex max-w-full gap-2 overflow-x-auto px-3 sm:mx-0 sm:px-0" role="tablist" aria-label="Areas">
+                {areaTabs.map((a) => {
+                  const Icon = areaKindMeta(a.kind).icon;
+                  const active = a.id === activeAreaId;
+                  const busyCount = activeByArea.get(a.id) || 0;
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setActiveAreaId(a.id)}
+                      className={`inline-flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-3 text-sm font-semibold transition ${
+                        active
+                          ? "border-[#FF4800] bg-[linear-gradient(91.59deg,#FF4800_2.56%,#FFA680_97.05%)] text-white shadow-[0_10px_18px_rgba(255,72,0,0.18)]"
+                          : "border-slate-200 bg-white text-slate-700 hover:bg-[#FFF7F4] hover:text-[#FF4800]"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {a.name}
+                      <span className={`rounded-full px-1.5 text-[11px] ${active ? "bg-white/25" : "bg-slate-100 text-slate-600"}`}>
+                        {busyCount ? `${busyCount}/${a.count}` : a.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+          <div className="overflow-x-auto rounded-2xl">
           <div
-            className="relative w-full rounded-2xl border border-dashed border-slate-300 bg-slate-50"
-            style={{ minHeight: 560 }}
+            className="relative aspect-[16/10] w-full min-w-[640px] rounded-2xl border border-dashed border-slate-300 bg-slate-50"
             onDragOver={(e) => {
               e.preventDefault();
               const rect = e.currentTarget.getBoundingClientRect();
@@ -455,7 +523,10 @@ export default function CashierTableLayoutPage() {
             }}
             onDrop={onDropNearTable}
           >
-            {tables.map((t) => {
+            {visibleTables.length === 0 ? (
+              <div className="absolute inset-0 grid place-items-center text-sm text-slate-500">No tables in this area.</div>
+            ) : null}
+            {visibleTables.map((t) => {
               const tableNo = Number(t.table_no);
               const size = sizeForShape(t.shape);
               const active = activeByTable.has(tableNo);
@@ -553,6 +624,7 @@ export default function CashierTableLayoutPage() {
                 </button>
               );
             })}
+          </div>
           </div>
         </div>
 

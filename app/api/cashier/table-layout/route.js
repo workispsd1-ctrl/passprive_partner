@@ -43,12 +43,20 @@ export async function GET(request) {
     const ctx = await resolveCashierRestaurant(token);
     if (ctx.error) return NextResponse.json({ ok: false, error: ctx.error }, { status: ctx.status });
 
-    const [layoutRes, ordersRes] = await Promise.all([
+    const loadLayout = (columns) =>
       ctx.admin
         .from("restaurant_table_layouts")
-        .select("id, table_no, label, shape, capacity, pos_x, pos_y")
+        .select(columns)
         .eq("restaurant_id", ctx.restaurantId)
-        .order("table_no", { ascending: true }),
+        .order("table_no", { ascending: true });
+
+    const [firstLayoutRes, areasRes, ordersRes] = await Promise.all([
+      loadLayout("id, table_no, label, shape, capacity, pos_x, pos_y, area_id"),
+      ctx.admin
+        .from("restaurant_table_areas")
+        .select("id, name, kind, sort_order, created_at")
+        .eq("restaurant_id", ctx.restaurantId)
+        .order("sort_order", { ascending: true }),
       ctx.admin
         .from("restaurant_table_bookings")
         .select("id, table_no, customer_name, customer_phone, order_items, order_details, notes, total_amount, booking_status, payment_status, created_at, updated_at, source")
@@ -56,6 +64,11 @@ export async function GET(request) {
         .order("created_at", { ascending: false }),
     ]);
 
+    // Database without the table-areas migration yet: serve the single floor map as before.
+    const layoutRes =
+      firstLayoutRes.error?.code === "42703"
+        ? await loadLayout("id, table_no, label, shape, capacity, pos_x, pos_y")
+        : firstLayoutRes;
     if (layoutRes.error) return NextResponse.json({ ok: false, error: layoutRes.error.message }, { status: 400 });
     if (ordersRes.error) return NextResponse.json({ ok: false, error: ordersRes.error.message }, { status: 400 });
 
@@ -63,6 +76,7 @@ export async function GET(request) {
       ok: true,
       restaurant_id: ctx.restaurantId,
       tables: layoutRes.data || [],
+      areas: areasRes.error ? [] : areasRes.data || [],
       orders: ordersRes.data || [],
     });
   } catch (error) {
