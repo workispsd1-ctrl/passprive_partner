@@ -68,15 +68,15 @@ function KpiCard({ title, value, subtitle, icon: Icon, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="w-full rounded-3xl border border-slate-200 bg-white p-4 shadow-sm min-h-[142px] flex items-center text-left hover:border-[#FF4800]/40 transition cursor-pointer"
+      className="w-full min-w-0 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm min-h-[120px] sm:min-h-[142px] flex items-center text-left hover:border-[#FF4800]/40 transition cursor-pointer"
     >
-      <div className="flex w-full items-center justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</p>
-          <p className="mt-2 text-3xl font-bold text-slate-900 leading-none">{value}</p>
-          <p className="mt-1.5 text-sm text-slate-500">{subtitle}</p>
+      <div className="flex w-full items-center justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <p className="truncate text-xs sm:text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</p>
+          <p className="mt-2 truncate text-2xl sm:text-3xl font-bold text-slate-900 leading-none">{value}</p>
+          <p className="mt-1.5 truncate text-xs sm:text-sm text-slate-500">{subtitle}</p>
         </div>
-        <div className="h-11 w-11 rounded-xl bg-[linear-gradient(91.59deg,#FF4800_2.56%,#FFA680_97.05%)] text-white flex items-center justify-center shadow-md">
+        <div className="hidden sm:flex shrink-0 h-11 w-11 rounded-xl bg-[linear-gradient(91.59deg,#FF4800_2.56%,#FFA680_97.05%)] text-white items-center justify-center shadow-md">
           <Icon className="h-5.5 w-5.5" />
         </div>
       </div>
@@ -373,7 +373,7 @@ export default function CashierDashboardPage() {
     return (
       <div className="space-y-5 animate-pulse">
         <div className="h-28 rounded-3xl border border-slate-200 bg-white" />
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-36 rounded-3xl border border-slate-200 bg-white" />)}
         </div>
         <div className="grid gap-4 xl:grid-cols-3">
@@ -388,8 +388,8 @@ export default function CashierDashboardPage() {
     <div className="space-y-5">
       {error ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
 
-      <section className="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm min-h-[142px] xl:row-span-2">
+      <section className="grid grid-cols-2 items-stretch gap-3 sm:gap-4 xl:grid-cols-3">
+        <div className="col-span-2 xl:col-span-1 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm min-h-[142px] xl:row-span-2">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Calendar</p>
             <CalendarDays className="h-5 w-5 text-violet-600" />
@@ -440,7 +440,7 @@ export default function CashierDashboardPage() {
       </section>
 
       <section className="rounded-3xl border border-slate-200 bg-white overflow-visible">
-        <div className="border-b border-slate-100 px-5 py-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="border-b border-slate-100 px-4 sm:px-5 py-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-900">Booking Time Flow</h2>
           <span className="text-xs text-slate-500">{fmtDate(selectedDate)} • {todaysBookings.length} bookings • {hourLabel(openingHour)} - {hourLabel(closingHour)}</span>
         </div>
@@ -528,7 +528,7 @@ export default function CashierDashboardPage() {
 
       <section className="grid gap-4 xl:grid-cols-3">
         <div className="rounded-3xl border border-slate-200 bg-white xl:col-span-2">
-          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 sm:px-5 py-4">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Order Confirmations</h2>
               
@@ -564,7 +564,7 @@ export default function CashierDashboardPage() {
 
         <div className="space-y-4">
           <div className="rounded-3xl border border-slate-200 bg-white">
-            <div className="border-b border-slate-100 px-5 py-4">
+            <div className="border-b border-slate-100 px-4 sm:px-5 py-4">
               <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2"><CalendarDays className="h-4 w-4" /> Bookings Timeline</h3>
               <p className="text-xs text-slate-500 mt-1">Today&apos;s dining schedule</p>
             </div>
@@ -591,7 +591,7 @@ export default function CashierDashboardPage() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-5">
+          <div className="rounded-3xl border border-slate-200 bg-white p-4 sm:p-5">
             <h3 className="text-base font-semibold text-slate-900">Calendar Snapshot</h3>
             <p className="mt-1 text-xs text-slate-500">Today: {fmtDate(new Date())}</p>
             <div className="mt-4 rounded-2xl bg-slate-50 p-4">
@@ -604,12 +604,12 @@ export default function CashierDashboardPage() {
       </section>
 
       <section className="rounded-3xl border border-slate-200 bg-white">
-        <div className="border-b border-slate-100 px-5 py-4">
+        <div className="border-b border-slate-100 px-4 sm:px-5 py-4">
           <h2 className="text-lg font-semibold text-slate-900">Recent Payment Sessions</h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-600">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead className="bg-slate-50 text-slate-600 whitespace-nowrap">
               <tr>
                 <th className="px-4 py-2 text-left">Tracking</th>
                 <th className="px-4 py-2 text-left">Context</th>

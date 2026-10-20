@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchMyStores } from "@/lib/store-partner/stores";
+import { MobileNavBackdrop, drawerAsideClass } from "@/components/ui/MobileNav";
 
 const BRAND_ACCENT = "#FF4800";
 const ACTIVE_ICON = "#FFFFFF";
@@ -190,7 +191,7 @@ async function queryCountFallback(queries) {
   return 0;
 }
 
-export default function StoreSidebar() {
+export default function StoreSidebar({ mobileOpen = false, onMobileClose }) {
   const pathname = usePathname();
 
   const [stores, setStores] = useState([]);
@@ -494,11 +495,15 @@ export default function StoreSidebar() {
 
   return (
     <>
-      <aside className="hidden lg:flex lg:flex-col lg:w-[280px] h-screen sticky top-0 border-r border-gray-200 bg-white overflow-hidden">
-        <div className="h-16 flex items-center px-6 border-b border-gray-200 shrink-0">
-          <div className="flex items-center gap-2">
+      <MobileNavBackdrop open={mobileOpen} onClose={onMobileClose} />
+      <aside
+        className={`${drawerAsideClass(mobileOpen)} shrink-0 lg:w-[280px] border-r border-gray-200 bg-white overflow-hidden`}
+        aria-label="Store navigation"
+      >
+        <div className="h-16 flex items-center justify-between gap-2 px-5 lg:px-6 border-b border-gray-200 shrink-0">
+          <div className="flex min-w-0 items-center gap-2">
             <div
-              className="h-9 w-9 rounded-xl overflow-hidden border flex items-center justify-center"
+              className="h-9 w-9 shrink-0 rounded-xl overflow-hidden border flex items-center justify-center"
               style={{ backgroundColor: "#FFF7F4", borderColor: "rgba(255, 72, 0, 0.25)" }}
             >
               {selectedStore?.logo_url ? (
@@ -511,13 +516,21 @@ export default function StoreSidebar() {
                 <Store className="h-4 w-4" style={{ color: BRAND_ACCENT }} />
               )}
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="font-bold leading-tight">Store Partner</div>
-              <div className="text-xs text-gray-500">
+              <div className="truncate text-xs text-gray-500">
                 {selectedStore?.name || "Dashboard"}
               </div>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={onMobileClose}
+            className="lg:hidden inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+            aria-label="Close navigation menu"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
         <nav className="flex-1 min-h-0 px-3 py-4 space-y-1 overflow-y-auto">

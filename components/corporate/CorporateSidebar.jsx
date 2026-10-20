@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { MobileNavBackdrop, drawerAsideClass } from "@/components/ui/MobileNav";
 
 export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
   const pathname = usePathname();
@@ -59,20 +60,11 @@ export default function CorporateSidebar({ isMobileOpen, closeMobileMenu }) {
 
   return (
     <>
-      {isMobileOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          onClick={closeMobileMenu}
-        />
-      )}
+      <MobileNavBackdrop open={isMobileOpen} onClose={closeMobileMenu} />
 
       <aside
-        className={[
-          "fixed lg:sticky top-0 h-screen bg-white z-50 transition-transform duration-300 overflow-y-auto",
-          "lg:translate-x-0",
-          isMobileOpen ? "translate-x-0" : "-translate-x-full",
-        ].join(" ")}
-        style={{ width: "min(280px, 90vw)" }}
+        className={`${drawerAsideClass(isMobileOpen)} shrink-0 lg:w-[280px] bg-white overflow-y-auto`}
+        aria-label="Corporate navigation"
       >
         <div className="pt-6 lg:pt-8 pb-4 lg:pb-6 px-4 lg:px-6 flex items-center justify-between">
           <h1

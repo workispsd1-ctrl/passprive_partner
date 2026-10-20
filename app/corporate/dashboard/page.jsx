@@ -343,13 +343,13 @@ export default function CorporateDashboardPage() {
       {/* Header with Time Period Filter */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Dashboard Overview</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Dashboard Overview</h2>
           <p className="text-sm text-gray-500 mt-1">Track your corporate metrics and performance</p>
         </div>
-        <div className="flex gap-2 bg-white rounded-lg p-1 border border-gray-200 shadow-sm">
+        <div className="flex w-full sm:w-auto gap-1 sm:gap-2 bg-white rounded-lg p-1 border border-gray-200 shadow-sm">
           <button
             onClick={() => setTimePeriod('daily')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            className={`flex-1 sm:flex-none whitespace-nowrap px-3 sm:px-4 py-2 rounded-md text-sm font-medium transition-all ${
               timePeriod === 'daily'
                 ? 'bg-[#FF4800] text-white shadow-sm'
                 : 'text-gray-600 hover:bg-gray-100'
@@ -359,7 +359,7 @@ export default function CorporateDashboardPage() {
           </button>
           <button
             onClick={() => setTimePeriod('weekly')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            className={`flex-1 sm:flex-none whitespace-nowrap px-3 sm:px-4 py-2 rounded-md text-sm font-medium transition-all ${
               timePeriod === 'weekly'
                 ? 'bg-[#FF4800] text-white shadow-sm'
                 : 'text-gray-600 hover:bg-gray-100'
@@ -369,7 +369,7 @@ export default function CorporateDashboardPage() {
           </button>
           <button
             onClick={() => setTimePeriod('monthly')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            className={`flex-1 sm:flex-none whitespace-nowrap px-3 sm:px-4 py-2 rounded-md text-sm font-medium transition-all ${
               timePeriod === 'monthly'
                 ? 'bg-[#FF4800] text-white shadow-sm'
                 : 'text-gray-600 hover:bg-gray-100'
@@ -381,9 +381,9 @@ export default function CorporateDashboardPage() {
       </div>
 
       {/* KPI Cards - Simplified */}
-      <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
+      <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
         {/* Total Points */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <div className="min-w-0 bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-[#737791]">Total Points</h3>
             <div className="w-12 h-12 rounded-full bg-[#FFF7F4] flex items-center justify-center">
@@ -392,12 +392,12 @@ export default function CorporateDashboardPage() {
               </svg>
             </div>
           </div>
-          <div className="text-3xl font-bold text-[#151D48]">{metrics.totalPointsPool.toLocaleString()}</div>
+          <div className="text-2xl sm:text-3xl font-bold text-[#151D48]">{metrics.totalPointsPool.toLocaleString()}</div>
           <div className="mt-2 text-xs text-[#737791]">Total purchased points</div>
         </div>
 
         {/* Total Passes */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <div className="min-w-0 bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-[#737791]">Total Passes</h3>
             <div className="w-12 h-12 rounded-full bg-[#FFF7F4] flex items-center justify-center">
@@ -406,12 +406,12 @@ export default function CorporateDashboardPage() {
               </svg>
             </div>
           </div>
-          <div className="text-3xl font-bold text-[#151D48]">{metrics.totalPasses.toLocaleString()}</div>
+          <div className="text-2xl sm:text-3xl font-bold text-[#151D48]">{metrics.totalPasses.toLocaleString()}</div>
           <div className="mt-2 text-xs text-[#737791]">{metrics.activePasses.toLocaleString()} active passes</div>
         </div>
 
         {/* Redemption Rate */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <div className="min-w-0 bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-[#737791]">Redemption Rate</h3>
             <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center">
@@ -420,120 +420,116 @@ export default function CorporateDashboardPage() {
               </svg>
             </div>
           </div>
-          <div className="text-3xl font-bold text-[#151D48]">{metrics.redemptionRate}%</div>
+          <div className="text-2xl sm:text-3xl font-bold text-[#151D48]">{metrics.redemptionRate}%</div>
           <div className="mt-2 text-xs text-[#737791]">Points redeemed vs distributed</div>
         </div>
       </div>
 
       {/* Charts Grid - 2x2 Layout */}
-      <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+      <div className="grid gap-4 sm:gap-6 grid-cols-1 xl:grid-cols-2">
         {/* Points Distribution Chart */}
         <div 
-          className="bg-white rounded-lg"
+          className="min-w-0 bg-white rounded-lg p-4 sm:p-6"
           style={{
             minHeight: "360px",
             border: "1px solid #F8F9FA",
             boxShadow: "0px 4px 20px 0px rgba(238, 238, 238, 0.5)",
-            padding: "24px"
           }}
         >
-          <div className="flex justify-between items-start mb-4">
+          <div className="flex justify-between items-start gap-3 mb-4">
             <div>
-              <h3 className="font-semibold text-gray-900 text-lg">Points Distribution Trend</h3>
+              <h3 className="font-semibold text-gray-900 text-base sm:text-lg">Points Distribution Trend</h3>
               <p className="text-sm text-gray-500 mt-1">{metrics.periodLabel} Performance</p>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-[#FFF7F4] rounded-lg">
+            <div className="flex shrink-0 items-center gap-2 px-3 py-1.5 bg-[#FFF7F4] rounded-lg">
               <div className="w-2 h-2 rounded-full bg-[#FF4800]"></div>
               <span className="text-xs font-medium text-[#FF4800]">Points</span>
             </div>
           </div>
-          <div className="relative h-[260px]">
+          <div className="relative h-[220px] sm:h-[260px]">
             <Line data={passesChartData} options={passesChartOptions} />
           </div>
         </div>
 
         {/* Pass Generation Chart */}
         <div 
-          className="bg-white rounded-lg"
+          className="min-w-0 bg-white rounded-lg p-4 sm:p-6"
           style={{
             minHeight: "360px",
             border: "1px solid #F8F9FA",
             boxShadow: "0px 4px 20px 0px rgba(238, 238, 238, 0.5)",
-            padding: "24px"
           }}
         >
-          <div className="flex justify-between items-start mb-4">
+          <div className="flex justify-between items-start gap-3 mb-4">
             <div>
-              <h3 className="font-semibold text-gray-900 text-lg">Pass Generation Analytics</h3>
+              <h3 className="font-semibold text-gray-900 text-base sm:text-lg">Pass Generation Analytics</h3>
               <p className="text-sm text-gray-500 mt-1">{metrics.periodLabel} Distribution</p>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-[#FFF7F4] rounded-lg">
+            <div className="flex shrink-0 items-center gap-2 px-3 py-1.5 bg-[#FFF7F4] rounded-lg">
               <div className="w-2 h-2 rounded-full bg-[#FF4800]"></div>
               <span className="text-xs font-medium text-[#FF4800]">Passes</span>
             </div>
           </div>
-          <div className="relative h-[260px]">
+          <div className="relative h-[220px] sm:h-[260px]">
             <Bar data={giftCardsChartData} options={giftCardsChartOptions} />
           </div>
         </div>
 
         {/* Pass Type Distribution Chart */}
         <div 
-          className="bg-white rounded-lg"
+          className="min-w-0 bg-white rounded-lg p-4 sm:p-6"
           style={{
             minHeight: "360px",
             border: "1px solid #F8F9FA",
             boxShadow: "0px 4px 20px 0px rgba(238, 238, 238, 0.5)",
-            padding: "24px"
           }}
         >
-          <div className="flex justify-between items-start mb-4">
+          <div className="flex justify-between items-start gap-3 mb-4">
             <div>
-              <h3 className="font-semibold text-gray-900 text-lg">Pass Type Distribution</h3>
+              <h3 className="font-semibold text-gray-900 text-base sm:text-lg">Pass Type Distribution</h3>
               <p className="text-sm text-gray-500 mt-1">Breakdown by tier</p>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-[#FFF7F4] rounded-lg">
+            <div className="flex shrink-0 items-center gap-2 px-3 py-1.5 bg-[#FFF7F4] rounded-lg">
               <svg className="w-4 h-4 text-[#FF4800]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
               <span className="text-xs font-medium text-[#FF4800]">Types</span>
             </div>
           </div>
-          <div className="relative h-[260px]">
+          <div className="relative h-[220px] sm:h-[260px]">
             <Doughnut data={passTypeChartData} options={passTypeChartOptions} />
           </div>
         </div>
 
         {/* Employee Engagement Chart */}
         <div 
-          className="bg-white rounded-lg"
+          className="min-w-0 bg-white rounded-lg p-4 sm:p-6"
           style={{
             minHeight: "360px",
             border: "1px solid #F8F9FA",
             boxShadow: "0px 4px 20px 0px rgba(238, 238, 238, 0.5)",
-            padding: "24px"
           }}
         >
-          <div className="flex justify-between items-start mb-4">
+          <div className="flex justify-between items-start gap-3 mb-4">
             <div>
-              <h3 className="font-semibold text-gray-900 text-lg">Employee Engagement</h3>
+              <h3 className="font-semibold text-gray-900 text-base sm:text-lg">Employee Engagement</h3>
               <p className="text-sm text-gray-500 mt-1">{metrics.periodLabel} Activity</p>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-lg">
+            <div className="flex shrink-0 items-center gap-2 px-3 py-1.5 bg-green-50 rounded-lg">
               <div className="w-2 h-2 rounded-full bg-[#10B981]"></div>
               <span className="text-xs font-medium text-green-600">Engaged</span>
             </div>
           </div>
-          <div className="relative h-[260px]">
+          <div className="relative h-[220px] sm:h-[260px]">
             <Line data={engagementChartData} options={engagementChartOptions} />
           </div>
         </div>
       </div>
 
       {/* Analytics Summary */}
-      <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
+      <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
         {/* Pass Distribution Rate */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <div className="min-w-0 bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-4">
             <h4 className="font-semibold text-[#151D48]">Pass Distribution</h4>
             <div className="w-10 h-10 rounded-full bg-[#FFF7F4] flex items-center justify-center">
@@ -542,31 +538,31 @@ export default function CorporateDashboardPage() {
               </svg>
             </div>
           </div>
-          <p className="text-3xl font-bold text-[#151D48] mb-2">
+          <p className="text-2xl sm:text-3xl font-bold text-[#151D48] mb-2">
             {((metrics.activePasses / metrics.totalPasses) * 100).toFixed(1)}%
           </p>
           <p className="text-sm text-[#737791]">Active passes being utilized</p>
         </div>
 
         {/* Points Utilization */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <div className="min-w-0 bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-4">
             <h4 className="font-semibold text-[#151D48]">Points Utilization</h4>
             <span className="text-2xl">💰</span>
           </div>
-          <p className="text-3xl font-bold text-[#151D48] mb-2">
+          <p className="text-2xl sm:text-3xl font-bold text-[#151D48] mb-2">
             {((metrics.pointsRedeemed / metrics.pointsDistributed) * 100).toFixed(1)}%
           </p>
           <p className="text-sm text-[#737791]">Distributed points redeemed</p>
         </div>
 
         {/* Pool Efficiency */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <div className="min-w-0 bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-4">
             <h4 className="font-semibold text-[#151D48]">Pool Efficiency</h4>
             <span className="text-2xl">📊</span>
           </div>
-          <p className="text-3xl font-bold text-[#151D48] mb-2">
+          <p className="text-2xl sm:text-3xl font-bold text-[#151D48] mb-2">
             {((metrics.pointsDistributed / metrics.totalPointsPool) * 100).toFixed(1)}%
           </p>
           <p className="text-sm text-[#737791]">Pool distributed to employees</p>

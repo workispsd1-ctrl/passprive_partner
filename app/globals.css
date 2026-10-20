@@ -112,3 +112,13 @@ button:focus-visible {
   transform: translateX(-100%);
   animation: skeleton-shimmer 1.6s ease-in-out infinite;
 }
+
+/* Horizontally scrollable rows (tab bars) without a visible scrollbar */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

@@ -26,7 +26,7 @@ function StatCard({ title, value, change, changeType, icon: Icon }) {
   const down = changeType === "down";
 
   return (
-    <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="min-w-0 rounded-3xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm">
       <div className="flex items-center justify-between">
         <div className="text-xs text-gray-500">{title}</div>
         <div
@@ -40,9 +40,9 @@ function StatCard({ title, value, change, changeType, icon: Icon }) {
         </div>
       </div>
 
-      <div className="mt-2 text-2xl font-bold text-gray-900">{value}</div>
+      <div className="mt-2 truncate text-xl sm:text-2xl font-bold text-gray-900">{value}</div>
 
-      <div className="mt-3 flex items-center gap-1 text-sm">
+      <div className="mt-3 flex flex-wrap items-center gap-1 text-sm">
         {up && <ArrowUpRight className="h-4 w-4" style={{ color: THEME_ACCENT_SOLID }} />}
         {down && <ArrowDownRight className="h-4 w-4 text-red-600" />}
         <span
@@ -62,11 +62,11 @@ function StatCard({ title, value, change, changeType, icon: Icon }) {
 function CardShell({ title, right, children }) {
   return (
     <div className="rounded-3xl border border-gray-200 bg-white shadow-sm">
-      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+      <div className="px-4 sm:px-6 py-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
         <div className="font-semibold text-gray-900">{title}</div>
         {right ? <div>{right}</div> : null}
       </div>
-      <div className="p-6">{children}</div>
+      <div className="p-4 sm:p-6">{children}</div>
     </div>
   );
 }
@@ -153,11 +153,11 @@ function GraphRangeSelect({ value, onChange }) {
   const selected = options.find((option) => option.value === value) || options[0];
 
   return (
-    <div className="relative" ref={rootRef}>
+    <div className="relative w-full sm:w-auto" ref={rootRef}>
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="group inline-flex h-11 min-w-[190px] items-center justify-between rounded-2xl border px-4 text-sm font-semibold text-gray-800 shadow-sm transition-all"
+        className="group inline-flex h-11 w-full sm:w-auto sm:min-w-[190px] items-center justify-between rounded-2xl border px-4 text-sm font-semibold text-gray-800 shadow-sm transition-all"
         style={{
           background: `linear-gradient(135deg, ${THEME_BG} 0%, #fffaf2 100%)`,
           borderColor: THEME_ACCENT,
@@ -256,7 +256,7 @@ function SalesOverviewChart({ data }) {
   );
 
   return (
-    <div className="h-[260px] rounded-2xl border border-gray-200 bg-white p-3">
+    <div className="h-[200px] sm:h-[260px] rounded-2xl border border-gray-200 bg-white p-2 sm:p-3">
       <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full">
         <defs>
           <linearGradient id="salesGradient" x1="0" x2="0" y1="0" y2="1">
@@ -450,7 +450,7 @@ export default function StorePartnerDashboardPage() {
         fontFamily: '"Space Grotesk", "Sora", sans-serif',
       }}
     >
-      <div className="mx-auto max-w-6xl px-6 py-4 space-y-6">
+      <div className="mx-auto max-w-6xl py-2 sm:py-4 space-y-4 sm:space-y-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             {selectedStore?.name ? (
@@ -465,7 +465,7 @@ export default function StorePartnerDashboardPage() {
 
           <div className="flex items-center gap-2">
             <button
-              className="h-10 rounded-full border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 shadow-sm"
+              className="h-10 flex-1 md:flex-none rounded-full border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 shadow-sm"
               type="button"
               onClick={handleExport}
             >
@@ -474,7 +474,7 @@ export default function StorePartnerDashboardPage() {
 
             <Link
               href={selectedStoreId ? `/store-partner/offers/create?store_id=${selectedStoreId}` : "/store-partner/offers/create"}
-              className="h-10 rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 shadow-lg shadow-[rgba(255,72,0,0.28)]"
+              className="h-10 flex-1 md:flex-none justify-center rounded-full px-4 text-sm font-semibold text-white inline-flex items-center gap-2 shadow-lg shadow-[rgba(255,72,0,0.28)]"
               style={{
                 background:
                   "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)",
@@ -510,7 +510,7 @@ export default function StorePartnerDashboardPage() {
               }
             >
               <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex flex-wrap gap-2">
+                <div className="flex w-full flex-wrap gap-2 sm:w-auto">
                   <GraphRangeSelect value={graphMode} onChange={setGraphMode} />
                 </div>
 
@@ -520,7 +520,7 @@ export default function StorePartnerDashboardPage() {
                       type="month"
                       value={selectedMonth}
                       onChange={(e) => setSelectedMonth(e.target.value)}
-                      className="h-11 rounded-2xl border px-3 text-sm font-medium text-gray-700 shadow-sm outline-none"
+                      className="h-11 min-w-0 flex-1 sm:flex-none rounded-2xl border px-3 text-sm font-medium text-gray-700 shadow-sm outline-none"
                       style={{
                         background: "#fffaf5",
                         borderColor: THEME_ACCENT,
@@ -535,7 +535,7 @@ export default function StorePartnerDashboardPage() {
                         type="date"
                         value={startDate}
                         onChange={(e) => setStartDate(e.target.value)}
-                        className="h-11 rounded-2xl border px-3 text-sm font-medium text-gray-700 shadow-sm outline-none"
+                        className="h-11 min-w-0 flex-1 sm:flex-none rounded-2xl border px-3 text-sm font-medium text-gray-700 shadow-sm outline-none"
                         style={{
                           background: "#fffaf5",
                           borderColor: THEME_ACCENT,
@@ -546,7 +546,7 @@ export default function StorePartnerDashboardPage() {
                         type="date"
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
-                        className="h-11 rounded-2xl border px-3 text-sm font-medium text-gray-700 shadow-sm outline-none"
+                        className="h-11 min-w-0 flex-1 sm:flex-none rounded-2xl border px-3 text-sm font-medium text-gray-700 shadow-sm outline-none"
                         style={{
                           background: "#fffaf5",
                           borderColor: THEME_ACCENT,
@@ -631,9 +631,9 @@ export default function StorePartnerDashboardPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[760px] text-sm">
                 <thead>
-                  <tr className="text-left text-gray-500">
+                  <tr className="text-left text-gray-500 whitespace-nowrap">
                     <th className="py-2 pr-4 font-medium">Order ID</th>
                     <th className="py-2 pr-4 font-medium">Date</th>
                     <th className="py-2 pr-4 font-medium">Method</th>

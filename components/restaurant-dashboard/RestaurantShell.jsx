@@ -8,11 +8,13 @@ import BookingAlertNotifier from "./BookingAlertNotifier";
 import TableOrderAlertNotifier from "./TableOrderAlertNotifier";
 import LockedPage from "./LockedPage";
 import { fetchRestaurantPlan, isRouteLocked } from "@/lib/restaurant-partner/plan";
+import { useMobileNav } from "@/components/ui/MobileNav";
 
 export default function RestaurantShell({ children }) {
   const pathname = usePathname();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [planInfo, setPlanInfo] = useState(null);
+  const mobileNav = useMobileNav();
 
   useEffect(() => {
     let mounted = true;
@@ -71,12 +73,18 @@ export default function RestaurantShell({ children }) {
       <BookingAlertNotifier />
       <TableOrderAlertNotifier />
       <div className="flex">
-        <RestaurantSidebar collapsed={sidebarCollapsed} />
+        <RestaurantSidebar
+          collapsed={sidebarCollapsed}
+          mobileOpen={mobileNav.open}
+          onMobileClose={mobileNav.close}
+        />
 
         <div className="flex-1 min-w-0">
           <RestaurantTopbar
             collapsed={sidebarCollapsed}
             onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
+            mobileNavOpen={mobileNav.open}
+            onOpenMobileNav={mobileNav.toggle}
           />
           <main className="px-4 sm:px-6 lg:px-8 py-6">{content}</main>
         </div>

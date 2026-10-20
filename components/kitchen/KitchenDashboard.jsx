@@ -576,7 +576,7 @@ export default function KitchenDashboard() {
           <div className="h-8 w-48 animate-pulse rounded bg-gray-200" />
           <div className="h-10 w-24 animate-pulse rounded bg-gray-200" />
         </div>
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6">
           {[1, 2].map((col) => (
             <div key={col} className="space-y-4">
               <div className="h-12 w-full animate-pulse rounded-lg bg-gray-200" />
@@ -593,7 +593,7 @@ export default function KitchenDashboard() {
   return (
     <div className="space-y-4">
       {orderAlert ? (
-        <div className="fixed right-6 top-20 z-50 w-72 rounded-lg border bg-[#FFF7F4] p-3 shadow-2xl">
+        <div className="fixed inset-x-4 top-20 z-50 sm:inset-x-auto sm:right-6 sm:w-72 rounded-lg border bg-[#FFF7F4] p-3 shadow-2xl">
           <div className="text-sm font-semibold text-slate-900">{orderAlert.message}</div>
           <div className="mt-2 text-xs text-slate-700 space-y-1">
             <div>Table: {orderAlert.tableNo}</div>
@@ -625,13 +625,13 @@ export default function KitchenDashboard() {
         </div>
       ) : null}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Kitchen Orders</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Kitchen Orders</h1>
       </div>
 
       {/* Two Column Layout */}
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6">
         {/* Table Orders Section */}
-        <div className="flex flex-col h-[calc(100vh-200px)]">
+        <div className="flex min-w-0 flex-col md:h-[calc(100dvh-200px)]">
           <div className="mb-4 flex items-center justify-between px-4 py-3 rounded-t-lg bg-gradient-to-r from-purple-50 to-purple-100 border-b-2 border-purple-300">
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
               🍽️ Table Orders
@@ -644,18 +644,18 @@ export default function KitchenDashboard() {
           </div>
 
           {tableOrders.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center rounded-b-lg border border-dashed border-gray-300 bg-gray-50">
+            <div className="flex-1 flex min-h-32 items-center justify-center rounded-b-lg border border-dashed border-gray-300 bg-gray-50">
               <p className="text-gray-600">No active table orders</p>
             </div>
           ) : (
-            <div className="flex-1 overflow-y-auto rounded-b-lg border border-gray-200 bg-white space-y-2 p-3">
+            <div className="flex-1 md:overflow-y-auto rounded-b-lg border border-gray-200 bg-white space-y-2 p-3">
               {tableOrders.map((order) => renderOrderCard(order, "table"))}
             </div>
           )}
         </div>
 
         {/* Pickup Orders Section */}
-        <div className="flex flex-col h-[calc(100vh-200px)]">
+        <div className="flex min-w-0 flex-col md:h-[calc(100dvh-200px)]">
           <div className="mb-4 flex items-center justify-between px-4 py-3 rounded-t-lg bg-gradient-to-r from-blue-50 to-blue-100 border-b-2 border-blue-300">
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
               📦 Pickup Orders
@@ -668,11 +668,11 @@ export default function KitchenDashboard() {
           </div>
 
           {pickupOrders.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center rounded-b-lg border border-dashed border-gray-300 bg-gray-50">
+            <div className="flex-1 flex min-h-32 items-center justify-center rounded-b-lg border border-dashed border-gray-300 bg-gray-50">
               <p className="text-gray-600">No active pickup orders</p>
             </div>
           ) : (
-            <div className="flex-1 overflow-y-auto rounded-b-lg border border-gray-200 bg-white space-y-2 p-3">
+            <div className="flex-1 md:overflow-y-auto rounded-b-lg border border-gray-200 bg-white space-y-2 p-3">
               {pickupOrders.map((order) => renderOrderCard(order, "pickup"))}
             </div>
           )}

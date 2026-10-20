@@ -1,14 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import CorporateSidebar from "./CorporateSidebar";
 import CorporateTopbar from "./CorporateTopbar";
+import { useMobileNav } from "@/components/ui/MobileNav";
 
 export default function CorporateShell({ children }) {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
-  const closeMobileMenu = () => setIsMobileMenuOpen(false);
+  const { open: isMobileMenuOpen, toggle: toggleMobileMenu, close: closeMobileMenu } = useMobileNav();
 
   return (
     <div

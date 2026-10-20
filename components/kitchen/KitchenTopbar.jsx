@@ -131,27 +131,29 @@ export default function KitchenTopbar() {
             <button
               type="button"
               onClick={onRefresh}
+              aria-label="Refresh"
               disabled={refreshing}
               className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-60"
             >
               <RefreshCcw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-              Refresh
+              <span className="hidden sm:inline">Refresh</span>
             </button>
 
             <button
               type="button"
               onClick={onLogout}
+              aria-label="Logout"
               disabled={loggingOut}
               className="h-10 rounded-xl bg-red-600 px-3 text-sm font-semibold text-white inline-flex items-center gap-2 disabled:opacity-60"
             >
               <LogOut className="h-4 w-4" />
-              {loggingOut ? "Logging out..." : "Logout"}
+              <span className="hidden sm:inline">{loggingOut ? "Logging out..." : "Logout"}</span>
             </button>
           </div>
         </div>
 
         {/* Tab nav row */}
-        <nav className="flex flex-wrap gap-5">
+        <nav className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:gap-3 sm:overflow-visible sm:px-0 lg:gap-5">
           {tabs.map((tab) => {
             const active = activeTab === tab.href;
             const Icon = tab.icon;
@@ -163,7 +165,7 @@ export default function KitchenTopbar() {
               <Link
                 key={tab.href}
                 href={tab.href}
-                className={`h-10 rounded-xl px-3 text-sm font-semibold inline-flex items-center gap-2 border transition ${
+                className={`h-10 shrink-0 whitespace-nowrap rounded-xl px-3 text-sm font-semibold inline-flex items-center gap-2 border transition ${
                   active ? palette.active : palette.idle
                 }`}
               >

@@ -26,6 +26,7 @@ import { fetchRestaurantPlan, isNavHidden, isRouteLocked } from "@/lib/restauran
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchOwnedRestaurantStatus } from "@/lib/restaurantData";
 import { resolveActiveRestaurant, selectRestaurant } from "@/lib/restaurant-partner/activeRestaurant";
+import { MobileNavBackdrop, drawerAsideClass } from "@/components/ui/MobileNav";
 
 const THEME_BG = "#FFF7F4";
 const THEME_ACCENT = "rgba(255,72,0,0.3)";
@@ -124,8 +125,10 @@ function ConfirmModal({
   );
 }
 
-export default function RestaurantSidebar({ collapsed = false }) {
+export default function RestaurantSidebar({ collapsed: collapsedPref = false, mobileOpen = false, onMobileClose }) {
   const pathname = usePathname();
+  // The open mobile drawer always shows the full sidebar; the collapsed rail is desktop-only.
+  const collapsed = collapsedPref && !mobileOpen;
 
   const [restaurantId, setRestaurantId] = useState(null);
   const [restaurantName, setRestaurantName] = useState("Restaurant");
@@ -378,13 +381,15 @@ export default function RestaurantSidebar({ collapsed = false }) {
 
   return (
     <>
+      <MobileNavBackdrop open={mobileOpen} onClose={onMobileClose} />
       <aside
-        className="hidden lg:flex lg:flex-col sticky top-0 h-screen border-r border-gray-200 bg-white transition-[width] duration-200 ease-out"
-        style={{ width: collapsed ? "5.5rem" : "17.5rem" }}
+        className={`${drawerAsideClass(mobileOpen)} shrink-0 border-r border-gray-200 bg-white lg:w-(--sidebar-w)`}
+        style={{ ["--sidebar-w"]: collapsed ? "5.5rem" : "17.5rem" }}
+        aria-label="Restaurant navigation"
       >
-        <div className={`h-16 flex items-center border-b border-gray-200 shrink-0 ${collapsed ? "justify-center px-3" : "px-6"}`}>
-          <div className={`flex items-center ${collapsed ? "justify-center" : "gap-2"}`}>
-            <div className="h-10 w-10 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className={`h-16 flex items-center border-b border-gray-200 shrink-0 ${collapsed ? "justify-center px-3" : "justify-between px-5 lg:px-6"}`}>
+          <div className={`flex min-w-0 items-center ${collapsed ? "justify-center" : "gap-2"}`}>
+            <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
               {restaurantLogo ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -402,12 +407,20 @@ export default function RestaurantSidebar({ collapsed = false }) {
               )}
             </div>
             {!collapsed ? (
-              <div>
+              <div className="min-w-0">
                 <div className="max-w-[150px] truncate font-bold leading-tight">{restaurantName}</div>
                 <div className="text-xs text-gray-500">Restaurant</div>
               </div>
             ) : null}
           </div>
+          <button
+            type="button"
+            onClick={onMobileClose}
+            className="lg:hidden inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+            aria-label="Close navigation menu"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">

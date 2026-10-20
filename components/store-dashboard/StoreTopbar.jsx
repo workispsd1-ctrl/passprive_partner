@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchMyStores } from "@/lib/store-partner/stores";
+import { MobileMenuButton } from "@/components/ui/MobileNav";
 
 const TITLE_BY_ROUTE = [
   { prefix: "/store-partner/all-stores/add", title: "Add Store" },
@@ -61,7 +62,7 @@ function flowTypeFromOrder(order) {
   return "payment";
 }
 
-export default function StoreTopbar() {
+export default function StoreTopbar({ mobileNavOpen = false, onOpenMobileNav }) {
   const router = useRouter();
   const pathname = usePathname();
   const dropdownRef = useRef(null);
@@ -263,18 +264,22 @@ export default function StoreTopbar() {
 
   return (
     <header className="sticky top-0 z-20 border-b border-gray-200 bg-white/90 backdrop-blur">
-      <div className="h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-        <div className="min-w-0">
-          <div className="text-xl font-bold text-gray-900 truncate">{pageTitle}</div>
-          <div className="text-xs text-gray-500 mt-0.5">{roleLabel}</div>
+      <div className="h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <MobileMenuButton onClick={onOpenMobileNav} open={mobileNavOpen} />
+          <div className="min-w-0">
+            <div className="text-lg sm:text-xl font-bold text-gray-900 truncate">{pageTitle}</div>
+            <div className="text-xs text-gray-500 mt-0.5 truncate">{roleLabel}</div>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3" ref={dropdownRef}>
-          <div className="relative">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3" ref={dropdownRef}>
+          <div className="sm:relative">
             <button
               className="h-10 w-10 rounded-xl border border-gray-200 bg-white flex items-center justify-center hover:bg-gray-50 relative"
               type="button"
               aria-label="Notifications"
+              aria-expanded={notifOpen}
               onClick={() => setNotifOpen((v) => !v)}
             >
               <Bell className="h-4 w-4 text-gray-700" />
@@ -286,13 +291,13 @@ export default function StoreTopbar() {
             </button>
 
             {notifOpen ? (
-              <div className="absolute right-0 mt-2 w-[360px] rounded-2xl border border-gray-200 bg-white shadow-xl p-2 z-50">
+              <div className="absolute inset-x-3 top-full mt-2 sm:inset-x-auto sm:right-0 sm:w-[360px] rounded-2xl border border-gray-200 bg-white shadow-xl p-2 z-50">
                 <div className="px-3 py-2 border-b border-gray-100">
                   <div className="text-sm font-semibold text-gray-900">New Orders</div>
                   <div className="text-xs text-gray-500">Pickup: {pickupCount}</div>
                 </div>
 
-                <div className="max-h-[360px] overflow-auto">
+                <div className="max-h-[min(360px,calc(100dvh-10rem))] overflow-auto">
                   {notifLoading ? (
                     <div className="p-4 text-sm text-gray-500">Loading...</div>
                   ) : unseenNotifications.length ? (
@@ -336,9 +341,10 @@ export default function StoreTopbar() {
             onClick={onLogout}
             className="h-10 rounded-xl border border-gray-200 bg-red-600 hover:bg-red-500 text-white px-3 text-sm font-medium flex items-center gap-2 cursor-pointer"
             type="button"
+            aria-label="Logout"
           >
             <LogOut className="h-4 w-4" />
-            Logout
+            <span className="hidden sm:inline">Logout</span>
           </button>
         </div>
       </div>

@@ -13,6 +13,7 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { getActiveRestaurantId } from "@/lib/restaurant-partner/activeRestaurant";
+import { MobileMenuButton } from "@/components/ui/MobileNav";
 
 const TITLE_MAP = {
   "/restaurant/dashboard": "Dashboard",
@@ -48,7 +49,12 @@ function fmtTime(t) {
   return String(t).slice(0, 5);
 }
 
-export default function RestaurantTopbar({ collapsed = false, onToggleSidebar }) {
+export default function RestaurantTopbar({
+  collapsed = false,
+  onToggleSidebar,
+  mobileNavOpen = false,
+  onOpenMobileNav,
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const title = useMemo(() => getTitleFromPath(pathname), [pathname]);
@@ -439,9 +445,10 @@ export default function RestaurantTopbar({ collapsed = false, onToggleSidebar })
 
   return (
     <header className="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-gray-200">
-      <div className="h-16 flex items-center justify-between px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
+      <div className="h-16 flex items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <MobileMenuButton onClick={onOpenMobileNav} open={mobileNavOpen} />
             <button
               type="button"
               onClick={onToggleSidebar}
@@ -453,16 +460,18 @@ export default function RestaurantTopbar({ collapsed = false, onToggleSidebar })
                 className={`h-4 w-4 transition-transform ${collapsed ? "rotate-180" : ""}`}
               />
             </button>
-            <div className="font-bold text-gray-900 text-xl">{title}</div>
+            <div className="truncate font-bold text-gray-900 text-lg sm:text-xl">{title}</div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="relative" ref={bellWrapRef}>
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <div className="sm:relative" ref={bellWrapRef}>
             <button
               className="h-10 w-10 rounded-xl border border-gray-200 bg-white flex items-center justify-center hover:bg-gray-50 relative"
               type="button"
               onClick={onBellClick}
+              aria-label="Notifications"
+              aria-expanded={open}
             >
               <Bell className="h-4 w-4 text-gray-700" />
               {showBadge && (
@@ -473,7 +482,7 @@ export default function RestaurantTopbar({ collapsed = false, onToggleSidebar })
             </button>
 
             {open && (
-              <div className="absolute right-0 mt-2 w-[420px] rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
+              <div className="absolute inset-x-3 top-full mt-2 sm:inset-x-auto sm:right-0 sm:w-[420px] rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
                 <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
                   <div className="text-sm font-semibold text-gray-900">Notifications</div>
                   <button
@@ -488,7 +497,7 @@ export default function RestaurantTopbar({ collapsed = false, onToggleSidebar })
                   </button>
                 </div>
 
-                <div className="max-h-[460px] overflow-auto">
+                <div className="max-h-[min(460px,calc(100dvh-12rem))] overflow-auto">
                   <div className="px-4 py-2 text-xs font-semibold text-gray-500 bg-gray-50 border-b border-gray-100">
                     New bookings
                   </div>
@@ -647,9 +656,10 @@ export default function RestaurantTopbar({ collapsed = false, onToggleSidebar })
             onClick={onLogout}
             className="h-10 rounded-xl border border-gray-200 px-3 text-sm font-medium hover:bg-red-400 cursor-pointer flex items-center gap-2 bg-red-500 text-white"
             type="button"
+            aria-label="Logout"
           >
             <LogOut className="h-4 w-4" />
-            Logout
+            <span className="hidden sm:inline">Logout</span>
           </button>
         </div>
       </div>
