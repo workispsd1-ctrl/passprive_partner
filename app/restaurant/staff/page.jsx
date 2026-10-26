@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { UserPlus, Users, Loader2, Eye, Pencil, Trash2, KeyRound, MonitorSmartphone } from "lucide-react";
+import QRCode from "qrcode";
+import { UserPlus, Users, Loader2, Eye, Pencil, Trash2, KeyRound, QrCode } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { getActiveRestaurantId } from "@/lib/restaurant-partner/activeRestaurant";
 import { toast } from "sonner";
@@ -56,6 +56,85 @@ export default function RestaurantStaffPage() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [members, setMembers] = useState([]);
   const [viewMember, setViewMember] = useState(null);
+  const [restaurantId, setRestaurantId] = useState("");
+  const [devices, setDevices] = useState([]);
+  const [loadingDevices, setLoadingDevices] = useState(true);
+  const [revokingDeviceId, setRevokingDeviceId] = useState("");
+  const [pairing, setPairing] = useState(null);
+  const [creatingPairing, setCreatingPairing] = useState(false);
+  const [setupQr, setSetupQr] = useState("");
+
+  // Staff devices are POS terminals paired with a one-time code; the QR just carries that code to /staff-pin.
+  const loadDevices = async () => {
+    const id = await getActiveRestaurantId();
+    setRestaurantId(id || "");
+    if (!id) {
+      setDevices([]);
+      setLoadingDevices(false);
+      return;
+    }
+    setLoadingDevices(true);
+    const { data, error } = await supabaseBrowser
+      .from("pos_terminals")
+      .select("id, label, status, device_model, paired_at, last_login_at")
+      .eq("restaurant_id", id)
+      .neq("status", "pending")
+      .order("created_at", { ascending: false });
+    setLoadingDevices(false);
+    if (error) {
+      setDevices([]);
+      toast.error(error.message || "Failed to load paired devices.");
+      return;
+    }
+    setDevices(data || []);
+  };
+
+  const onCreatePairing = async () => {
+    if (!restaurantId) return;
+    setCreatingPairing(true);
+    const { data, error } = await supabaseBrowser.rpc("pos_create_pairing", {
+      p_restaurant_id: restaurantId,
+      p_store_id: null,
+      p_label: "Staff device",
+    });
+    setCreatingPairing(false);
+    if (error || !data?.code) {
+      toast.error(error?.message || "Failed to create setup QR.");
+      return;
+    }
+    setPairing({ ...data, url: `${window.location.origin}/staff-pin?code=${encodeURIComponent(data.code)}` });
+  };
+
+  const onRevokeDevice = async (device) => {
+    const yes = window.confirm("Revoke this device? It will need a new setup QR to sign in again.");
+    if (!yes) return;
+    setRevokingDeviceId(device.id);
+    const { error } = await supabaseBrowser.rpc("pos_revoke_terminal", { p_terminal_id: device.id });
+    setRevokingDeviceId("");
+    if (error) {
+      toast.error(error.message || "Failed to revoke device.");
+      return;
+    }
+    toast.success("Device revoked.");
+    await loadDevices();
+  };
+
+  useEffect(() => {
+    loadDevices();
+  }, []);
+
+  useEffect(() => {
+    if (!pairing) {
+      setSetupQr("");
+      return;
+    }
+    QRCode.toDataURL(pairing.url, { width: 200, margin: 1 }).then(setSetupQr).catch(() => setSetupQr(""));
+    const timer = setTimeout(() => {
+      setPairing(null);
+      loadDevices();
+    }, Math.max(new Date(pairing.expires_at).getTime() - Date.now(), 0));
+    return () => clearTimeout(timer);
+  }, [pairing]);
 
   const loadMembers = async () => {
     setLoadingMembers(true);
@@ -245,20 +324,67 @@ export default function RestaurantStaffPage() {
 
         <div className="rounded-2xl border border-gray-200 bg-white p-5">
           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
-            <MonitorSmartphone className="h-4 w-4" />
-            Staff Devices
+            <QrCode className="h-4 w-4" />
+            Staff QR Setup
           </div>
-          <ol className="list-decimal space-y-1.5 pl-4 text-xs text-gray-600">
-            <li>On POS Terminals, generate a pairing code.</li>
-            <li>On the staff device, open <span className="font-mono">/staff-pin</span> and enter the code once.</li>
-            <li>Staff then sign in on that device with their own PIN.</li>
-          </ol>
-          <Link
-            href="/restaurant/pos"
-            className="mt-4 inline-flex rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-          >
-            Go to POS Terminals
-          </Link>
+          <p className="text-xs text-gray-600">New device: scan this QR, then enter PIN. Paired devices need PIN only.</p>
+          {pairing ? (
+            <>
+              {setupQr ? (
+                <img alt="Staff setup QR" className="mt-3 h-40 w-40 rounded-xl border border-gray-200" src={setupQr} />
+              ) : (
+                <div className="mt-3 h-40 w-40 rounded-xl bg-gray-100 animate-pulse" />
+              )}
+              <p className="mt-2 font-mono text-sm font-bold tracking-widest text-gray-900">
+                {`${pairing.code.slice(0, 4)}-${pairing.code.slice(4)}`}
+              </p>
+              <p className="text-[11px] text-gray-500">Works once. Expires {new Date(pairing.expires_at).toLocaleTimeString()}.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.open(pairing.url, "_blank", "noopener,noreferrer")}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  Open Link
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(pairing.url);
+                      toast.success("Setup link copied.");
+                    } catch {
+                      toast.error("Unable to copy link.");
+                    }
+                  }}
+                  className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+                >
+                  Copy Link
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPairing(null);
+                    loadDevices();
+                  }}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  Done
+                </button>
+              </div>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={onCreatePairing}
+              disabled={creatingPairing || !restaurantId}
+              className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-60"
+              style={{ background: "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)" }}
+            >
+              {creatingPairing ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
+              Generate Setup QR
+            </button>
+          )}
         </div>
       </div>
 
@@ -302,6 +428,61 @@ export default function RestaurantStaffPage() {
             {!loadingMembers && members.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-4 py-6 text-center text-gray-500">No staff members yet.</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+        <div className="px-5 py-3 border-b border-gray-100 text-sm font-semibold text-gray-900">Paired Devices</div>
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-gray-500">
+            <tr>
+              <th className="px-4 py-2 text-left">Device</th>
+              <th className="px-4 py-2 text-left">Last Paired</th>
+              <th className="px-4 py-2 text-left">Status</th>
+              <th className="px-4 py-2 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {loadingDevices ? (
+              [...Array(3)].map((_, idx) => (
+                <tr key={`dev-sk-${idx}`} className="animate-pulse">
+                  <td className="px-4 py-3"><div className="h-4 w-56 rounded bg-gray-200" /></td>
+                  <td className="px-4 py-3"><div className="h-4 w-36 rounded bg-gray-200" /></td>
+                  <td className="px-4 py-3"><div className="h-4 w-16 rounded bg-gray-200" /></td>
+                  <td className="px-4 py-3"><div className="ml-auto h-7 w-24 rounded bg-gray-200" /></td>
+                </tr>
+              ))
+            ) : null}
+            {!loadingDevices && devices.map((d) => (
+              <tr key={d.id}>
+                <td className="px-4 py-2">
+                  <div className="font-medium text-gray-900">{d.label}</div>
+                  {d.device_model ? <div className="max-w-xs truncate text-xs text-gray-500">{d.device_model}</div> : null}
+                </td>
+                <td className="px-4 py-2">{d.paired_at ? new Date(d.paired_at).toLocaleString() : "-"}</td>
+                <td className="px-4 py-2">
+                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${d.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
+                    {d.status === "active" ? "Active" : "Revoked"}
+                  </span>
+                </td>
+                <td className="px-4 py-2 text-right">
+                  <button
+                    type="button"
+                    disabled={d.status !== "active" || revokingDeviceId === d.id}
+                    onClick={() => onRevokeDevice(d)}
+                    className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                  >
+                    {revokingDeviceId === d.id ? "Revoking..." : "Revoke"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {!loadingDevices && devices.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-6 text-center text-gray-500">No paired devices yet.</td>
               </tr>
             ) : null}
           </tbody>

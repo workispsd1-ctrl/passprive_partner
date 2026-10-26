@@ -61,6 +61,13 @@ export default function StaffPinPage() {
     setDeviceToken(readStored(TOKEN_KEY));
     setMerchantName(readStored(NAME_KEY));
     setReady(true);
+
+    // The Staff page QR opens /staff-pin?code=...; pair straight away and drop the one-time code from the URL.
+    const qrCode = new URLSearchParams(window.location.search).get("code") || "";
+    if (qrCode) {
+      window.history.replaceState(null, "", window.location.pathname);
+      pairWith(qrCode);
+    }
   }, []);
 
   function forgetDevice() {
@@ -73,11 +80,15 @@ export default function StaffPinPage() {
 
   async function onPair(e) {
     e.preventDefault();
+    await pairWith(code);
+  }
+
+  async function pairWith(pairingCode) {
     setError("");
     setBusy(true);
     try {
       const json = await postJson("/api/pos/pair", {
-        code: code.trim(),
+        code: pairingCode.trim(),
         device_model: navigator.userAgent.slice(0, 80),
         app_version: "staff-web",
       });
