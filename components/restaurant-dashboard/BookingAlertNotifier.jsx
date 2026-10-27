@@ -6,6 +6,14 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 const ESCALATION_DELAY_MS = 3 * 60 * 1000;
 
+const RESPOND_ERRORS = {
+  payment_pending: "The guest has not paid the cover charge yet.",
+  booking_paid: "This booking is already paid and can't be declined or moved here.",
+  invalid_time: "Pick a future date and time that differs from the request.",
+  already_handled: "This booking was already handled.",
+  not_found: "This booking could not be found.",
+};
+
 const BOOKING_SELECT_FIELDS = [
   "id",
   "restaurant_id",
@@ -60,6 +68,10 @@ export default function BookingAlertNotifier() {
   const [queue, setQueue] = useState([]);
   const [visible, setVisible] = useState(false);
   const [ackLoading, setAckLoading] = useState(false);
+  const [proposing, setProposing] = useState(false);
+  const [proposeDate, setProposeDate] = useState("");
+  const [proposeTime, setProposeTime] = useState("");
+  const [respondError, setRespondError] = useState("");
 
   const channelRef = useRef(null);
   const pollRef = useRef(null);
@@ -184,25 +196,55 @@ export default function BookingAlertNotifier() {
     });
   };
 
-  const acknowledgeBooking = async () => {
-    if (!activeBooking?.id || ackLoading) return;
-    setAckLoading(true);
+  const isRequest = String(activeBooking?.status || "").toLowerCase() === "pending";
 
+  const closeActive = () => {
     clearEscalationTimer();
     stopBuzzer();
-
-    await supabaseBrowser
-      .from("restaurant_bookings")
-      .update({ read: true, updated_at: new Date().toISOString() })
-      .eq("id", activeBooking.id);
-
     setAckLoading(false);
+    setProposing(false);
+    setRespondError("");
     setVisible(false);
     setActiveBooking(null);
 
     window.setTimeout(() => {
       showNextBooking();
     }, 120);
+  };
+
+  const acknowledgeBooking = async () => {
+    if (!activeBooking?.id || ackLoading) return;
+    setAckLoading(true);
+    await supabaseBrowser
+      .from("restaurant_bookings")
+      .update({ read: true, updated_at: new Date().toISOString() })
+      .eq("id", activeBooking.id);
+    closeActive();
+  };
+
+  const respond = async (action, extra = {}) => {
+    if (!activeBooking?.id || ackLoading) return;
+    setAckLoading(action);
+    setRespondError("");
+    const { data, error } = await supabaseBrowser.rpc("partner_respond_booking", {
+      p_booking_id: activeBooking.id,
+      p_action: action,
+      ...extra,
+    });
+    if (error || !data?.ok) {
+      setAckLoading(false);
+      if (data?.error === "already_handled") return closeActive();
+      setRespondError(RESPOND_ERRORS[data?.error] || error?.message || "Could not update this booking.");
+      return;
+    }
+    closeActive();
+  };
+
+  const openPropose = () => {
+    setProposeDate(String(activeBooking?.booking_date || "").slice(0, 10));
+    setProposeTime(String(activeBooking?.booking_time || "").slice(0, 5));
+    setRespondError("");
+    setProposing(true);
   };
 
   useEffect(() => {
@@ -302,7 +344,12 @@ export default function BookingAlertNotifier() {
       <div className="w-full max-w-xl rounded-2xl border border-amber-300 bg-white shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between border-b border-amber-200 bg-amber-50 px-5 py-4">
           <div>
-            <h3 className="text-base font-semibold text-amber-900">New Table Booking Alert</h3>
+            <h3 className="text-base font-semibold text-amber-900">
+              {isRequest ? "New Booking Request" : "New Table Booking Alert"}
+            </h3>
+            {isRequest && (
+              <p className="mt-0.5 text-xs text-amber-800">The guest is waiting for you to accept, decline or suggest another time.</p>
+            )}
             
           </div>
           <button
@@ -330,14 +377,85 @@ export default function BookingAlertNotifier() {
         </div>
 
         <div className="border-t border-gray-100 bg-gray-50 px-5 py-4">
-          <button
-            type="button"
-            onClick={acknowledgeBooking}
-            disabled={ackLoading}
-            className="h-10 w-full rounded-xl bg-amber-600 px-4 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
-          >
-            {ackLoading ? "Saving..." : "OK"}
-          </button>
+          {respondError && <p className="mb-3 text-sm text-red-600">{respondError}</p>}
+          {!isRequest ? (
+            <button
+              type="button"
+              onClick={acknowledgeBooking}
+              disabled={!!ackLoading}
+              className="h-10 w-full rounded-xl bg-amber-600 px-4 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+            >
+              {ackLoading ? "Saving..." : "OK"}
+            </button>
+          ) : proposing ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <label className="text-xs font-medium text-gray-700">
+                  New date
+                  <input
+                    type="date"
+                    value={proposeDate}
+                    onChange={(e) => setProposeDate(e.target.value)}
+                    className="mt-1 h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900"
+                  />
+                </label>
+                <label className="text-xs font-medium text-gray-700">
+                  New time
+                  <input
+                    type="time"
+                    value={proposeTime}
+                    onChange={(e) => setProposeTime(e.target.value)}
+                    className="mt-1 h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900"
+                  />
+                </label>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setProposing(false)}
+                  disabled={!!ackLoading}
+                  className="h-10 flex-1 rounded-xl border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-60"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => respond("propose", { p_proposed_date: proposeDate, p_proposed_time: proposeTime.slice(0, 5) })}
+                  disabled={!!ackLoading || !proposeDate || !proposeTime}
+                  className="h-10 flex-1 rounded-xl bg-amber-600 px-4 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+                >
+                  {ackLoading === "propose" ? "Sending..." : "Send to guest"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => respond("reject", { p_reason: "Declined by restaurant" })}
+                disabled={!!ackLoading}
+                className="h-10 flex-1 rounded-xl border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
+              >
+                {ackLoading === "reject" ? "Declining..." : "Decline"}
+              </button>
+              <button
+                type="button"
+                onClick={openPropose}
+                disabled={!!ackLoading}
+                className="h-10 flex-1 rounded-xl border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-60"
+              >
+                Suggest new time
+              </button>
+              <button
+                type="button"
+                onClick={() => respond("accept")}
+                disabled={!!ackLoading}
+                className="h-10 flex-1 rounded-xl bg-green-600 px-4 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-60"
+              >
+                {ackLoading === "accept" ? "Accepting..." : "Accept"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
