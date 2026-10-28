@@ -8,7 +8,7 @@ const ESCALATION_DELAY_MS = 3 * 60 * 1000;
 
 const RESPOND_ERRORS = {
   payment_pending: "The guest has not paid the cover charge yet.",
-  booking_paid: "This booking is already paid and can't be declined or moved here.",
+  booking_paid: "This booking is already paid and can't be rejected or moved here.",
   invalid_time: "Pick a future date and time that differs from the request.",
   already_handled: "This booking was already handled.",
   not_found: "This booking could not be found.",
@@ -30,6 +30,7 @@ const BOOKING_SELECT_FIELDS = [
   "booking_code",
   "customer_booking_number",
   "created_at",
+  "restaurants(booking_service_type)",
 ].join(",");
 
 function formatDate(value) {
@@ -196,7 +197,9 @@ export default function BookingAlertNotifier() {
     });
   };
 
-  const isRequest = String(activeBooking?.status || "").toLowerCase() === "pending";
+  const isRequest =
+    String(activeBooking?.status || "").toLowerCase() === "pending" ||
+    String(activeBooking?.restaurants?.booking_service_type || "").toLowerCase() === "request";
 
   const closeActive = () => {
     clearEscalationTimer();
@@ -348,7 +351,7 @@ export default function BookingAlertNotifier() {
               {isRequest ? "New Booking Request" : "New Table Booking Alert"}
             </h3>
             {isRequest && (
-              <p className="mt-0.5 text-xs text-amber-800">The guest is waiting for you to accept, decline or suggest another time.</p>
+              <p className="mt-0.5 text-xs text-amber-800">The guest is waiting for you to accept, reject or propose a new timing.</p>
             )}
             
           </div>
@@ -432,11 +435,11 @@ export default function BookingAlertNotifier() {
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => respond("reject", { p_reason: "Declined by restaurant" })}
+                onClick={() => respond("reject", { p_reason: "Rejected by restaurant" })}
                 disabled={!!ackLoading}
                 className="h-10 flex-1 rounded-xl border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
               >
-                {ackLoading === "reject" ? "Declining..." : "Decline"}
+                {ackLoading === "reject" ? "Rejecting..." : "Reject"}
               </button>
               <button
                 type="button"
@@ -444,7 +447,7 @@ export default function BookingAlertNotifier() {
                 disabled={!!ackLoading}
                 className="h-10 flex-1 rounded-xl border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-60"
               >
-                Suggest new time
+                Propose new timing
               </button>
               <button
                 type="button"
