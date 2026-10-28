@@ -201,6 +201,12 @@ export default function BookingAlertNotifier() {
     String(activeBooking?.status || "").toLowerCase() === "pending" ||
     String(activeBooking?.restaurants?.booking_service_type || "").toLowerCase() === "request";
 
+  const silence = () => {
+    pendingPlayRef.current = false;
+    clearEscalationTimer();
+    stopBuzzer();
+  };
+
   const closeActive = () => {
     clearEscalationTimer();
     stopBuzzer();
@@ -217,6 +223,7 @@ export default function BookingAlertNotifier() {
 
   const acknowledgeBooking = async () => {
     if (!activeBooking?.id || ackLoading) return;
+    silence();
     setAckLoading(true);
     await supabaseBrowser
       .from("restaurant_bookings")
@@ -227,6 +234,7 @@ export default function BookingAlertNotifier() {
 
   const respond = async (action, extra = {}) => {
     if (!activeBooking?.id || ackLoading) return;
+    silence();
     setAckLoading(action);
     setRespondError("");
     const { data, error } = await supabaseBrowser.rpc("partner_respond_booking", {
@@ -244,6 +252,7 @@ export default function BookingAlertNotifier() {
   };
 
   const openPropose = () => {
+    silence();
     setProposeDate(String(activeBooking?.booking_date || "").slice(0, 10));
     setProposeTime(String(activeBooking?.booking_time || "").slice(0, 5));
     setRespondError("");

@@ -1,134 +1,178 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ShoppingBag } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
-import { fetchMyRestaurants } from "@/lib/restaurant-partner/activeRestaurant";
-import { showToast } from "@/components/restaurant-dashboard/useToast";
+
+const ORDER_FIELDS = "id,restaurant_id,order_number,customer_name,customer_phone,items,total_amount,payment_status,pickup_code,pickup_eta,created_at";
+const POLL_MS = 5000;
+
+function money(n) {
+  return `MUR ${Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+}
+
+function fmtTime(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleTimeString("en-US", { timeZone: "Indian/Mauritius", hour: "numeric", minute: "2-digit" });
+}
 
 export default function OrderRealtimeNotifier() {
-  const restaurantIdsRef = useRef(new Set());
-  const seenOrderIdsRef = useRef(new Set());
+  const router = useRouter();
+  const [queue, setQueue] = useState([]);
+  const activeOrder = queue[0] || null;
+
+  const startedAtRef = useRef(new Date().toISOString());
+  const seenIdsRef = useRef(new Set());
   const audioRef = useRef(null);
-  const channelRef = useRef(null);
+  const audioUnlockedRef = useRef(false);
+  const pendingPlayRef = useRef(false);
+
+  const stopBuzzer = () => {
+    pendingPlayRef.current = false;
+    try {
+      audioRef.current?.pause();
+      if (audioRef.current) audioRef.current.currentTime = 0;
+    } catch {}
+  };
+
+  const playBuzzer = async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (!audioUnlockedRef.current) {
+      pendingPlayRef.current = true;
+      return;
+    }
+    try {
+      audio.currentTime = 0;
+      await audio.play();
+    } catch {
+      pendingPlayRef.current = true;
+    }
+  };
 
   useEffect(() => {
+    const audio = new Audio("/sound.wav");
+    audio.loop = true;
+    audio.preload = "auto";
+    audioRef.current = audio;
+
+    const unlock = async () => {
+      if (audioUnlockedRef.current) return;
+      try {
+        await audio.play();
+        audio.pause();
+        audio.currentTime = 0;
+        audioUnlockedRef.current = true;
+        if (pendingPlayRef.current) {
+          pendingPlayRef.current = false;
+          playBuzzer();
+        }
+      } catch {}
+    };
+
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+
     let active = true;
-
-    const initAudio = () => {
-      try {
-        // public/sound.wav -> /sound.wav
-        audioRef.current = new Audio("/sound.wav");
-        audioRef.current.preload = "auto";
-        audioRef.current.volume = 1.0;
-      } catch (e) {
-        console.error("[OrderRealtimeNotifier] audio init error:", e);
-      }
+    const pull = async () => {
+      const { data } = await supabaseBrowser
+        .from("restaurant_orders")
+        .select(ORDER_FIELDS)
+        .gt("created_at", startedAtRef.current)
+        .order("created_at", { ascending: true })
+        .limit(20);
+      if (!active) return;
+      const fresh = (data || []).filter((o) => !seenIdsRef.current.has(String(o.id)));
+      if (!fresh.length) return;
+      fresh.forEach((o) => seenIdsRef.current.add(String(o.id)));
+      setQueue((prev) => [...prev, ...fresh]);
+      playBuzzer();
     };
 
-    const unlockAudio = async () => {
-      if (!audioRef.current) return;
-      try {
-        await audioRef.current.play();
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-      } catch {
-        // expected on some browsers until user gesture
-      } finally {
-        window.removeEventListener("click", unlockAudio);
-        window.removeEventListener("touchstart", unlockAudio);
-      }
-    };
-
-    const playSound = async () => {
-      if (!audioRef.current) return;
-      try {
-        audioRef.current.currentTime = 0;
-        await audioRef.current.play();
-      } catch (e) {
-        console.error("[OrderRealtimeNotifier] sound play error:", e);
-      }
-    };
-
-    const boot = async () => {
-      try {
-        const { data: userRes, error: userErr } = await supabaseBrowser.auth.getUser();
-        if (userErr) throw userErr;
-        if (!userRes?.user?.id || !active) return;
-
-        const myRestaurants = await fetchMyRestaurants();
-        if (!active) return;
-
-        restaurantIdsRef.current = new Set((myRestaurants || []).map((r) => String(r.id)));
-
-        channelRef.current = supabaseBrowser
-          .channel("restaurant-order-global-alerts")
-          .on(
-            "postgres_changes",
-            { event: "INSERT", schema: "public", table: "restaurant_orders" },
-            async (payload) => {
-              try {
-                const row = payload?.new;
-                if (!row) return;
-
-                const belongsToMe = restaurantIdsRef.current.has(String(row.restaurant_id));
-                if (!belongsToMe) return;
-
-                if (seenOrderIdsRef.current.has(String(row.id))) return;
-                seenOrderIdsRef.current.add(String(row.id));
-
-                await playSound();
-
-                showToast({
-                  type: "success",
-                  title: "New order received",
-                  description: `Order ${row.order_number || ""} is waiting for action.`,
-                });
-              } catch (err) {
-                console.error("[OrderRealtimeNotifier] insert handler error:", err);
-                showToast({
-                  type: "error",
-                  title: "Order notifier error",
-                  description: "Failed to process incoming order notification.",
-                });
-              }
-            }
-          )
-          .subscribe((status) => {
-            if (status === "CHANNEL_ERROR") {
-              console.error("[OrderRealtimeNotifier] realtime channel error");
-              showToast({
-                type: "error",
-                title: "Realtime connection error",
-                description: "Could not connect to order notifications.",
-              });
-            }
-          });
-      } catch (e) {
-        console.error("[OrderRealtimeNotifier] boot error:", e);
-        showToast({
-          type: "error",
-          title: "Notifier setup failed",
-          description: e?.message || "Failed to start order notifications.",
-        });
-      }
-    };
-
-    initAudio();
-    window.addEventListener("click", unlockAudio);
-    window.addEventListener("touchstart", unlockAudio);
-    boot();
+    pull();
+    const timer = window.setInterval(pull, POLL_MS);
 
     return () => {
       active = false;
-      window.removeEventListener("click", unlockAudio);
-      window.removeEventListener("touchstart", unlockAudio);
-
-      if (channelRef.current) {
-        supabaseBrowser.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
+      window.clearInterval(timer);
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+      stopBuzzer();
     };
   }, []);
 
-  return null;
+  const close = (goToOrders) => {
+    if (queue.length <= 1) stopBuzzer();
+    setQueue((prev) => prev.slice(1));
+    if (goToOrders) router.push("/restaurant/orders");
+  };
+
+  if (!activeOrder) return null;
+
+  const items = Array.isArray(activeOrder.items) ? activeOrder.items : [];
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center gap-3 border-b border-orange-100 bg-orange-50 px-5 py-4">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FF4800] text-white">
+            <ShoppingBag className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold text-gray-900">New Order & Collect order</h3>
+            <p className="text-xs text-gray-600">
+              {activeOrder.order_number || "Order"} · received {fmtTime(activeOrder.created_at)}
+              {queue.length > 1 ? ` · ${queue.length - 1} more waiting` : ""}
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-3 px-5 py-4 text-sm text-gray-800">
+          <div className="grid grid-cols-2 gap-2">
+            <div><span className="text-gray-500">Customer</span><div className="font-medium">{activeOrder.customer_name || "Guest"}</div></div>
+            <div><span className="text-gray-500">Phone</span><div className="font-medium">{activeOrder.customer_phone || "—"}</div></div>
+            <div><span className="text-gray-500">Pickup code</span><div className="font-semibold tracking-wide">{activeOrder.pickup_code || "—"}</div></div>
+            <div><span className="text-gray-500">Payment</span><div className="font-medium">{String(activeOrder.payment_status || "PENDING")}</div></div>
+          </div>
+
+          <div className="max-h-44 overflow-auto rounded-xl border border-gray-200">
+            {items.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-gray-500">No item details.</div>
+            ) : (
+              items.map((it, idx) => (
+                <div key={`${activeOrder.id}-${idx}`} className="flex justify-between gap-2 border-b border-gray-100 px-3 py-2 text-sm last:border-b-0">
+                  <span>{it.qty} × {it.name}</span>
+                  <span className="font-medium">{money(it.line_total ?? (Number(it.unit_price) || 0) * (Number(it.qty) || 0))}</span>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="flex justify-between text-base font-semibold text-gray-900">
+            <span>Total</span>
+            <span>{money(activeOrder.total_amount)}</span>
+          </div>
+        </div>
+
+        <div className="flex gap-2 border-t border-gray-100 bg-gray-50 px-5 py-4">
+          <button
+            type="button"
+            onClick={() => close(false)}
+            className="h-10 flex-1 rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-900 hover:bg-gray-50"
+          >
+            Dismiss
+          </button>
+          <button
+            type="button"
+            onClick={() => close(true)}
+            className="h-10 flex-1 rounded-xl bg-[#FF4800] text-sm font-semibold text-white hover:bg-[#E64000]"
+          >
+            View order
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
