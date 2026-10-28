@@ -141,7 +141,8 @@ export default function RestaurantDashboardPage() {
       const fromIso = startOfDay(bounds.prevFrom).toISOString();
       const toIso = new Date(startOfDay(bounds.to).getTime() + DAY_MS).toISOString();
       const bookingFrom = bounds.prevFrom < today ? bounds.prevFrom : today;
-      const bookingTo = bounds.to > today ? bounds.to : today;
+      const weekAhead = addDays(today, 6);
+      const bookingTo = bounds.to > weekAhead ? bounds.to : weekAhead;
 
       const [ordersRes, tableRes, sessionsRes, bookingsRes, requestsRes, reviewsRes] = await Promise.all([
         supabaseBrowser
@@ -264,9 +265,18 @@ export default function RestaurantDashboardPage() {
     const ratings = data.reviews.map((r) => Number(r.rating)).filter(Number.isFinite);
     const rating = ratings.length ? ratings.reduce((s, v) => s + v, 0) / ratings.length : 0;
 
-    const todays = data.bookings
-      .filter((b) => b.booking_date === data.today && !CANCELLED_BOOKING.includes(String(b.status || "").toLowerCase()))
-      .sort((a, b) => String(a.booking_time).localeCompare(String(b.booking_time)));
+    const weekAhead = addDays(data.today, 6);
+    const upcoming = data.bookings
+      .filter((b) => b.booking_date >= data.today && b.booking_date <= weekAhead)
+      .sort((a, b) => `${a.booking_date}${a.booking_time}`.localeCompare(`${b.booking_date}${b.booking_time}`));
+    const isLive = (b) => !CANCELLED_BOOKING.includes(String(b.status || "").toLowerCase());
+    const todayLive = upcoming.filter((b) => b.booking_date === data.today && isLive(b));
+    const upcomingDays = [];
+    upcoming.forEach((b) => {
+      const last = upcomingDays[upcomingDays.length - 1];
+      if (last?.date === b.booking_date) last.rows.push(b);
+      else upcomingDays.push({ date: b.booking_date, rows: [b] });
+    });
 
     const recent = [
       ...data.orders.map((o) => ({
@@ -323,7 +333,9 @@ export default function RestaurantDashboardPage() {
       buckets,
       rating,
       reviewCount: ratings.length,
-      todays,
+      upcomingDays,
+      todayBookings: todayLive.length,
+      todayGuests: todayLive.reduce((s, b) => s + Number(b.party_size || 0), 0),
       recent,
       attention,
       reviews: data.reviews.slice(0, 3),
@@ -486,21 +498,37 @@ export default function RestaurantDashboardPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Panel title="Today's reservations" subtitle={`${view.todays.length} bookings · ${view.todays.reduce((s, b) => s + Number(b.party_size || 0), 0)} guests`} href="/restaurant/bookings">
-          {view.todays.length === 0 ? (
-            <EmptyState text="No reservations today." />
+        <Panel
+          title="Upcoming reservations"
+          subtitle={`Today: ${view.todayBookings} bookings · ${view.todayGuests} guests`}
+          href="/restaurant/bookings"
+        >
+          {view.upcomingDays.length === 0 ? (
+            <EmptyState text="No reservations in the next 7 days." />
           ) : (
-            <div className="max-h-80 divide-y divide-gray-100 overflow-y-auto">
-              {view.todays.map((b) => (
-                <div key={b.id} className="flex items-center gap-3 py-2.5">
-                  <div className="w-16 shrink-0 text-sm font-semibold text-gray-900">{slotLabel(b.booking_time)}</div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm text-gray-900">{b.customer_name || "Guest"}</div>
-                    <div className="flex items-center gap-1 text-xs text-gray-500">
-                      <Users className="h-3 w-3" /> {b.party_size}
-                    </div>
+            <div className="max-h-96 space-y-4 overflow-y-auto">
+              {view.upcomingDays.map((day) => (
+                <div key={day.date}>
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    {upcomingDayLabel(day.date, data.today)}
                   </div>
-                  <BookingPill booking={b} />
+                  <div className="divide-y divide-gray-100">
+                    {day.rows.map((b) => {
+                      const cancelled = CANCELLED_BOOKING.includes(String(b.status || "").toLowerCase());
+                      return (
+                        <div key={b.id} className={`flex items-center gap-3 py-2.5 ${cancelled ? "opacity-50" : ""}`}>
+                          <div className="w-16 shrink-0 text-sm font-semibold text-gray-900">{slotLabel(b.booking_time)}</div>
+                          <div className="min-w-0 flex-1">
+                            <div className={`truncate text-sm text-gray-900 ${cancelled ? "line-through" : ""}`}>{b.customer_name || "Guest"}</div>
+                            <div className="flex items-center gap-1 text-xs text-gray-500">
+                              <Users className="h-3 w-3" /> {b.party_size}
+                            </div>
+                          </div>
+                          <BookingPill booking={b} />
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ))}
             </div>
@@ -625,10 +653,18 @@ function KpiCard({ icon: Icon, title, value, change, hint, className = "" }) {
   );
 }
 
+function upcomingDayLabel(ymd, today) {
+  if (ymd === today) return "Today";
+  if (ymd === addDays(today, 1)) return "Tomorrow";
+  return startOfDay(ymd).toLocaleDateString("en-US", { timeZone: TZ, weekday: "short", day: "numeric", month: "short" });
+}
+
 function BookingPill({ booking }) {
   const s = String(booking.status || "").toLowerCase();
   const [label, cls] =
-    s === "pending" && booking.proposed_at
+    CANCELLED_BOOKING.includes(s)
+      ? ["Cancelled", "bg-gray-100 text-gray-600"]
+      : s === "pending" && booking.proposed_at
       ? ["New time sent", "bg-orange-50 text-orange-700"]
       : s === "pending"
       ? ["Request", "bg-amber-50 text-amber-700"]
