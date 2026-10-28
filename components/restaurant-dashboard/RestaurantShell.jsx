@@ -7,6 +7,7 @@ import RestaurantTopbar from "./RestaurantTopbar";
 import BookingAlertNotifier from "./BookingAlertNotifier";
 import TableOrderAlertNotifier from "./TableOrderAlertNotifier";
 import OrderRealtimeNotifier from "./OrderRealtimeNotifier";
+import PaymentAlertNotifier from "./PaymentAlertNotifier";
 import LockedPage from "./LockedPage";
 import { fetchRestaurantPlan, isRouteLocked } from "@/lib/restaurant-partner/plan";
 import { useMobileNav } from "@/components/ui/MobileNav";
@@ -74,6 +75,7 @@ export default function RestaurantShell({ children }) {
       <BookingAlertNotifier />
       <TableOrderAlertNotifier />
       <OrderRealtimeNotifier />
+      <PaymentAlertNotifier />
       <div className="flex">
         <RestaurantSidebar
           collapsed={sidebarCollapsed}

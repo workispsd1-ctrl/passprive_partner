@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShoppingBag } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { useI18n } from "@/lib/i18n";
 
 const ORDER_FIELDS = "id,restaurant_id,order_number,customer_name,customer_phone,items,total_amount,payment_status,pickup_code,pickup_eta,created_at";
 const POLL_MS = 5000;
@@ -12,13 +13,14 @@ function money(n) {
   return `MUR ${Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
 }
 
-function fmtTime(value) {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleTimeString("en-US", { timeZone: "Indian/Mauritius", hour: "numeric", minute: "2-digit" });
+function paymentLabel(t, status) {
+  const s = String(status || "PENDING").toUpperCase();
+  const label = t(`payment.${s}`);
+  return label === `payment.${s}` ? s : label;
 }
 
 export default function OrderRealtimeNotifier() {
+  const { t, fmt } = useI18n();
   const router = useRouter();
   const [queue, setQueue] = useState([]);
   const activeOrder = queue[0] || null;
@@ -121,25 +123,25 @@ export default function OrderRealtimeNotifier() {
             <ShoppingBag className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <h3 className="text-base font-semibold text-gray-900">New Order & Collect order</h3>
+            <h3 className="text-base font-semibold text-gray-900">{t("orderAlert.title")}</h3>
             <p className="text-xs text-gray-600">
-              {activeOrder.order_number || "Order"} · received {fmtTime(activeOrder.created_at)}
-              {queue.length > 1 ? ` · ${queue.length - 1} more waiting` : ""}
+              {activeOrder.order_number || t("common.order")} · {t("orderAlert.received", { time: fmt.time(activeOrder.created_at) })}
+              {queue.length > 1 ? ` · ${t("orderAlert.moreWaiting", { count: queue.length - 1 })}` : ""}
             </p>
           </div>
         </div>
 
         <div className="space-y-3 px-5 py-4 text-sm text-gray-800">
           <div className="grid grid-cols-2 gap-2">
-            <div><span className="text-gray-500">Customer</span><div className="font-medium">{activeOrder.customer_name || "Guest"}</div></div>
-            <div><span className="text-gray-500">Phone</span><div className="font-medium">{activeOrder.customer_phone || "—"}</div></div>
-            <div><span className="text-gray-500">Pickup code</span><div className="font-semibold tracking-wide">{activeOrder.pickup_code || "—"}</div></div>
-            <div><span className="text-gray-500">Payment</span><div className="font-medium">{String(activeOrder.payment_status || "PENDING")}</div></div>
+            <div><span className="text-gray-500">{t("orderAlert.customer")}</span><div className="font-medium">{activeOrder.customer_name || t("common.guest")}</div></div>
+            <div><span className="text-gray-500">{t("orderAlert.phone")}</span><div className="font-medium">{activeOrder.customer_phone || "—"}</div></div>
+            <div><span className="text-gray-500">{t("orderAlert.pickupCode")}</span><div className="font-semibold tracking-wide">{activeOrder.pickup_code || "—"}</div></div>
+            <div><span className="text-gray-500">{t("orderAlert.payment")}</span><div className="font-medium">{paymentLabel(t, activeOrder.payment_status)}</div></div>
           </div>
 
           <div className="max-h-44 overflow-auto rounded-xl border border-gray-200">
             {items.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-gray-500">No item details.</div>
+              <div className="px-3 py-2 text-xs text-gray-500">{t("orderAlert.noItems")}</div>
             ) : (
               items.map((it, idx) => (
                 <div key={`${activeOrder.id}-${idx}`} className="flex justify-between gap-2 border-b border-gray-100 px-3 py-2 text-sm last:border-b-0">
@@ -151,7 +153,7 @@ export default function OrderRealtimeNotifier() {
           </div>
 
           <div className="flex justify-between text-base font-semibold text-gray-900">
-            <span>Total</span>
+            <span>{t("orderAlert.total")}</span>
             <span>{money(activeOrder.total_amount)}</span>
           </div>
         </div>
@@ -162,14 +164,14 @@ export default function OrderRealtimeNotifier() {
             onClick={() => close(false)}
             className="h-10 flex-1 rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-900 hover:bg-gray-50"
           >
-            Dismiss
+            {t("orderAlert.dismiss")}
           </button>
           <button
             type="button"
             onClick={() => close(true)}
             className="h-10 flex-1 rounded-xl bg-[#FF4800] text-sm font-semibold text-white hover:bg-[#E64000]"
           >
-            View order
+            {t("orderAlert.viewOrder")}
           </button>
         </div>
       </div>

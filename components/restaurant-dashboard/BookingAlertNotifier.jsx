@@ -3,16 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { useI18n } from "@/lib/i18n";
 
 const ESCALATION_DELAY_MS = 3 * 60 * 1000;
 
-const RESPOND_ERRORS = {
-  payment_pending: "The guest has not paid the cover charge yet.",
-  booking_paid: "This booking is already paid and can't be rejected or moved here.",
-  invalid_time: "Pick a future date and time that differs from the request.",
-  already_handled: "This booking was already handled.",
-  not_found: "This booking could not be found.",
-};
+const RESPOND_ERRORS = ["payment_pending", "booking_paid", "invalid_time", "already_handled", "not_found"];
 
 const BOOKING_SELECT_FIELDS = [
   "id",
@@ -33,38 +28,8 @@ const BOOKING_SELECT_FIELDS = [
   "restaurants(booking_service_type)",
 ].join(",");
 
-function formatDate(value) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Indian/Mauritius",
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  }).format(date);
-}
-
-function formatTime(value) {
-  if (!value) return "-";
-  return String(value).slice(0, 5);
-}
-
-function formatDateTime(value) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Indian/Mauritius",
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
-
 export default function BookingAlertNotifier() {
+  const { t, fmt } = useI18n();
   const [activeBooking, setActiveBooking] = useState(null);
   const [queue, setQueue] = useState([]);
   const [visible, setVisible] = useState(false);
@@ -245,7 +210,11 @@ export default function BookingAlertNotifier() {
     if (error || !data?.ok) {
       setAckLoading(false);
       if (data?.error === "already_handled") return closeActive();
-      setRespondError(RESPOND_ERRORS[data?.error] || error?.message || "Could not update this booking.");
+      setRespondError(
+        RESPOND_ERRORS.includes(data?.error)
+          ? t(`bookingAlert.err.${data.error}`)
+          : error?.message || t("bookingAlert.err.generic"),
+      );
       return;
     }
     closeActive();
@@ -357,17 +326,17 @@ export default function BookingAlertNotifier() {
         <div className="flex items-center justify-between border-b border-amber-200 bg-amber-50 px-5 py-4">
           <div>
             <h3 className="text-base font-semibold text-amber-900">
-              {isRequest ? "New Booking Request" : "New Table Booking Alert"}
+              {isRequest ? t("bookingAlert.titleRequest") : t("bookingAlert.title")}
             </h3>
             {isRequest && (
-              <p className="mt-0.5 text-xs text-amber-800">The guest is waiting for you to accept, reject or propose a new timing.</p>
+              <p className="mt-0.5 text-xs text-amber-800">{t("bookingAlert.requestHint")}</p>
             )}
             
           </div>
           <button
             type="button"
             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-amber-200 bg-white"
-            aria-label="Booking alert active"
+            aria-label={t("bookingAlert.active")}
             disabled
           >
             <X className="h-4 w-4 text-amber-700" />
@@ -375,17 +344,17 @@ export default function BookingAlertNotifier() {
         </div>
 
         <div className="grid grid-cols-1 gap-3 px-5 py-4 text-sm text-gray-700 sm:grid-cols-2">
-          <div><span className="font-medium text-gray-900">Guest:</span> {activeBooking.customer_name || "-"}</div>
-          <div><span className="font-medium text-gray-900">Phone:</span> {activeBooking.customer_phone || "-"}</div>
-          <div><span className="font-medium text-gray-900">Email:</span> {activeBooking.customer_email || "-"}</div>
-          <div><span className="font-medium text-gray-900">Party Size:</span> {activeBooking.party_size ?? "-"}</div>
-          <div><span className="font-medium text-gray-900">Date:</span> {formatDate(activeBooking.booking_date)}</div>
-          <div><span className="font-medium text-gray-900">Time:</span> {formatTime(activeBooking.booking_time)}</div>
-          <div><span className="font-medium text-gray-900">Booking Received At:</span> {formatDateTime(activeBooking.created_at)}</div>
-          <div><span className="font-medium text-gray-900">Duration:</span> {activeBooking.duration_minutes ? `${activeBooking.duration_minutes} min` : "-"}</div>
-          <div><span className="font-medium text-gray-900">Source:</span> {activeBooking.source || "-"}</div>
-          <div><span className="font-medium text-gray-900">Booking Code:</span> {activeBooking.booking_code || activeBooking.customer_booking_number || "-"}</div>
-          <div className="sm:col-span-2"><span className="font-medium text-gray-900">Special Request:</span> {activeBooking.special_request || "-"}</div>
+          <div><span className="font-medium text-gray-900">{t("bookingAlert.guest")}</span> {activeBooking.customer_name || "—"}</div>
+          <div><span className="font-medium text-gray-900">{t("bookingAlert.phone")}</span> {activeBooking.customer_phone || "—"}</div>
+          <div><span className="font-medium text-gray-900">{t("bookingAlert.email")}</span> {activeBooking.customer_email || "—"}</div>
+          <div><span className="font-medium text-gray-900">{t("bookingAlert.partySize")}</span> {activeBooking.party_size ?? "—"}</div>
+          <div><span className="font-medium text-gray-900">{t("bookingAlert.date")}</span> {activeBooking.booking_date ? fmt.dateLong(`${String(activeBooking.booking_date).slice(0, 10)}T12:00:00+04:00`) : "—"}</div>
+          <div><span className="font-medium text-gray-900">{t("bookingAlert.time")}</span> {activeBooking.booking_time ? fmt.slot(activeBooking.booking_time) : "—"}</div>
+          <div><span className="font-medium text-gray-900">{t("bookingAlert.receivedAt")}</span> {activeBooking.created_at ? fmt.dateTime(activeBooking.created_at) : "—"}</div>
+          <div><span className="font-medium text-gray-900">{t("bookingAlert.duration")}</span> {activeBooking.duration_minutes ? t("bookingAlert.minutes", { count: activeBooking.duration_minutes }) : "—"}</div>
+          <div><span className="font-medium text-gray-900">{t("bookingAlert.source")}</span> {activeBooking.source || "—"}</div>
+          <div><span className="font-medium text-gray-900">{t("bookingAlert.code")}</span> {activeBooking.booking_code || activeBooking.customer_booking_number || "—"}</div>
+          <div className="sm:col-span-2"><span className="font-medium text-gray-900">{t("bookingAlert.specialRequest")}</span> {activeBooking.special_request || "—"}</div>
         </div>
 
         <div className="border-t border-gray-100 bg-gray-50 px-5 py-4">
@@ -397,13 +366,13 @@ export default function BookingAlertNotifier() {
               disabled={!!ackLoading}
               className="h-10 w-full rounded-xl bg-amber-600 px-4 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
             >
-              {ackLoading ? "Saving..." : "OK"}
+              {ackLoading ? t("common.saving") : t("common.ok")}
             </button>
           ) : proposing ? (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-xs font-medium text-gray-700">
-                  New date
+                  {t("bookingAlert.newDate")}
                   <input
                     type="date"
                     value={proposeDate}
@@ -412,7 +381,7 @@ export default function BookingAlertNotifier() {
                   />
                 </label>
                 <label className="text-xs font-medium text-gray-700">
-                  New time
+                  {t("bookingAlert.newTime")}
                   <input
                     type="time"
                     value={proposeTime}
@@ -428,7 +397,7 @@ export default function BookingAlertNotifier() {
                   disabled={!!ackLoading}
                   className="h-10 flex-1 rounded-xl border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-60"
                 >
-                  Back
+                  {t("common.back")}
                 </button>
                 <button
                   type="button"
@@ -436,7 +405,7 @@ export default function BookingAlertNotifier() {
                   disabled={!!ackLoading || !proposeDate || !proposeTime}
                   className="h-10 flex-1 rounded-xl bg-amber-600 px-4 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
                 >
-                  {ackLoading === "propose" ? "Sending..." : "Send to guest"}
+                  {ackLoading === "propose" ? t("bookingAlert.sending") : t("bookingAlert.sendToGuest")}
                 </button>
               </div>
             </div>
@@ -448,7 +417,7 @@ export default function BookingAlertNotifier() {
                 disabled={!!ackLoading}
                 className="h-10 flex-1 rounded-xl border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
               >
-                {ackLoading === "reject" ? "Rejecting..." : "Reject"}
+                {ackLoading === "reject" ? t("common.rejecting") : t("common.reject")}
               </button>
               <button
                 type="button"
@@ -456,7 +425,7 @@ export default function BookingAlertNotifier() {
                 disabled={!!ackLoading}
                 className="h-10 flex-1 rounded-xl border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-60"
               >
-                Propose new timing
+                {t("bookingAlert.propose")}
               </button>
               <button
                 type="button"
@@ -464,7 +433,7 @@ export default function BookingAlertNotifier() {
                 disabled={!!ackLoading}
                 className="h-10 flex-1 rounded-xl bg-green-600 px-4 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-60"
               >
-                {ackLoading === "accept" ? "Accepting..." : "Accept"}
+                {ackLoading === "accept" ? t("common.accepting") : t("common.accept")}
               </button>
             </div>
           )}

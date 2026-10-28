@@ -27,31 +27,32 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchOwnedRestaurantStatus } from "@/lib/restaurantData";
 import { resolveActiveRestaurant, selectRestaurant } from "@/lib/restaurant-partner/activeRestaurant";
 import { MobileNavBackdrop, drawerAsideClass } from "@/components/ui/MobileNav";
+import { useI18n } from "@/lib/i18n";
 
 const THEME_BG = "#FFF7F4";
 const THEME_ACCENT = "rgba(255,72,0,0.3)";
 const THEME_ACCENT_SOLID = "#FF4800";
 
 const nav = [
-  { label: "Dashboard", href: "/restaurant/dashboard", icon: LayoutDashboard },
-  { label: "Branches", href: "/restaurant/branches", icon: Building2, masterOnly: true },
-  { label: "Bookings", href: "/restaurant/bookings", icon: CalendarCheck },
-    { label: "Staff", href: "/restaurant/staff", icon: UserRound },
-  { label: "POS Terminals", href: "/restaurant/pos", icon: MonitorSmartphone },
-  { label: "QR Orders", href: "/restaurant/table-orders", icon: QrCode, key: "table_orders" },
-  { label: "Table Layout", href: "/restaurant/table-layout", icon: Table2 },
-
-  { label: "Pickup Orders", href: "/restaurant/orders", icon: Soup, key: "pickup_orders" },
-  { label: "Menu", href: "/restaurant/menu", icon: UtensilsCrossed },
-  { label: "Offers", href: "/restaurant/offers", icon: Tag, },
-  { label: "Reviews", href: "/restaurant/reviews", icon: Star },
-  { label: "Analytics", href: "/restaurant/analytics", icon: LineChart },
-  { label: "Timings", href: "/restaurant/timings", icon: Clock3 },
-  { label: "Transactions", href: "/restaurant/transactions", icon: Receipt },
-  { label: "Settings", href: "/restaurant/settings", icon: Settings },
+  { label: "nav.dashboard", href: "/restaurant/dashboard", icon: LayoutDashboard },
+  { label: "nav.branches", href: "/restaurant/branches", icon: Building2, masterOnly: true },
+  { label: "nav.bookings", href: "/restaurant/bookings", icon: CalendarCheck },
+  { label: "nav.staff", href: "/restaurant/staff", icon: UserRound },
+  { label: "nav.pos", href: "/restaurant/pos", icon: MonitorSmartphone },
+  { label: "nav.qrOrders", href: "/restaurant/table-orders", icon: QrCode, key: "table_orders" },
+  { label: "nav.tableLayout", href: "/restaurant/table-layout", icon: Table2 },
+  { label: "nav.pickupOrders", href: "/restaurant/orders", icon: Soup, key: "pickup_orders" },
+  { label: "nav.menu", href: "/restaurant/menu", icon: UtensilsCrossed },
+  { label: "nav.offers", href: "/restaurant/offers", icon: Tag },
+  { label: "nav.reviews", href: "/restaurant/reviews", icon: Star },
+  { label: "nav.analytics", href: "/restaurant/analytics", icon: LineChart },
+  { label: "nav.timings", href: "/restaurant/timings", icon: Clock3 },
+  { label: "nav.transactions", href: "/restaurant/transactions", icon: Receipt },
+  { label: "nav.settings", href: "/restaurant/settings", icon: Settings },
 ];
 
 function StatusSwitch({ checked, onChange, disabled }) {
+  const { t } = useI18n();
   return (
     <button
       type="button"
@@ -62,7 +63,7 @@ function StatusSwitch({ checked, onChange, disabled }) {
       } ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
       style={checked ? { backgroundColor: THEME_ACCENT_SOLID, borderColor: THEME_ACCENT_SOLID } : undefined}
       aria-pressed={checked}
-      aria-label="Toggle restaurant status"
+      aria-label={t("sidebar.toggleStatus")}
     >
       <span
         className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
@@ -82,6 +83,7 @@ function ConfirmModal({
   onConfirm,
   onCancel,
 }) {
+  const { t } = useI18n();
   if (!open) return null;
 
   return (
@@ -93,6 +95,7 @@ function ConfirmModal({
             type="button"
             onClick={onCancel}
             disabled={loading}
+            aria-label={t("common.cancel")}
             className="h-8 w-8 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center"
           >
             <X className="h-4 w-4 text-gray-700" />
@@ -108,7 +111,7 @@ function ConfirmModal({
             disabled={loading}
             className="h-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 px-4 text-sm font-medium"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -117,7 +120,7 @@ function ConfirmModal({
             className="h-9 rounded-xl text-white px-4 text-sm font-medium hover:opacity-95 disabled:opacity-60"
             style={{ background: "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)" }}
           >
-            {loading ? "Saving..." : confirmText}
+            {loading ? t("common.saving") : confirmText}
           </button>
         </div>
       </div>
@@ -129,6 +132,7 @@ export default function RestaurantSidebar({ collapsed: collapsedPref = false, mo
   const pathname = usePathname();
   // The open mobile drawer always shows the full sidebar; the collapsed rail is desktop-only.
   const collapsed = collapsedPref && !mobileOpen;
+  const { t } = useI18n();
 
   const [restaurantId, setRestaurantId] = useState(null);
   const [restaurantName, setRestaurantName] = useState("Restaurant");
@@ -385,7 +389,7 @@ export default function RestaurantSidebar({ collapsed: collapsedPref = false, mo
       <aside
         className={`${drawerAsideClass(mobileOpen)} shrink-0 border-r border-gray-200 bg-white lg:w-(--sidebar-w)`}
         style={{ ["--sidebar-w"]: collapsed ? "5.5rem" : "17.5rem" }}
-        aria-label="Restaurant navigation"
+        aria-label={t("sidebar.navigation")}
       >
         <div className={`h-16 flex items-center border-b border-gray-200 shrink-0 ${collapsed ? "justify-center px-3" : "justify-between px-5 lg:px-6"}`}>
           <div className={`flex min-w-0 items-center ${collapsed ? "justify-center" : "gap-2"}`}>
@@ -409,7 +413,7 @@ export default function RestaurantSidebar({ collapsed: collapsedPref = false, mo
             {!collapsed ? (
               <div className="min-w-0">
                 <div className="max-w-[150px] truncate font-bold leading-tight">{restaurantName}</div>
-                <div className="text-xs text-gray-500">Restaurant</div>
+                <div className="text-xs text-gray-500">{t("sidebar.restaurant")}</div>
               </div>
             ) : null}
           </div>
@@ -417,7 +421,7 @@ export default function RestaurantSidebar({ collapsed: collapsedPref = false, mo
             type="button"
             onClick={onMobileClose}
             className="lg:hidden inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-            aria-label="Close navigation menu"
+            aria-label={t("sidebar.closeMenu")}
           >
             <X className="h-4 w-4" />
           </button>
@@ -439,7 +443,7 @@ export default function RestaurantSidebar({ collapsed: collapsedPref = false, mo
               <Link
                 key={item.href}
                 href={item.href}
-                title={collapsed ? item.label : undefined}
+                title={collapsed ? t(item.label) : undefined}
                 className={[
                   "relative flex items-center rounded-xl px-3 py-2.5 text-sm font-medium transition",
                   collapsed ? "justify-center" : "justify-between",
@@ -454,9 +458,9 @@ export default function RestaurantSidebar({ collapsed: collapsedPref = false, mo
                   </span>
                   {!collapsed ? (
                     <>
-                      <span className="truncate">{item.label}</span>
+                      <span className="truncate">{t(item.label)}</span>
                       {item.locked ? (
-                        <Lock className="h-3.5 w-3.5 shrink-0" style={{ color: active ? "#FFFFFF" : "#9CA3AF" }} aria-label="Locked" />
+                        <Lock className="h-3.5 w-3.5 shrink-0" style={{ color: active ? "#FFFFFF" : "#9CA3AF" }} aria-label={t("sidebar.locked")} />
                       ) : null}
                     </>
                   ) : null}
@@ -481,7 +485,7 @@ export default function RestaurantSidebar({ collapsed: collapsedPref = false, mo
         <div className={`shrink-0 border-t border-gray-200 ${collapsed ? "p-3" : "p-4"} space-y-3`}>
           {!collapsed && branches.length > 1 ? (
             <div className="rounded-2xl border border-gray-200 bg-white p-4">
-              <div className="text-sm font-semibold">Branch</div>
+              <div className="text-sm font-semibold">{t("sidebar.branch")}</div>
               <select
                 value={activeBranchId}
                 onChange={(e) => selectRestaurant(e.target.value)}
@@ -504,13 +508,13 @@ export default function RestaurantSidebar({ collapsed: collapsedPref = false, mo
             >
               {!collapsed ? (
                 <div>
-                  <div className="text-sm font-semibold">Restaurant Visibility</div>
+                  <div className="text-sm font-semibold">{t("sidebar.visibility")}</div>
                   <div className="text-xs text-gray-600 mt-1">
                     {statusLoading
-                      ? "Loading status..."
+                      ? t("sidebar.loadingStatus")
                       : isActive
-                      ? "Visible to customers"
-                      : "Hidden from customers"}
+                      ? t("sidebar.visible")
+                      : t("sidebar.hidden")}
                   </div>
                 </div>
               ) : (
@@ -520,10 +524,10 @@ export default function RestaurantSidebar({ collapsed: collapsedPref = false, mo
                   }`}
                   title={
                     statusLoading
-                      ? "Loading visibility status"
+                      ? t("sidebar.loadingVisibility")
                       : isActive
-                      ? "Restaurant visible to customers"
-                      : "Restaurant hidden from customers"
+                      ? t("sidebar.restaurantVisible")
+                      : t("sidebar.restaurantHidden")
                   }
                 />
               )}
@@ -533,7 +537,7 @@ export default function RestaurantSidebar({ collapsed: collapsedPref = false, mo
                 disabled={statusLoading || statusSaving || !restaurantId}
               />
             </div>
-            {!collapsed && statusSaving ? <div className="text-xs text-amber-600 mt-2">Saving status...</div> : null}
+            {!collapsed && statusSaving ? <div className="text-xs text-amber-600 mt-2">{t("sidebar.savingStatus")}</div> : null}
           </div>
 
           {isNavHidden(plan, "/restaurant/offers") ? null : (
@@ -544,16 +548,16 @@ export default function RestaurantSidebar({ collapsed: collapsedPref = false, mo
             >
               {!collapsed ? (
                 <>
-                  <div className="text-sm font-semibold">Quick Actions</div>
+                  <div className="text-sm font-semibold">{t("sidebar.quickActions")}</div>
                   <div className="text-xs text-gray-600 mt-1">
-                    Create offers, update hours, manage menu.
+                    {t("sidebar.quickActionsHint")}
                   </div>
                   <button
                     className="mt-3 w-full rounded-xl border bg-white py-2 text-sm font-medium cursor-pointer"
                     style={{ borderColor: THEME_ACCENT, color: THEME_ACCENT_SOLID }}
                     type="button"
                   >
-                    Create Offer
+                    {t("sidebar.createOffer")}
                   </button>
                 </>
               ) : (
@@ -570,13 +574,9 @@ export default function RestaurantSidebar({ collapsed: collapsedPref = false, mo
       <ConfirmModal
         open={confirmOpen}
         loading={statusSaving}
-        title={pendingStatus ? "Set Restaurant Active?" : "Set Restaurant Inactive?"}
-        description={
-          pendingStatus
-            ? "Restaurant will be visible to customers and can receive bookings/orders."
-            : "Restaurant will be hidden from customers and will not appear publicly."
-        }
-        confirmText={pendingStatus ? "Yes, Set Active" : "Yes, Set Inactive"}
+        title={pendingStatus ? t("sidebar.activateTitle") : t("sidebar.deactivateTitle")}
+        description={pendingStatus ? t("sidebar.activateBody") : t("sidebar.deactivateBody")}
+        confirmText={pendingStatus ? t("sidebar.activateConfirm") : t("sidebar.deactivateConfirm")}
         onConfirm={confirmToggle}
         onCancel={closeConfirm}
       />

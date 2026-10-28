@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Bell,
   LogOut,
@@ -14,30 +14,33 @@ import { usePathname, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { getActiveRestaurantId } from "@/lib/restaurant-partner/activeRestaurant";
 import { MobileMenuButton } from "@/components/ui/MobileNav";
+import { LanguageSwitcher, useI18n } from "@/lib/i18n";
 
 const TITLE_MAP = {
-  "/restaurant/dashboard": "Dashboard",
-  "/restaurant/branches": "Branches",
-  "/restaurant/bookings": "Bookings",
-  "/restaurant/menu": "Menu",
-  "/restaurant/offers": "Offers",
-  "/restaurant/reviews": "Reviews",
-  "/restaurant/analytics": "Analytics",
-  "/restaurant/timings": "Timings",
-  "/restaurant/transactions": "Transactions",
-  "/restaurant/payouts": "Payouts",
-  "/restaurant/settings": "Settings",
-  "/restaurant/orders": "Orders",
-  "/restaurant/staff": "Staff",
-  "/restaurant/table-positioning": "Table Layout",
-  "/restaurant/table-layout": "Table Layout",
+  "/restaurant/dashboard": "nav.dashboard",
+  "/restaurant/branches": "nav.branches",
+  "/restaurant/bookings": "nav.bookings",
+  "/restaurant/menu": "nav.menu",
+  "/restaurant/offers": "nav.offers",
+  "/restaurant/reviews": "nav.reviews",
+  "/restaurant/analytics": "nav.analytics",
+  "/restaurant/timings": "nav.timings",
+  "/restaurant/transactions": "nav.transactions",
+  "/restaurant/payouts": "nav.payouts",
+  "/restaurant/settings": "nav.settings",
+  "/restaurant/orders": "nav.pickupOrders",
+  "/restaurant/staff": "nav.staff",
+  "/restaurant/pos": "nav.pos",
+  "/restaurant/table-orders": "nav.qrOrders",
+  "/restaurant/table-positioning": "nav.tableLayout",
+  "/restaurant/table-layout": "nav.tableLayout",
 };
 
-function getTitleFromPath(pathname) {
+function getTitleKeyFromPath(pathname) {
   const parts = pathname.split("/").filter(Boolean);
-  if (parts.length <= 1) return "Dashboard";
+  if (parts.length <= 1) return "nav.dashboard";
   const base = `/${parts[0]}/${parts[1]}`;
-  return TITLE_MAP[base] || "Dashboard";
+  return TITLE_MAP[base] || "nav.dashboard";
 }
 
 function fmtDate(d) {
@@ -57,7 +60,8 @@ export default function RestaurantTopbar({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const title = useMemo(() => getTitleFromPath(pathname), [pathname]);
+  const { t } = useI18n();
+  const title = t(getTitleKeyFromPath(pathname));
 
   const [restaurantId, setRestaurantId] = useState(null);
 
@@ -453,8 +457,8 @@ export default function RestaurantTopbar({
               type="button"
               onClick={onToggleSidebar}
               className="hidden lg:inline-flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-50"
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-label={collapsed ? t("topbar.expandSidebar") : t("topbar.collapseSidebar")}
+              title={collapsed ? t("topbar.expandSidebar") : t("topbar.collapseSidebar")}
             >
               <ChevronLeft
                 className={`h-4 w-4 transition-transform ${collapsed ? "rotate-180" : ""}`}
@@ -465,12 +469,13 @@ export default function RestaurantTopbar({
         </div>
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <LanguageSwitcher />
           <div className="sm:relative" ref={bellWrapRef}>
             <button
               className="h-10 w-10 rounded-xl border border-gray-200 bg-white flex items-center justify-center hover:bg-gray-50 relative"
               type="button"
               onClick={onBellClick}
-              aria-label="Notifications"
+              aria-label={t("topbar.notifications")}
               aria-expanded={open}
             >
               <Bell className="h-4 w-4 text-gray-700" />
@@ -484,7 +489,7 @@ export default function RestaurantTopbar({
             {open && (
               <div className="absolute inset-x-3 top-full mt-2 sm:inset-x-auto sm:right-0 sm:w-[420px] rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
                 <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                  <div className="text-sm font-semibold text-gray-900">Notifications</div>
+                  <div className="text-sm font-semibold text-gray-900">{t("topbar.notifications")}</div>
                   <button
                     type="button"
                     onClick={() => {
@@ -493,26 +498,26 @@ export default function RestaurantTopbar({
                     }}
                     className="text-xs font-semibold text-gray-700 hover:text-gray-900 inline-flex items-center gap-1"
                   >
-                    View all <ChevronRight className="h-4 w-4" />
+                    {t("common.viewAll")} <ChevronRight className="h-4 w-4" />
                   </button>
                 </div>
 
                 <div className="max-h-[min(460px,calc(100dvh-12rem))] overflow-auto">
                   <div className="px-4 py-2 text-xs font-semibold text-gray-500 bg-gray-50 border-b border-gray-100">
-                    New bookings
+                    {t("topbar.newBookings")}
                   </div>
 
                   {loadingList ? (
-                    <div className="px-4 py-4 text-sm text-gray-500">Loading bookings...</div>
+                    <div className="px-4 py-4 text-sm text-gray-500">{t("topbar.loadingBookings")}</div>
                   ) : unreadBookings.length === 0 ? (
-                    <div className="px-4 py-4 text-sm text-gray-500">No new bookings</div>
+                    <div className="px-4 py-4 text-sm text-gray-500">{t("topbar.noNewBookings")}</div>
                   ) : (
                     unreadBookings.map((b) => (
                       <div key={b.id} className="px-4 py-3 border-b border-gray-100 hover:bg-gray-50">
                         <button type="button" onClick={() => onClickNotifRow(b)} className="w-full text-left">
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <div className="text-sm font-semibold text-gray-900">{b.customer_name || "Guest"}</div>
+                              <div className="text-sm font-semibold text-gray-900">{b.customer_name || t("common.guest")}</div>
                               <div className="text-xs text-gray-500">
                                 {b.customer_phone || "—"}
                                 {b.booking_code ? ` • ${b.booking_code}` : ""}
@@ -522,7 +527,7 @@ export default function RestaurantTopbar({
                             <div className="text-right">
                               <div className="text-xs font-semibold text-gray-900">{fmtDate(b.booking_date)}</div>
                               <div className="text-xs text-gray-500">
-                                {fmtTime(b.booking_time)} • {b.party_size} guests
+                                {fmtTime(b.booking_time)} • {t("common.guests", { count: Number(b.party_size || 0) })}
                               </div>
                             </div>
                           </div>
@@ -539,7 +544,7 @@ export default function RestaurantTopbar({
                             className="flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-semibold text-green-700 bg-green-50 border-green-200 hover:bg-green-100 disabled:opacity-50"
                           >
                             <CheckCircle className="h-3.5 w-3.5" />
-                            {confirmingId === b.id ? "Confirming..." : "Confirm"}
+                            {confirmingId === b.id ? t("common.confirming") : t("common.confirm")}
                           </button>
 
                           <button
@@ -552,7 +557,7 @@ export default function RestaurantTopbar({
                             className="flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-semibold text-red-700 bg-red-50 border-red-200 hover:bg-red-100 disabled:opacity-50"
                           >
                             <XCircle className="h-3.5 w-3.5" />
-                            {cancellingId === b.id ? "Cancelling..." : "Cancel"}
+                            {cancellingId === b.id ? t("common.cancelling") : t("common.cancel")}
                           </button>
                         </div>
                       </div>
@@ -560,13 +565,13 @@ export default function RestaurantTopbar({
                   )}
 
                   <div className="px-4 py-2 text-xs font-semibold text-gray-500 bg-gray-50 border-y border-gray-100">
-                    New orders
+                    {t("topbar.newOrders")}
                   </div>
 
                   {loadingOrders ? (
-                    <div className="px-4 py-4 text-sm text-gray-500">Loading orders...</div>
+                    <div className="px-4 py-4 text-sm text-gray-500">{t("topbar.loadingOrders")}</div>
                   ) : unreadOrders.length === 0 ? (
-                    <div className="px-4 py-4 text-sm text-gray-500">No new orders</div>
+                    <div className="px-4 py-4 text-sm text-gray-500">{t("topbar.noNewOrders")}</div>
                   ) : (
                     unreadOrders.map((o) => (
                       <div key={o.id} className="px-4 py-3 border-b border-gray-100 hover:bg-gray-50">
@@ -574,10 +579,10 @@ export default function RestaurantTopbar({
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <div className="text-sm font-semibold text-gray-900">
-                                {o.order_number || "Order"}
+                                {o.order_number || t("common.order")}
                               </div>
                               <div className="text-xs text-gray-500">
-                                {o.customer_name || "Customer"} • {o.customer_phone || "—"}
+                                {o.customer_name || t("common.customer")} • {o.customer_phone || "—"}
                               </div>
                             </div>
 
@@ -586,7 +591,7 @@ export default function RestaurantTopbar({
                                 MUR {Number(o.total_amount || 0).toLocaleString("en-US")}
                               </div>
                               <div className="text-xs text-gray-500">
-                                {o.pickup_code ? `Code: ${o.pickup_code}` : "Pickup"}
+                                {o.pickup_code ? t("topbar.pickupCode", { code: o.pickup_code }) : t("topbar.pickup")}
                               </div>
                             </div>
                           </div>
@@ -603,7 +608,7 @@ export default function RestaurantTopbar({
                             className="flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-semibold text-green-700 bg-green-50 border-green-200 hover:bg-green-100 disabled:opacity-50"
                           >
                             <PackageCheck className="h-3.5 w-3.5" />
-                            {acceptingOrderId === o.id ? "Accepting..." : "Accept"}
+                            {acceptingOrderId === o.id ? t("common.accepting") : t("common.accept")}
                           </button>
 
                           <button
@@ -616,7 +621,7 @@ export default function RestaurantTopbar({
                             className="flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-semibold text-red-700 bg-red-50 border-red-200 hover:bg-red-100 disabled:opacity-50"
                           >
                             <XCircle className="h-3.5 w-3.5" />
-                            {cancellingOrderId === o.id ? "Cancelling..." : "Cancel"}
+                            {cancellingOrderId === o.id ? t("common.cancelling") : t("common.cancel")}
                           </button>
                         </div>
                       </div>
@@ -634,7 +639,7 @@ export default function RestaurantTopbar({
                       }}
                       className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold hover:bg-gray-50"
                     >
-                      Go to bookings
+                      {t("topbar.goToBookings")}
                     </button>
                     <button
                       type="button"
@@ -644,7 +649,7 @@ export default function RestaurantTopbar({
                       }}
                       className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold hover:bg-gray-50"
                     >
-                      Go to orders
+                      {t("topbar.goToOrders")}
                     </button>
                   </div>
                 )}
@@ -656,10 +661,10 @@ export default function RestaurantTopbar({
             onClick={onLogout}
             className="h-10 rounded-xl border border-gray-200 px-3 text-sm font-medium hover:bg-red-400 cursor-pointer flex items-center gap-2 bg-red-500 text-white"
             type="button"
-            aria-label="Logout"
+            aria-label={t("topbar.logout")}
           >
             <LogOut className="h-4 w-4" />
-            <span className="hidden sm:inline">Logout</span>
+            <span className="hidden sm:inline">{t("topbar.logout")}</span>
           </button>
         </div>
       </div>

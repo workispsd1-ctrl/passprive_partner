@@ -4,15 +4,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Lock, Tag } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { useI18n } from "@/lib/i18n";
 
-const PLAN_LABELS = {
-  discoverable: "Discoverable only",
-  deals: "Discoverable + Deals",
-  booking: "Discoverable + Book a table",
-};
+const PLAN_KEYS = ["discoverable", "deals", "booking"];
 
-// Shows a page as a read-only preview: visible, but nothing inside can be clicked, typed or focused.
 export default function LockedPage({ plan, restaurantId, showDeals, children }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 rounded-2xl border border-[#FFD3C2] bg-[#FFF7F4] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -21,10 +18,9 @@ export default function LockedPage({ plan, restaurantId, showDeals, children }) 
             <Lock className="h-4 w-4" />
           </span>
           <div>
-            <div className="text-sm font-semibold text-gray-900">This feature isn&apos;t included in your service</div>
+            <div className="text-sm font-semibold text-gray-900">{t("locked.title")}</div>
             <div className="text-xs text-gray-600">
-              Your restaurant is set up for {PLAN_LABELS[plan] || "a limited service"}. This page is shown as a
-              preview only. Contact Pass Privé if you have questions.
+              {t("locked.body", { plan: t(PLAN_KEYS.includes(plan) ? `locked.plan.${plan}` : "locked.plan.limited") })}
             </div>
           </div>
         </div>
@@ -40,6 +36,7 @@ export default function LockedPage({ plan, restaurantId, showDeals, children }) 
 }
 
 function DealsSummary({ restaurantId }) {
+  const { t } = useI18n();
   const [counts, setCounts] = useState(null);
 
   useEffect(() => {
@@ -77,7 +74,7 @@ function DealsSummary({ restaurantId }) {
           <Tag className="h-5 w-5" />
         </span>
         <div>
-          <div className="text-sm text-gray-500">Live deals & offers</div>
+          <div className="text-sm text-gray-500">{t("locked.liveDeals")}</div>
           <div className="text-2xl font-bold text-gray-900">{live === null ? "—" : live}</div>
         </div>
       </div>
@@ -85,7 +82,7 @@ function DealsSummary({ restaurantId }) {
         href="/restaurant/offers"
         className="rounded-xl bg-[#FF4800] px-4 py-2 text-center text-sm font-semibold text-white hover:opacity-90"
       >
-        Manage deals
+        {t("locked.manageDeals")}
       </Link>
     </div>
   );
