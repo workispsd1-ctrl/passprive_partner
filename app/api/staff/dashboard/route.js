@@ -89,7 +89,7 @@ export async function POST(request) {
       // 1. Reviews — all time for rating
       admin
         .from("restaurant_reviews")
-        .select("id,rating,comment,username_snapshot,created_at")
+        .select("id,rating,comment:review_text,username_snapshot,created_at")
         .eq("restaurant_id", restaurantId)
         .order("created_at", { ascending: false })
         .limit(200),

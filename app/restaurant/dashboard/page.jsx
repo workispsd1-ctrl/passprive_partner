@@ -187,7 +187,7 @@ export default function RestaurantDashboardPage() {
           .limit(10),
         supabaseBrowser
           .from("restaurant_reviews")
-          .select("id,rating,comment,created_at")
+          .select("id,rating,review_text,username_snapshot,created_at")
           .eq("restaurant_id", rid)
           .order("created_at", { ascending: false })
           .limit(500),
@@ -556,14 +556,15 @@ export default function RestaurantDashboardPage() {
           <div className="grid gap-3 md:grid-cols-3">
             {view.reviews.map((r) => (
               <div key={r.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                <div className="flex items-center justify-between">
-                  <span className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-sm font-semibold text-gray-900">{r.username_snapshot || "Guest"}</span>
+                  <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-gray-900">
                     <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
                     {Number(r.rating || 0).toFixed(1)}
                   </span>
-                  <span className="text-xs text-gray-400">{dayLabel(ymdInTz(new Date(r.created_at)))}</span>
                 </div>
-                <p className="mt-2 line-clamp-3 text-sm text-gray-700">{r.comment || "No comment"}</p>
+                <div className="mt-0.5 text-xs text-gray-400">{dayLabel(ymdInTz(new Date(r.created_at)))}</div>
+                <p className="mt-2 line-clamp-3 text-sm text-gray-700">{r.review_text || "No comment"}</p>
               </div>
             ))}
           </div>

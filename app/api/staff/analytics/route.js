@@ -28,7 +28,7 @@ function topKeywords(reviews, limit = 10) {
   const stop = new Set(["the","a","an","and","or","to","of","for","in","on","is","was","were","it","this","that","with","at","as","but","we","i","you","they","them","our","my","your","very","so","too","just","really","also"]);
   const freq = {};
   for (const r of reviews) {
-    const words = tokenize(r?.comment || "");
+    const words = tokenize(r?.review_text || "");
     for (const w of words) {
       if (w.length < 3) continue;
       if (stop.has(w)) continue;
