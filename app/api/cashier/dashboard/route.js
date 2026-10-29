@@ -24,7 +24,7 @@ export async function GET(request) {
         .limit(200),
       ctx.admin
         .from("restaurant_table_bookings")
-        .select("id,table_no,customer_name,customer_phone,booking_status,payment_status,total_amount,created_at,order_details,notes,order_items", { count: "exact" })
+        .select("id,table_no,customer_name,customer_phone,booking_status,payment_status,total_amount,created_at,order_details,notes,order_items,source", { count: "exact" })
         .eq("restaurant_id", ctx.restaurantId)
         .order("created_at", { ascending: false })
         .limit(200),

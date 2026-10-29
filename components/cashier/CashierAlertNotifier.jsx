@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { isStaffPlacedOrder } from "@/lib/staffOrder";
 
 function fmtDateTime(v) {
   if (!v) return "—";
@@ -150,6 +151,7 @@ export default function CashierAlertNotifier() {
 
     const enqueueIfNew = (item) => {
       if (!item?.id) return;
+      if (item.type === "TABLE_ORDER" && isStaffPlacedOrder(item)) return;
       const key = `${item.type}:${item.id}`;
       if (seenIdsRef.current.has(key)) return;
       seenIdsRef.current.add(key);

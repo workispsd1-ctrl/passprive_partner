@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { resolveActiveRestaurant } from "@/lib/restaurant-partner/activeRestaurant";
 import { Bell, Phone, Hash, ArrowLeft } from "lucide-react";
+import { isStaffPlacedOrder } from "@/lib/staffOrder";
 
 const STATUS = {
   PLACED: "PLACED",
@@ -336,7 +337,7 @@ export default function TableOrdersPage() {
       // Queue ALL new orders (not just the first one). Guard against racing
       // fetches adding the same order twice via queuedOrderIdsRef.
       const unqueued = newOrders.filter(
-        (o) => o?.id && !queuedOrderIdsRef.current.has(String(o.id))
+        (o) => o?.id && !queuedOrderIdsRef.current.has(String(o.id)) && !isStaffPlacedOrder(o)
       );
       if (unqueued.length > 0) {
         unqueued.forEach((o) => queuedOrderIdsRef.current.add(String(o.id)));

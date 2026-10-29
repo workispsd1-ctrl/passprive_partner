@@ -35,6 +35,24 @@ function normalizeItems(items) {
     .filter((it) => it.item_id && it.qty > 0 && it.unit_price >= 0 && it.line_total >= 0);
 }
 
+const PAYMENT_METHODS = ["CASH", "CARD", "JUICE", "OTHER"];
+
+function isClosed(row) {
+  const payment = String(row?.payment_status || "").toUpperCase();
+  const booking = String(row?.booking_status || "").toUpperCase();
+  return ["PAID", "COMPLETED"].includes(payment) || ["PAID", "COMPLETED", "CANCELLED"].includes(booking);
+}
+
+function totalsFor(items) {
+  const subtotalCents = items.reduce((sum, it) => sum + Math.round(Number(it.unit_price || 0) * 100) * Number(it.qty || 0), 0);
+  const taxCents = Math.round((subtotalCents * TAX_PERCENT) / 100);
+  return {
+    subtotal_amount: subtotalCents / 100,
+    tax_amount: taxCents / 100,
+    total_amount: (subtotalCents + taxCents) / 100,
+  };
+}
+
 export async function GET(request) {
   try {
     const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
@@ -155,11 +173,16 @@ export async function POST(request) {
     const body = await request.json();
     const action = String(body?.action || "").trim().toLowerCase();
 
-    if (action === "cancel_item") {
+    if (action === "cancel_item" || action === "set_item_qty") {
       const orderId = String(body?.order_id || "").trim();
       const itemKey = String(body?.item_key || "").trim();
+      const nextQty = action === "cancel_item" ? 0 : Number(body?.qty);
+      const reason = String(body?.reason || "").trim().slice(0, 120);
       if (!orderId || !itemKey) {
         return NextResponse.json({ ok: false, error: "order_id and item_key are required" }, { status: 400 });
+      }
+      if (!Number.isInteger(nextQty) || nextQty < 0 || nextQty > 999) {
+        return NextResponse.json({ ok: false, error: "Invalid quantity." }, { status: 400 });
       }
 
       const { data: row, error: rowErr } = await ctx.admin
@@ -170,51 +193,46 @@ export async function POST(request) {
         .maybeSingle();
       if (rowErr) return NextResponse.json({ ok: false, error: rowErr.message }, { status: 400 });
       if (!row?.id) return NextResponse.json({ ok: false, error: "Order not found." }, { status: 404 });
-
-      const payment = String(row?.payment_status || "").toUpperCase();
-      const booking = String(row?.booking_status || "").toUpperCase();
-      if (["PAID", "COMPLETED"].includes(payment) || ["PAID", "COMPLETED", "CANCELLED", "SERVED"].includes(booking)) {
-        return NextResponse.json({ ok: false, error: "Cannot cancel item on closed/paid order." }, { status: 400 });
+      if (isClosed(row)) {
+        return NextResponse.json({ ok: false, error: "This bill is already closed." }, { status: 400 });
       }
 
       const existingItems = normalizeItems(extractOrderItems(row));
-      const filteredItems = existingItems.filter(
-        (it) => String(it.item_id || it.name || "").toLowerCase() !== itemKey.toLowerCase()
+      const idx = existingItems.findIndex(
+        (it) => String(it.item_id || it.name || "").toLowerCase() === itemKey.toLowerCase()
       );
-      if (filteredItems.length === existingItems.length) {
-        return NextResponse.json({ ok: false, error: "Item not found in this order." }, { status: 404 });
-      }
+      if (idx < 0) return NextResponse.json({ ok: false, error: "Item not found in this order." }, { status: 404 });
 
-      const nextSubtotal = Number(
-        filteredItems.reduce((sum, it) => sum + Number(it.qty || 0) * Number(it.unit_price || 0), 0).toFixed(2)
-      );
-      const nextTax = Number(((nextSubtotal * TAX_PERCENT) / 100).toFixed(2));
-      const nextTotal = Number((nextSubtotal + nextTax).toFixed(2));
+      const line = existingItems[idx];
+      if (nextQty < line.qty && !reason) {
+        return NextResponse.json({ ok: false, error: "A reason is required to remove items." }, { status: 400 });
+      }
+      const nextItems =
+        nextQty === 0
+          ? existingItems.filter((_, i) => i !== idx)
+          : existingItems.map((it, i) =>
+              i === idx ? { ...it, qty: nextQty, line_total: Number((nextQty * it.unit_price).toFixed(2)) } : it
+            );
 
       const prevDetails = row.order_details && typeof row.order_details === "object" ? row.order_details : {};
-      const prevSnapshot = prevDetails.order_snapshot && typeof prevDetails.order_snapshot === "object" ? prevDetails.order_snapshot : {};
+      const voids = Array.isArray(prevDetails.voids) ? prevDetails.voids : [];
       const updatedDetails = {
         ...prevDetails,
-        items: filteredItems,
-        order_items: filteredItems,
-        order_snapshot: {
-          ...prevSnapshot,
-          items: filteredItems,
-          order_items: filteredItems,
-          subtotal_amount: nextSubtotal,
-          tax_amount: nextTax,
-          total_amount: nextTotal,
-        },
+        items: nextItems,
+        order_items: nextItems,
+        voids:
+          nextQty < line.qty
+            ? [...voids, { item_id: line.item_id, name: line.name, from_qty: line.qty, to_qty: nextQty, unit_price: line.unit_price, reason, by: ctx.userId, at: new Date().toISOString() }].slice(-200)
+            : voids,
       };
 
+      const totals = totalsFor(nextItems);
       const { data: updatedRows, error: upErr } = await ctx.admin
         .from("restaurant_table_bookings")
         .update({
-          order_items: filteredItems,
+          order_items: nextItems,
           order_details: updatedDetails,
-          subtotal_amount: nextSubtotal,
-          tax_amount: nextTax,
-          total_amount: nextTotal,
+          ...totals,
           updated_at: new Date().toISOString(),
         })
         .eq("id", orderId)
@@ -226,6 +244,103 @@ export async function POST(request) {
         ok: true,
         order: Array.isArray(updatedRows) ? updatedRows[0] || null : null,
       });
+    }
+
+    if (action === "settle") {
+      const orderId = String(body?.order_id || "").trim();
+      const method = String(body?.method || "").trim().toUpperCase();
+      const reference = String(body?.reference || "").trim().slice(0, 60);
+      const idempotencyKey = String(body?.idempotency_key || "").trim().slice(0, 64);
+      if (!orderId || !idempotencyKey) {
+        return NextResponse.json({ ok: false, error: "order_id and idempotency_key are required" }, { status: 400 });
+      }
+      if (!PAYMENT_METHODS.includes(method)) {
+        return NextResponse.json({ ok: false, error: "Pick a payment method." }, { status: 400 });
+      }
+
+      const { data: row, error: rowErr } = await ctx.admin
+        .from("restaurant_table_bookings")
+        .select("id, order_items, order_details, total_amount, payment_status, booking_status")
+        .eq("id", orderId)
+        .eq("restaurant_id", ctx.restaurantId)
+        .maybeSingle();
+      if (rowErr) return NextResponse.json({ ok: false, error: rowErr.message }, { status: 400 });
+      if (!row?.id) return NextResponse.json({ ok: false, error: "Order not found." }, { status: 404 });
+
+      const prevDetails = row.order_details && typeof row.order_details === "object" ? row.order_details : {};
+      if (prevDetails.payment?.idempotency_key === idempotencyKey) {
+        return NextResponse.json({ ok: true, payment: prevDetails.payment });
+      }
+      if (isClosed(row)) return NextResponse.json({ ok: false, error: "This bill is already closed." }, { status: 409 });
+
+      const dueCents = Math.round(Number(row.total_amount || 0) * 100);
+      if (dueCents <= 0 || !normalizeItems(extractOrderItems(row)).length) {
+        return NextResponse.json({ ok: false, error: "There is nothing to pay on this bill." }, { status: 400 });
+      }
+      const receivedCents = method === "CASH" ? Math.round(Number(body?.amount_received) * 100) : dueCents;
+      if (!Number.isFinite(receivedCents) || receivedCents < dueCents || receivedCents > dueCents + 10_000_000) {
+        return NextResponse.json({ ok: false, error: "Amount received is less than the total." }, { status: 400 });
+      }
+
+      const payment = {
+        method,
+        amount_due: dueCents / 100,
+        amount_received: receivedCents / 100,
+        change: (receivedCents - dueCents) / 100,
+        reference: reference || null,
+        by: ctx.userId,
+        at: new Date().toISOString(),
+        idempotency_key: idempotencyKey,
+      };
+
+      const { data: updated, error: upErr } = await ctx.admin
+        .from("restaurant_table_bookings")
+        .update({
+          payment_status: "PAID",
+          booking_status: "COMPLETED",
+          payment_method: method,
+          payment_reference: reference || null,
+          order_details: { ...prevDetails, payment },
+          updated_at: payment.at,
+        })
+        .eq("id", orderId)
+        .eq("restaurant_id", ctx.restaurantId)
+        .not("payment_status", "in", "(PAID,COMPLETED)")
+        .select("id");
+      if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 400 });
+      if (!updated?.length) return NextResponse.json({ ok: false, error: "This bill is already closed." }, { status: 409 });
+
+      return NextResponse.json({ ok: true, payment });
+    }
+
+    if (action === "void_order") {
+      const orderId = String(body?.order_id || "").trim();
+      const reason = String(body?.reason || "").trim().slice(0, 120);
+      if (!orderId) return NextResponse.json({ ok: false, error: "order_id is required" }, { status: 400 });
+      if (!reason) return NextResponse.json({ ok: false, error: "A reason is required to cancel a table." }, { status: 400 });
+
+      const { data: row, error: rowErr } = await ctx.admin
+        .from("restaurant_table_bookings")
+        .select("id, order_details, payment_status, booking_status, total_amount")
+        .eq("id", orderId)
+        .eq("restaurant_id", ctx.restaurantId)
+        .maybeSingle();
+      if (rowErr) return NextResponse.json({ ok: false, error: rowErr.message }, { status: 400 });
+      if (!row?.id) return NextResponse.json({ ok: false, error: "Order not found." }, { status: 404 });
+      if (isClosed(row)) return NextResponse.json({ ok: false, error: "This bill is already closed." }, { status: 400 });
+
+      const prevDetails = row.order_details && typeof row.order_details === "object" ? row.order_details : {};
+      const { error: upErr } = await ctx.admin
+        .from("restaurant_table_bookings")
+        .update({
+          booking_status: "CANCELLED",
+          order_details: { ...prevDetails, void: { reason, by: ctx.userId, at: new Date().toISOString(), total_amount: row.total_amount } },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", orderId)
+        .eq("restaurant_id", ctx.restaurantId);
+      if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 400 });
+      return NextResponse.json({ ok: true });
     }
 
     if (action === "update_order_state") {
@@ -248,13 +363,27 @@ export async function POST(request) {
       const patch = { updated_at: new Date().toISOString() };
       if (nextBookingStatus) patch.booking_status = nextBookingStatus;
       if (nextPaymentStatus) patch.payment_status = nextPaymentStatus;
+      const query = ctx.admin.from("restaurant_table_bookings");
       if (nextPaymentStatus === "PAID" || nextPaymentStatus === "COMPLETED") {
+        const { data: row } = await ctx.admin
+          .from("restaurant_table_bookings")
+          .select("order_details, total_amount, payment_status")
+          .eq("id", orderId)
+          .eq("restaurant_id", ctx.restaurantId)
+          .maybeSingle();
+        const prevDetails = row?.order_details && typeof row.order_details === "object" ? row.order_details : {};
         patch.booking_status = "COMPLETED";
         patch.payment_method = "CASH";
+        if (!prevDetails.payment && !["PAID", "COMPLETED"].includes(String(row?.payment_status || "").toUpperCase())) {
+          const due = Number(row?.total_amount || 0);
+          patch.order_details = {
+            ...prevDetails,
+            payment: { method: "CASH", amount_due: due, amount_received: due, change: 0, reference: null, by: ctx.userId, at: patch.updated_at, via: "quick_mark" },
+          };
+        }
       }
 
-      const { data: updatedRows, error: upErr } = await ctx.admin
-        .from("restaurant_table_bookings")
+      const { data: updatedRows, error: upErr } = await query
         .update(patch)
         .eq("id", orderId)
         .eq("restaurant_id", ctx.restaurantId)

@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { ShoppingBag } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useI18n } from "@/lib/i18n";
+import { isStaffPlacedOrder } from "@/lib/staffOrder";
 
-const ORDER_FIELDS = "id,restaurant_id,order_number,customer_name,customer_phone,items,total_amount,payment_status,pickup_code,pickup_eta,created_at";
+const ORDER_FIELDS = "id,restaurant_id,order_number,customer_name,customer_phone,items,total_amount,payment_status,pickup_code,pickup_eta,created_at,metadata";
 const POLL_MS = 5000;
 
 function money(n) {
@@ -86,9 +87,10 @@ export default function OrderRealtimeNotifier() {
         .order("created_at", { ascending: true })
         .limit(20);
       if (!active) return;
-      const fresh = (data || []).filter((o) => !seenIdsRef.current.has(String(o.id)));
+      const unseen = (data || []).filter((o) => !seenIdsRef.current.has(String(o.id)));
+      unseen.forEach((o) => seenIdsRef.current.add(String(o.id)));
+      const fresh = unseen.filter((o) => !isStaffPlacedOrder(o));
       if (!fresh.length) return;
-      fresh.forEach((o) => seenIdsRef.current.add(String(o.id)));
       setQueue((prev) => [...prev, ...fresh]);
       playBuzzer();
     };

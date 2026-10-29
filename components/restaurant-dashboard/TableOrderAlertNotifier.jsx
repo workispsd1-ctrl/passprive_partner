@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useI18n } from "@/lib/i18n";
+import { isStaffPlacedOrder } from "@/lib/staffOrder";
 
 const TABLE_ORDER_FIELDS = [
   "id",
@@ -13,6 +14,7 @@ const TABLE_ORDER_FIELDS = [
   "customer_phone",
   "order_items",
   "order_details",
+  "source",
   "notes",
   "total_amount",
   "payment_status",
@@ -149,7 +151,7 @@ export default function TableOrderAlertNotifier() {
 
     const queueOrder = (order) => {
       if (!order?.id) return;
-      if (String(order.booking_status || "").toUpperCase() === "SEATED") return;
+      if (isStaffPlacedOrder(order) || String(order.booking_status || "").toUpperCase() === "SEATED") return;
       const id = String(order.id);
       if (seenIdsRef.current.has(id)) return;
       seenIdsRef.current.add(id);

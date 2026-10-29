@@ -37,7 +37,7 @@ export async function POST(request) {
         .order("table_no", { ascending: true }),
       admin
         .from("restaurant_table_bookings")
-        .select("id, table_no, guest_count, booking_status, payment_status, total_amount, order_items, notes, updated_at, source, order_details")
+        .select("id, table_no, guest_count, customer_name, customer_phone, booking_status, payment_status, subtotal_amount, tax_amount, total_amount, order_items, notes, created_at, updated_at, source, order_details")
         .eq("restaurant_id", restaurantId)
         .not("booking_status", "in", "(CANCELLED,COMPLETED,PAID)")
         .not("payment_status", "in", "(PAID,COMPLETED)")

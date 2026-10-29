@@ -81,7 +81,7 @@ export async function GET(request) {
 
     const { data, error } = await ctx.admin
       .from("restaurant_table_bookings")
-      .select("id,table_no,customer_name,customer_phone,order_items,order_details,total_amount,payment_status,booking_status,notes,created_at,updated_at,session_id")
+      .select("id,table_no,customer_name,customer_phone,order_items,order_details,total_amount,payment_status,booking_status,notes,created_at,updated_at,session_id,source")
       .eq("restaurant_id", ctx.restaurantId)
       .order("created_at", { ascending: false })
       .limit(200);

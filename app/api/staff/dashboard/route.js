@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readJson, requireTerminal, serverError } from "../_terminal";
+import { isStaffPlacedOrder } from "@/lib/staffOrder";
 
 function isPendingBooking(status) {
   const s = String(status || "").toLowerCase();
@@ -107,7 +108,7 @@ export async function POST(request) {
       // 3. Table orders — range-filtered for KPIs
       admin
         .from("restaurant_table_bookings")
-        .select("id,customer_name,total_amount,payment_status,booking_status,table_no,created_at,updated_at")
+        .select("id,customer_name,total_amount,payment_status,booking_status,table_no,created_at,updated_at,source,order_details")
         .eq("restaurant_id", restaurantId)
         .gte("created_at", fromISO)
         .lte("created_at", toISO)
@@ -195,7 +196,7 @@ export async function POST(request) {
     // ── Pending actions ────────────────────────────────────────────────────────
     const newOrders =
       orders.filter(o => o.order_status === "NEW").length +
-      tableOrders.filter(o => String(o.booking_status || "").toUpperCase() === "PLACED").length;
+      tableOrders.filter(o => String(o.booking_status || "").toUpperCase() === "PLACED" && !isStaffPlacedOrder(o)).length;
     const readyPickups = orders.filter(o => o.order_status === "READY_FOR_PICKUP").length;
     const pendingBookings = bookings.filter(b => isPendingBooking(b.status)).length;
 

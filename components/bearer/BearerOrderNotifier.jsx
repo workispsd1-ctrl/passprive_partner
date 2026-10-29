@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { toast } from "sonner";
 import { Bell, CheckCircle2, X } from "lucide-react";
+import { isStaffPlacedOrder } from "@/lib/staffOrder";
 
 // Web Audio cues. soft = single short beep (awareness); loud = triple beep (action).
 function beep(times = 1) {
@@ -97,7 +98,7 @@ export default function BearerOrderNotifier() {
       // New order → awareness (soft); unclaimed offers Take Table.
       if (!seenRef.current.has(id)) {
         seenRef.current.add(id);
-        if (mineOrFree) {
+        if (mineOrFree && !isStaffPlacedOrder(o)) {
           newAlerts.push({
             id,
             tableNo: o.table_no ?? "—",

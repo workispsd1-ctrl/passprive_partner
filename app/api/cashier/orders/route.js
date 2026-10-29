@@ -148,6 +148,11 @@ export async function POST(request) {
       if (!Number.isInteger(guests) || guests < 1 || guests > 99) {
         return NextResponse.json({ ok: false, error: "Guests must be between 1 and 99." }, { status: 400 });
       }
+      const guestName = String(body?.customer_name || "").trim().slice(0, 80);
+      const guestPhone = String(body?.customer_phone || "").replace(/[^\d+]/g, "").slice(0, 16);
+      if (guestPhone && !/^\+?\d{7,15}$/.test(guestPhone)) {
+        return NextResponse.json({ ok: false, error: "Enter a valid phone number." }, { status: 400 });
+      }
       const { data: rows, error: rowsErr } = await ctx.admin
         .from("restaurant_table_bookings")
         .select("id, booking_status, payment_status")
@@ -165,7 +170,8 @@ export async function POST(request) {
           restaurant_id: ctx.restaurantId,
           table_no: seatTable,
           guest_count: guests,
-          customer_name: "Walk-in",
+          customer_name: guestName || "Walk-in",
+          customer_phone: guestPhone || null,
           order_items: [],
           order_details: { source_channel: "cashier_orders", cashier_user_id: ctx.userId, created_by: "cashier" },
           subtotal_amount: 0,
@@ -223,7 +229,7 @@ export async function POST(request) {
     if (orderType === "TABLE") {
       const { data: existingRows, error: existingErr } = await ctx.admin
         .from("restaurant_table_bookings")
-        .select("id, order_items, order_details, subtotal_amount, tax_amount, total_amount, booking_status, payment_status")
+        .select("id, customer_name, customer_phone, order_items, order_details, subtotal_amount, tax_amount, total_amount, booking_status, payment_status")
         .eq("restaurant_id", ctx.restaurantId)
         .eq("table_no", tableNo)
         .order("updated_at", { ascending: false })
@@ -245,8 +251,8 @@ export async function POST(request) {
         const { data: updatedRows, error: updateErr } = await ctx.admin
           .from("restaurant_table_bookings")
           .update({
-            customer_name: customerName,
-            customer_phone: customerPhone || null,
+            customer_name: openExisting.customer_name || customerName,
+            customer_phone: openExisting.customer_phone || customerPhone || null,
             order_items: mergedItems,
             order_details: {
               ...prevDetails,
