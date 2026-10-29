@@ -101,6 +101,25 @@ begin
       return json_build_object('ok', false, 'error', 'invalid_code');
     end if;
 
+    -- PIN lockout is per device, so a leaked QR could mint fresh devices to keep guessing.
+    -- Block new setup-code devices once this merchant's devices have 5+ unresolved wrong PINs in total
+    -- (owner clears them via unlock/revoke), and cap how many can be added per day.
+    if (
+      select coalesce(sum(failed_pin_count), 0) from public.pos_terminals
+      where restaurant_id is not distinct from v_setup.restaurant_id
+        and store_id is not distinct from v_setup.store_id
+        and status = 'active'
+    ) >= 5 or (
+      select count(*) from public.pos_terminals
+      where restaurant_id is not distinct from v_setup.restaurant_id
+        and store_id is not distinct from v_setup.store_id
+        and token_hash is not null and pairing_code_hash is null
+        and label = 'Staff device'
+        and paired_at > now() - interval '24 hours'
+    ) >= 20 then
+      return json_build_object('ok', false, 'error', 'invalid_code');
+    end if;
+
     insert into public.pos_terminals (
       restaurant_id, store_id, label, status, token_hash, paired_at, device_model, app_version
     )
@@ -126,3 +145,6 @@ revoke all on function public.pos_get_setup_code(uuid, uuid, boolean) from publi
 revoke all on function public.pos_pair(text, text, text) from public, anon, authenticated;
 grant execute on function public.pos_get_setup_code(uuid, uuid, boolean) to authenticated;
 grant execute on function public.pos_pair(text, text, text) to service_role;
+
+-- Let PostgREST see the new function immediately.
+notify pgrst, 'reload schema';
