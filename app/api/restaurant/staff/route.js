@@ -84,7 +84,7 @@ async function resolveOwnerRestaurant(supabase, admin, userId, reqId) {
 
 function validatePin(pin) {
   const value = String(pin || "").trim();
-  if (!/^\d{4,6}$/.test(value)) return null;
+  if (!/^\d{4}$/.test(value)) return null;
   return value;
 }
 
@@ -183,7 +183,7 @@ export async function POST(request) {
       const userId = String(body?.user_id || "").trim();
       const pin = validatePin(body?.pin);
       if (!userId || !pin) {
-        return NextResponse.json({ ok: false, error: "Valid user_id and 4-6 digit pin are required." }, { status: 400 });
+        return NextResponse.json({ ok: false, error: "Valid user_id and 4-digit pin are required." }, { status: 400 });
       }
 
       const { data: staffRow } = await admin
@@ -230,7 +230,7 @@ export async function POST(request) {
     }
 
     if (!pin) {
-      return NextResponse.json({ ok: false, error: "PIN must be 4-6 digits." }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "PIN must be exactly 4 digits." }, { status: 400 });
     }
 
     const email = createSyntheticEmail(owner.restaurantId, role);

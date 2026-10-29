@@ -111,8 +111,8 @@ export default function StaffPinPage() {
   async function onLogin(e) {
     e.preventDefault();
     setError("");
-    if (!/^\d{4,6}$/.test(pin)) {
-      setError("Enter your 4-6 digit PIN.");
+    if (!/^\d{4}$/.test(pin)) {
+      setError("Enter your 4-digit PIN.");
       return;
     }
     setBusy(true);
@@ -189,8 +189,8 @@ export default function StaffPinPage() {
                 inputMode="numeric"
                 autoComplete="off"
                 value={pin}
-                onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                placeholder="Enter 4-6 digit PIN"
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                placeholder="Enter 4-digit PIN"
                 className={inputClass}
               />
             </label>

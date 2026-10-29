@@ -10,7 +10,7 @@ export async function POST(request) {
   const deviceToken = String(body.device_token || "");
   const pin = String(body.pin || "");
   if (!/^[a-f0-9]{64}$/.test(deviceToken)) return reply({ ok: false, error: "device_not_paired" }, 401);
-  if (!/^\d{4,6}$/.test(pin)) return reply({ ok: false, error: "wrong_pin" }, 401);
+  if (!/^\d{4}$/.test(pin)) return reply({ ok: false, error: "wrong_pin" }, 401);
 
   try {
     const admin = serviceClient();

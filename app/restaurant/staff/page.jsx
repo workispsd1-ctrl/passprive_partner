@@ -253,7 +253,7 @@ export default function RestaurantStaffPage() {
   };
 
   const onResetPin = async (member) => {
-    const nextPin = window.prompt(`Enter new 4-6 digit PIN for ${member.full_name}:`, "");
+    const nextPin = window.prompt(`Enter new 4-digit PIN for ${member.full_name}:`, "");
     if (!nextPin) return;
 
     const { data: sess } = await supabaseBrowser.auth.getSession();
@@ -316,14 +316,14 @@ export default function RestaurantStaffPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Staff name" />
             <Field label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number" />
-            <Field label="PIN (4-6 digits)" type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="Enter PIN" />
+            <Field label="PIN (4 digits)" type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="Enter PIN" />
             <SelectField label="Role" value={role} onChange={(e) => setRole(e.target.value)} options={ROLE_OPTIONS} />
           </div>
           <div className="mt-4 flex items-center gap-3">
             <button
               type="button"
               onClick={onCreate}
-              disabled={loading || !fullName.trim() || !/^\d{4,6}$/.test(pin)}
+              disabled={loading || !fullName.trim() || !/^\d{4}$/.test(pin)}
               className="inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-60"
               style={{ background: "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)" }}
             >
