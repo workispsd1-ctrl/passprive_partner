@@ -60,11 +60,14 @@ export default function RestaurantStaffPage() {
   const [devices, setDevices] = useState([]);
   const [loadingDevices, setLoadingDevices] = useState(true);
   const [revokingDeviceId, setRevokingDeviceId] = useState("");
-  const [pairing, setPairing] = useState(null);
-  const [creatingPairing, setCreatingPairing] = useState(false);
+  const [setupCode, setSetupCode] = useState("");
+  const [resettingSetup, setResettingSetup] = useState(false);
   const [setupQr, setSetupQr] = useState("");
+  const setupUrl = setupCode && typeof window !== "undefined"
+    ? `${window.location.origin}/staff-pin?code=${encodeURIComponent(setupCode)}`
+    : "";
 
-  // Staff devices are POS terminals paired with a one-time code; the QR just carries that code to /staff-pin.
+  // Staff devices are POS terminals paired with the restaurant's permanent setup code; the QR carries it to /staff-pin.
   const loadDevices = async () => {
     const id = await getActiveRestaurantId();
     setRestaurantId(id || "");
@@ -89,24 +92,33 @@ export default function RestaurantStaffPage() {
     setDevices(data || []);
   };
 
-  const onCreatePairing = async () => {
-    if (!restaurantId) return;
-    setCreatingPairing(true);
-    const { data, error } = await supabaseBrowser.rpc("pos_create_pairing", {
-      p_restaurant_id: restaurantId,
+  const loadSetupCode = async (id, reset = false) => {
+    const { data, error } = await supabaseBrowser.rpc("pos_get_setup_code", {
+      p_restaurant_id: id,
       p_store_id: null,
-      p_label: "Staff device",
+      p_reset: reset,
     });
-    setCreatingPairing(false);
-    if (error || !data?.code) {
-      toast.error(error?.message || "Failed to create setup QR.");
-      return;
+    if (error || !data) {
+      toast.error(error?.message || "Failed to load setup QR.");
+      return false;
     }
-    setPairing({ ...data, url: `${window.location.origin}/staff-pin?code=${encodeURIComponent(data.code)}` });
+    setSetupCode(data);
+    return true;
+  };
+
+  const onResetSetupCode = async () => {
+    const yes = window.confirm(
+      "Reset the setup QR? The old QR stops working for new devices. Devices already paired stay signed in."
+    );
+    if (!yes || !restaurantId) return;
+    setResettingSetup(true);
+    const ok = await loadSetupCode(restaurantId, true);
+    setResettingSetup(false);
+    if (ok) toast.success("New setup QR created.");
   };
 
   const onRevokeDevice = async (device) => {
-    const yes = window.confirm("Revoke this device? It will need a new setup QR to sign in again.");
+    const yes = window.confirm("Revoke this device? It will need to scan the setup QR again to sign in.");
     if (!yes) return;
     setRevokingDeviceId(device.id);
     const { error } = await supabaseBrowser.rpc("pos_revoke_terminal", { p_terminal_id: device.id });
@@ -124,17 +136,16 @@ export default function RestaurantStaffPage() {
   }, []);
 
   useEffect(() => {
-    if (!pairing) {
+    if (restaurantId) loadSetupCode(restaurantId);
+  }, [restaurantId]);
+
+  useEffect(() => {
+    if (!setupUrl) {
       setSetupQr("");
       return;
     }
-    QRCode.toDataURL(pairing.url, { width: 200, margin: 1 }).then(setSetupQr).catch(() => setSetupQr(""));
-    const timer = setTimeout(() => {
-      setPairing(null);
-      loadDevices();
-    }, Math.max(new Date(pairing.expires_at).getTime() - Date.now(), 0));
-    return () => clearTimeout(timer);
-  }, [pairing]);
+    QRCode.toDataURL(setupUrl, { width: 200, margin: 1 }).then(setSetupQr).catch(() => setSetupQr(""));
+  }, [setupUrl]);
 
   const loadMembers = async () => {
     setLoadingMembers(true);
@@ -328,21 +339,21 @@ export default function RestaurantStaffPage() {
             Staff QR Setup
           </div>
           <p className="text-xs text-gray-600">New device: scan this QR, then enter PIN. Paired devices need PIN only.</p>
-          {pairing ? (
+          {setupQr ? (
+            <img alt="Staff setup QR" className="mt-3 h-40 w-40 rounded-xl border border-gray-200" src={setupQr} />
+          ) : (
+            <div className="mt-3 h-40 w-40 rounded-xl bg-gray-100 animate-pulse" />
+          )}
+          {setupCode ? (
             <>
-              {setupQr ? (
-                <img alt="Staff setup QR" className="mt-3 h-40 w-40 rounded-xl border border-gray-200" src={setupQr} />
-              ) : (
-                <div className="mt-3 h-40 w-40 rounded-xl bg-gray-100 animate-pulse" />
-              )}
               <p className="mt-2 font-mono text-sm font-bold tracking-widest text-gray-900">
-                {`${pairing.code.slice(0, 4)}-${pairing.code.slice(4)}`}
+                {setupCode.match(/.{1,4}/g).join("-")}
               </p>
-              <p className="text-[11px] text-gray-500">Works once. Expires {new Date(pairing.expires_at).toLocaleTimeString()}.</p>
+              <p className="text-[11px] text-gray-500">This QR stays the same. Print it or keep it at the counter.</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => window.open(pairing.url, "_blank", "noopener,noreferrer")}
+                  onClick={() => window.open(setupUrl, "_blank", "noopener,noreferrer")}
                   className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
                 >
                   Open Link
@@ -351,7 +362,7 @@ export default function RestaurantStaffPage() {
                   type="button"
                   onClick={async () => {
                     try {
-                      await navigator.clipboard.writeText(pairing.url);
+                      await navigator.clipboard.writeText(setupUrl);
                       toast.success("Setup link copied.");
                     } catch {
                       toast.error("Unable to copy link.");
@@ -363,28 +374,15 @@ export default function RestaurantStaffPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setPairing(null);
-                    loadDevices();
-                  }}
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                  onClick={onResetSetupCode}
+                  disabled={resettingSetup}
+                  className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
                 >
-                  Done
+                  {resettingSetup ? "Resetting..." : "Reset QR"}
                 </button>
               </div>
             </>
-          ) : (
-            <button
-              type="button"
-              onClick={onCreatePairing}
-              disabled={creatingPairing || !restaurantId}
-              className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-60"
-              style={{ background: "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)" }}
-            >
-              {creatingPairing ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
-              Generate Setup QR
-            </button>
-          )}
+          ) : null}
         </div>
       </div>
 

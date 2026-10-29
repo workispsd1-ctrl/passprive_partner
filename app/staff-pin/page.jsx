@@ -9,7 +9,7 @@ const TOKEN_KEY = "passprive_device_token";
 const NAME_KEY = "passprive_device_merchant";
 
 const MESSAGES = {
-  invalid_code: "That code is wrong or has expired. Ask the owner for a new one.",
+  invalid_code: "That code is not valid. Scan the setup QR on the owner's Staff page again.",
   device_not_paired: "This device is no longer linked. Enter a new pairing code.",
   wrong_pin: "Wrong PIN.",
   not_in_plan: "Staff logins aren't included in this restaurant's service.",
@@ -157,7 +157,7 @@ export default function StaffPinPage() {
             ? "Loading..."
             : paired
               ? `Linked to ${merchantName || "your restaurant"}. Enter your PIN.`
-              : "Link this device once with the pairing code from the owner's POS Terminals page."}
+              : "Link this device once by scanning the setup QR on the owner's Staff page, or enter its code."}
         </p>
 
         {ready && !paired ? (
@@ -166,7 +166,7 @@ export default function StaffPinPage() {
               <span className="text-xs font-semibold text-gray-600">Pairing code</span>
               <input
                 value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 9))}
+                onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 14))}
                 placeholder="ABCD-EFGH"
                 autoCapitalize="characters"
                 autoComplete="off"
