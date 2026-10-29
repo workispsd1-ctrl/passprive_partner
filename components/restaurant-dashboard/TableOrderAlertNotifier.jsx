@@ -149,6 +149,7 @@ export default function TableOrderAlertNotifier() {
 
     const queueOrder = (order) => {
       if (!order?.id) return;
+      if (String(order.booking_status || "").toUpperCase() === "SEATED") return;
       const id = String(order.id);
       if (seenIdsRef.current.has(id)) return;
       seenIdsRef.current.add(id);

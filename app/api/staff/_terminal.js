@@ -32,6 +32,7 @@ export async function requireTerminal(request, plans = ["booking", "payments"]) 
 
   const { data: auth, error: authErr } = await admin.auth.getUser(token);
   const userId = auth?.user?.id;
+  if (authErr && !(authErr.status >= 400 && authErr.status < 500)) return { error: serverError(authErr) };
   if (authErr || !userId) return { error: reply({ ok: false, error: "unauthorized" }, 401) };
 
   const deviceToken = String(request.headers.get("x-device-token") || "").trim();
@@ -58,7 +59,7 @@ export async function requireTerminal(request, plans = ["booking", "payments"]) 
       .limit(1)
       .maybeSingle();
     if (staffErr) return { error: serverError(staffErr) };
-    if (!staff) return { error: reply({ ok: false, error: "unauthorized" }, 401) };
+    if (!staff) return { error: reply({ ok: false, error: "staff_removed" }, 403) };
     staffRole = String(staff.role || "").toLowerCase();
   }
 

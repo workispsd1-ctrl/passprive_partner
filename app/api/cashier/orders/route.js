@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveCashierRestaurant } from "../_shared";
+import { fromCents, menuIndex, priceLines } from "@/lib/server/menuPricing";
 
 const TAX_PERCENT = 15;
 
@@ -137,6 +138,50 @@ export async function POST(request) {
     if (ctx.error) return NextResponse.json({ ok: false, error: ctx.error }, { status: ctx.status });
 
     const body = await request.json();
+
+    if (body?.action === "seat") {
+      const seatTable = Number(body?.table_no || 0);
+      const guests = Number(body?.guest_count || 0);
+      if (!Number.isInteger(seatTable) || seatTable <= 0) {
+        return NextResponse.json({ ok: false, error: "Valid table number is required." }, { status: 400 });
+      }
+      if (!Number.isInteger(guests) || guests < 1 || guests > 99) {
+        return NextResponse.json({ ok: false, error: "Guests must be between 1 and 99." }, { status: 400 });
+      }
+      const { data: rows, error: rowsErr } = await ctx.admin
+        .from("restaurant_table_bookings")
+        .select("id, booking_status, payment_status")
+        .eq("restaurant_id", ctx.restaurantId)
+        .eq("table_no", seatTable)
+        .order("updated_at", { ascending: false })
+        .limit(20);
+      if (rowsErr) return NextResponse.json({ ok: false, error: rowsErr.message }, { status: 400 });
+      const open = (rows || []).find(isTableOccupied);
+      if (open) return NextResponse.json({ ok: false, error: "table_occupied", order_id: open.id }, { status: 409 });
+
+      const { data: seated, error: seatErr } = await ctx.admin
+        .from("restaurant_table_bookings")
+        .insert({
+          restaurant_id: ctx.restaurantId,
+          table_no: seatTable,
+          guest_count: guests,
+          customer_name: "Walk-in",
+          order_items: [],
+          order_details: { source_channel: "cashier_orders", cashier_user_id: ctx.userId, created_by: "cashier" },
+          subtotal_amount: 0,
+          tax_amount: 0,
+          total_amount: 0,
+          payment_method: "CASH",
+          payment_status: "PENDING",
+          booking_status: "SEATED",
+          source: "cashier",
+        })
+        .select("id, table_no, guest_count, booking_status")
+        .single();
+      if (seatErr) return NextResponse.json({ ok: false, error: seatErr.message }, { status: 400 });
+      return NextResponse.json({ ok: true, order: seated });
+    }
+
     const orderType = String(body?.order_type || "").trim().toUpperCase();
     const items = Array.isArray(body?.items) ? body.items : [];
     const notes = String(body?.notes || "").trim();
@@ -152,25 +197,26 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: "Valid table number is required." }, { status: 400 });
     }
 
-    const normalizedItems = items
-      .map((it) => {
-        const qty = Number(it?.qty || 0);
-        const unit = Number(it?.unit_price || 0);
-        return {
-          item_id: String(it?.item_id || it?.id || it?.name || "").trim(),
-          name: String(it?.name || "Item").trim(),
-          qty: Number(qty.toFixed(3)),
-          unit_price: toFixed2(unit),
-          line_total: toFixed2(qty * unit),
-        };
-      })
-      .filter((it) => it.item_id && it.qty > 0 && it.unit_price >= 0);
+    const { data: menuRow, error: menuErr } = await ctx.admin
+      .from("restaurants")
+      .select("menu_json")
+      .eq("id", ctx.restaurantId)
+      .maybeSingle();
+    if (menuErr) return NextResponse.json({ ok: false, error: menuErr.message }, { status: 400 });
 
-    if (!normalizedItems.length) {
-      return NextResponse.json({ ok: false, error: "No valid items in cart." }, { status: 400 });
+    const priced = priceLines(
+      items.map((it) => ({
+        item_id: it?.item_id ?? it?.id,
+        quantity: Number(it?.quantity ?? it?.qty),
+        modifiers: it?.modifiers,
+      })),
+      menuIndex(menuRow?.menu_json)
+    );
+    if (!priced) {
+      return NextResponse.json({ ok: false, error: "Some items are no longer on the menu. Refresh and try again." }, { status: 400 });
     }
-
-    const subtotal = toFixed2(normalizedItems.reduce((sum, it) => sum + toFixed2(it.qty * it.unit_price), 0));
+    const normalizedItems = priced.lines;
+    const subtotal = fromCents(priced.subtotalCents);
     const tax = toFixed2((subtotal * TAX_PERCENT) / 100);
     const total = toFixed2(subtotal + tax);
 
@@ -214,7 +260,7 @@ export async function POST(request) {
             total_amount: nextTotal,
             payment_method: "CASH",
             payment_status: "PENDING",
-            booking_status: "PREPARING",
+            booking_status: String(openExisting.booking_status || "").toUpperCase() === "SEATED" ? "PLACED" : "PREPARING",
             source: "cashier",
             notes: notes || prevDetails?.notes || null,
             updated_at: new Date().toISOString(),

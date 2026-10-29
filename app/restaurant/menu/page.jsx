@@ -186,6 +186,7 @@ export default function RestaurantMenuPage() {
   const [editingSectionId, setEditingSectionId] = useState(null);
   const [sectionName, setSectionName] = useState("");
   const [sectionDesc, setSectionDesc] = useState("");
+  const [sectionGroup, setSectionGroup] = useState("");
 
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState(null);
@@ -441,6 +442,7 @@ export default function RestaurantMenuPage() {
     setEditingSectionId(null);
     setSectionName("");
     setSectionDesc("");
+    setSectionGroup("");
     setSectionModalOpen(true);
   };
 
@@ -449,6 +451,7 @@ export default function RestaurantMenuPage() {
     setEditingSectionId(s.id);
     setSectionName(s.name || "");
     setSectionDesc(s.description || "");
+    setSectionGroup(s.group || "");
     setSectionModalOpen(true);
   };
 
@@ -457,16 +460,17 @@ export default function RestaurantMenuPage() {
 
     const name = sectionName.trim();
     const description = sectionDesc.trim();
+    const group = sectionGroup.trim().slice(0, 40) || null;
     if (!name) return;
 
     const nextMenu = (() => {
       const next = { ...menu, sections: [...(menu.sections || [])] };
       if (editingSectionId) {
         next.sections = next.sections.map((s) =>
-          s.id === editingSectionId ? { ...s, name, description: description || null } : s
+          s.id === editingSectionId ? { ...s, name, description: description || null, group } : s
         );
       } else {
-        const newSection = { id: uid(), name, description: description || null, items: [] };
+        const newSection = { id: uid(), name, description: description || null, group, items: [] };
         next.sections = [newSection, ...next.sections];
         setSelectedSectionId(newSection.id);
       }
@@ -480,6 +484,7 @@ export default function RestaurantMenuPage() {
     setEditingSectionId(null);
     setSectionName("");
     setSectionDesc("");
+    setSectionGroup("");
   };
 
   const deleteSection = async (sectionId) => {
@@ -906,7 +911,12 @@ export default function RestaurantMenuPage() {
                             }}
                             className="flex-1 cursor-pointer select-none"
                           >
-                            <div className="text-sm font-semibold text-gray-900">{s.name}</div>
+                            <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                              {s.name}
+                              {s.group ? (
+                                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600">{s.group}</span>
+                              ) : null}
+                            </div>
                             <div className="text-xs text-gray-500">
                               {(s.items || []).length} items {s.description ? `• ${s.description}` : ""}
                             </div>
@@ -1105,6 +1115,23 @@ export default function RestaurantMenuPage() {
               placeholder="e.g. Starters, Main Course, Desserts"
               className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-300"
             />
+          </div>
+
+          <div>
+            <label className="text-sm font-semibold text-gray-700">Menu</label>
+            <input
+              value={sectionGroup}
+              onChange={(e) => setSectionGroup(e.target.value)}
+              list="menu-groups"
+              placeholder="e.g. Food, Bar"
+              className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-300"
+            />
+            <datalist id="menu-groups">
+              {Array.from(new Set(["Food", "Bar", ...sections.map((x) => x.group).filter(Boolean)])).map((g) => (
+                <option key={g} value={g} />
+              ))}
+            </datalist>
+            <p className="mt-1 text-xs text-gray-500">Staff see each menu as its own tab when taking orders.</p>
           </div>
 
           <div>
