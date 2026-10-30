@@ -177,7 +177,11 @@ export async function POST(request) {
     const latestPickupOrders = latestPickupRes.data || [];
 
     // ── KPIs ──────────────────────────────────────────────────────────────────
-    const revenueCents = sales.reduce((sum, sale) => sum + sale.amount, 0);
+    const promoCents = sales.reduce(
+      (sum, sale) => sum + (sale.split || []).filter((p) => p.method === "PROMO").reduce((s, p) => s + Math.round(Number(p.amount || 0) * 100), 0),
+      0
+    );
+    const revenueCents = sales.reduce((sum, sale) => sum + sale.amount, 0) - promoCents;
 
     const ratings = reviews.map(r => Number(r.rating || 0)).filter(r => r > 0);
     const avgRating = ratings.length > 0
