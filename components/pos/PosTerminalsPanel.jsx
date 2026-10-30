@@ -63,7 +63,7 @@ export default function PosTerminalsPanel({ restaurantId = null, storeId = null 
     }
     setPinStatus(statusRes.data?.[0] || { has_pin: false });
     const now = new Date();
-    setTerminals((listRes.data || []).filter((t) => t.status !== "pending" || new Date(t.pairing_expires_at) > now));
+    setTerminals((listRes.data || []).filter((t) => t.label !== "MultiPOS invite").filter((t) => t.status !== "pending" || new Date(t.pairing_expires_at) > now));
   }, [restaurantId, storeId]);
 
   useEffect(() => {

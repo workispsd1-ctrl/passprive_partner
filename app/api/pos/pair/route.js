@@ -39,6 +39,7 @@ export async function POST(request) {
     device_token: data.device_token,
     terminal_id: data.terminal_id,
     label: data.label,
+    status: data.status,
     merchant_name: data.merchant_name,
   });
 }
