@@ -28,7 +28,7 @@ export async function POST(request) {
     const [tableRes, pickupRes, bookingRes, payBillRes, merchantRes] = await Promise.all([
       admin
         .from("restaurant_table_bookings")
-        .select("id,table_no,customer_name,customer_phone,order_items,order_details,subtotal_amount,tax_amount,total_amount,payment_method,payment_reference,booking_status,guest_count,notes,created_at,updated_at")
+        .select("id,table_no,customer_name,customer_phone,order_items,order_details,subtotal_amount,tax_amount,total_amount,payment_method,payment_reference,booking_status,guest_count,notes,promo_code,discount_amount,created_at,updated_at")
         .eq("restaurant_id", restaurantId)
         .or("payment_status.in.(PAID,COMPLETED),booking_status.in.(PAID,CANCELLED)")
         .gte("updated_at", start)
