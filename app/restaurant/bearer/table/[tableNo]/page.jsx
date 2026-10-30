@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-// Reusing some logic from public-menu for consistency
 function safeMenu(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return { sections: [] };
@@ -176,8 +175,8 @@ export default function BearerTableOrderPage() {
 
     try {
       const subtotal = Number(cartTotal.toFixed(2));
-      const tax = Number((subtotal * 0.15).toFixed(2));
-      const total = Number((subtotal + tax).toFixed(2));
+      const tax = 0;
+      const total = subtotal;
 
       const sessionId = activeOrder?.session_id || makeUuid();
 
@@ -211,8 +210,6 @@ export default function BearerTableOrderPage() {
         notes: notes.trim() || null,
       };
 
-      // Use the robust UPSERT API to handle merging items into existing table sessions
-      // Staff send their own session instead of the table QR key; the server prices the items.
       const { data: { session } } = await supabaseBrowser.auth.getSession();
       const upsertRes = await fetch("/api/public-menu/orders", {
         method: "POST",
@@ -223,7 +220,7 @@ export default function BearerTableOrderPage() {
           action: "upsert",
           target_order_id: activeOrder?.id || null,
           payload: commonPayload,
-          bill_ready: false, // Bearers don't mark bill as ready from this flow
+          bill_ready: false,
         }),
       });
 
@@ -235,7 +232,6 @@ export default function BearerTableOrderPage() {
         setNotes("");
         setShowCart(false);
         
-        // Refresh active order state
         await fetchActiveOrder(restaurantId, tableNo);
       } else {
         throw new Error(upsertJson?.error || "Failed to save order.");
@@ -275,7 +271,6 @@ export default function BearerTableOrderPage() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-140px)] bg-slate-50 -m-5 overflow-hidden rounded-[2.5rem] border border-slate-200">
-      {/* Header */}
       <div className="bg-white border-b border-slate-100 p-4 sm:p-6 flex items-center justify-between sticky top-0 z-20">
         <div className="flex items-center gap-4">
           <button onClick={() => router.back()} className="h-12 w-12 rounded-2xl bg-slate-50 hover:bg-slate-100 flex items-center justify-center transition-all">
@@ -296,7 +291,6 @@ export default function BearerTableOrderPage() {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar Categories */}
         <div className="w-56 bg-white border-r border-slate-100 overflow-y-auto hidden lg:block">
           <div className="p-4 space-y-1">
             <p className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Categories</p>
@@ -316,10 +310,8 @@ export default function BearerTableOrderPage() {
           </div>
         </div>
 
-        {/* Menu Items Area */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-8 pb-32">
           <div className="max-w-4xl mx-auto space-y-8">
-            {/* Search */}
             <div className="relative group">
               <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-slate-900 transition-colors" />
               <input 
@@ -331,7 +323,6 @@ export default function BearerTableOrderPage() {
               />
             </div>
 
-            {/* Mobile Categories Scroll */}
             <div className="lg:hidden flex gap-2 overflow-x-auto pb-2 no-scrollbar">
               {categories.map(cat => (
                 <button
@@ -346,7 +337,6 @@ export default function BearerTableOrderPage() {
               ))}
             </div>
 
-            {/* Items Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
               {filteredItems.map(item => (
                 <div key={item.id} className="bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-sm flex gap-5 group hover:border-slate-300 transition-all">
@@ -404,7 +394,6 @@ export default function BearerTableOrderPage() {
         </div>
       </div>
 
-      {/* Cart Drawer Overlay */}
       {showCart && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md transition-opacity" onClick={() => setShowCart(false)}>
           <div 
@@ -475,7 +464,6 @@ export default function BearerTableOrderPage() {
         </div>
       )}
 
-      {/* Floating Cart Button */}
       {cartCount > 0 && !showCart && (
         <div className="fixed bottom-10 left-10 right-10 z-40 animate-in fade-in slide-in-from-bottom-10 duration-700">
           <button 

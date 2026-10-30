@@ -3,13 +3,11 @@ import { NextResponse } from "next/server";
 import { serviceClient } from "@/lib/server/deviceSession";
 import { PAY_BILL_PLANS } from "@/lib/server/plan";
 
-const TAX_PERCENT = 15;
 const MAX_LINES = 100;
 const MAX_QTY = 50;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const NO_STORE = { "Cache-Control": "no-store" };
 
-// What a diner may see about an order. Customer name and phone are never sent back.
 const PUBLIC_ORDER_FIELDS =
   "id, session_id:order_details->>session_id, booking_status, payment_status, payment_method, notes, order_items, subtotal_amount, tax_amount, total_amount, updated_at";
 
@@ -60,7 +58,6 @@ function menuPrices(menuJson) {
   return prices;
 }
 
-// Prices come from the restaurant's menu, never from the browser.
 function priceItems(rawItems, prices) {
   if (!Array.isArray(rawItems) || rawItems.length === 0 || rawItems.length > MAX_LINES) return null;
   const lines = new Map();
@@ -90,8 +87,6 @@ function mergeItems(existing, incoming) {
   return [...map.values()];
 }
 
-// A diner proves they are at the table with the key in the table's QR link. Logged-in owners and
-// staff of the restaurant (the waiter screen) use their session instead.
 async function resolveTable(admin, request, body) {
   const restaurantId = String(body.restaurant_id || "").trim();
   const tableNo = Number(body.table_no);
@@ -160,7 +155,7 @@ async function upsertOrder(admin, ctx, body) {
   if (!items) return fail("Some items in your cart are no longer available. Please refresh the menu.");
 
   const subtotal = money(items.reduce((sum, it) => sum + it.line_total, 0));
-  const tax = money((subtotal * TAX_PERCENT) / 100);
+  const tax = 0;
   const notes = String(payload.notes || "").trim().slice(0, 500) || null;
   const sessionId = UUID_RE.test(String(payload.session_id || "")) ? String(payload.session_id) : crypto.randomUUID();
 
@@ -168,7 +163,6 @@ async function upsertOrder(admin, ctx, body) {
   const phone = String(payload.customer_phone || "").replace(/\D/g, "");
   const loyalty = !ctx.staffUserId && Boolean(payload.order_details?.loyalty_enrolled) && name && phone.length === 8;
 
-  // Retry if someone else at the table added items at the same moment.
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const open = await findOpenOrder(admin, ctx.restaurant.id, ctx.tableNo, {
       orderId: String(body.target_order_id || ""),

@@ -965,7 +965,7 @@ export default function RestaurantTableLayoutPage() {
             Areas are the parts of your restaurant where guests sit. Each one gets its own floor map.
           </p>
           <div className="mx-auto mt-6 grid max-w-xl grid-cols-2 gap-2 sm:grid-cols-4">
-            {AREA_KINDS.slice(0, 4).map((k) => {
+            {AREA_KINDS.filter((k) => ["interior", "terrace", "pool", "bar"].includes(k.value)).map((k) => {
               const Icon = k.icon;
               return (
                 <button

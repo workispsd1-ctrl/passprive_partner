@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveCashierRestaurant } from "../_shared";
 
-const TAX_PERCENT = 15;
-
 function extractOrderItems(row) {
   if (Array.isArray(row?.order_items) && row.order_items.length) return row.order_items;
   const details = row?.order_details;
@@ -45,12 +43,25 @@ function isClosed(row) {
 
 function totalsFor(items) {
   const subtotalCents = items.reduce((sum, it) => sum + Math.round(Number(it.unit_price || 0) * 100) * Number(it.qty || 0), 0);
-  const taxCents = Math.round((subtotalCents * TAX_PERCENT) / 100);
   return {
     subtotal_amount: subtotalCents / 100,
-    tax_amount: taxCents / 100,
-    total_amount: (subtotalCents + taxCents) / 100,
+    tax_amount: 0,
+    total_amount: subtotalCents / 100,
   };
+}
+
+function mergeLines(base, extra) {
+  const out = base.map((it) => ({ ...it }));
+  for (const it of extra) {
+    const hit = out.find((o) => o.item_id === it.item_id && o.unit_price === it.unit_price);
+    if (hit) {
+      hit.qty = Number((hit.qty + it.qty).toFixed(3));
+      hit.line_total = Number((hit.qty * hit.unit_price).toFixed(2));
+    } else {
+      out.push({ ...it });
+    }
+  }
+  return out;
 }
 
 export async function GET(request) {
@@ -82,7 +93,6 @@ export async function GET(request) {
         .order("created_at", { ascending: false }),
     ]);
 
-    // Database without the table-areas migration yet: serve the single floor map as before.
     const layoutRes =
       firstLayoutRes.error?.code === "42703"
         ? await loadLayout("id, table_no, label, shape, capacity, pos_x, pos_y")
@@ -115,8 +125,6 @@ export async function PATCH(request) {
 
     if (tables.length > 200) return NextResponse.json({ ok: false, error: "Too many tables." }, { status: 400 });
 
-    // Rows are saved by id, so every id sent must already belong to this restaurant. Without this a
-    // cashier could send another restaurant's table id and take that row over.
     const { data: ownRows, error: ownErr } = await ctx.admin
       .from("restaurant_table_layouts")
       .select("id")
@@ -138,7 +146,6 @@ export async function PATCH(request) {
       pos_y: Number(t.pos_y || 10),
     }));
 
-    // Existing tables are updated in place (their QR key is kept); new tables are inserted.
     const existing = rows.filter((r) => r.id);
     const added = rows.filter((r) => !r.id);
     if (existing.length) {
@@ -393,6 +400,103 @@ export async function POST(request) {
         return NextResponse.json({ ok: false, error: "Order not found." }, { status: 404 });
       }
       return NextResponse.json({ ok: true, order: updatedRows[0] });
+    }
+
+    if (action === "merge_tables") {
+      const fromTable = Number(body?.from_table || 0);
+      const toTable = Number(body?.to_table || 0);
+      if (!Number.isInteger(fromTable) || !Number.isInteger(toTable) || fromTable <= 0 || toTable <= 0 || fromTable === toTable) {
+        return NextResponse.json({ ok: false, error: "Invalid table numbers" }, { status: 400 });
+      }
+
+      const { data: rows, error: rowsErr } = await ctx.admin
+        .from("restaurant_table_bookings")
+        .select("id, table_no, order_items, order_details, booking_status, payment_status, created_at")
+        .eq("restaurant_id", ctx.restaurantId)
+        .in("table_no", [fromTable, toTable]);
+      if (rowsErr) return NextResponse.json({ ok: false, error: rowsErr.message }, { status: 400 });
+
+      const open = (rows || []).filter((r) => !isClosed(r));
+      const sources = open.filter((r) => Number(r.table_no) === fromTable);
+      if (!sources.length) return NextResponse.json({ ok: false, error: `No open bill on T${fromTable}.` }, { status: 400 });
+      const targets = open
+        .filter((r) => Number(r.table_no) === toTable)
+        .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+
+      const at = new Date().toISOString();
+      if (!targets.length) {
+        const { data: moved, error: moveErr } = await ctx.admin
+          .from("restaurant_table_bookings")
+          .update({ table_no: toTable, updated_at: at })
+          .eq("restaurant_id", ctx.restaurantId)
+          .in("id", sources.map((r) => r.id))
+          .select("id");
+        if (moveErr) return NextResponse.json({ ok: false, error: moveErr.message }, { status: 400 });
+        return NextResponse.json({ ok: true, merged_count: moved?.length || 0, order_id: moved?.[0]?.id || null });
+      }
+
+      const target = targets[0];
+      const absorbed = [...sources, ...targets.slice(1)];
+      const closed = [];
+      for (const row of absorbed) {
+        const prev = row.order_details && typeof row.order_details === "object" ? row.order_details : {};
+        const { data: done } = await ctx.admin
+          .from("restaurant_table_bookings")
+          .update({
+            booking_status: "CANCELLED",
+            order_details: { ...prev, merged_into: { order_id: target.id, table_no: toTable, by: ctx.userId, at } },
+            updated_at: at,
+          })
+          .eq("id", row.id)
+          .eq("restaurant_id", ctx.restaurantId)
+          .not("booking_status", "in", "(CANCELLED,COMPLETED,PAID)")
+          .not("payment_status", "in", "(PAID,COMPLETED)")
+          .select("id");
+        if (done?.length) closed.push(row);
+      }
+      if (!closed.length) return NextResponse.json({ ok: false, error: "Those bills changed. Try again." }, { status: 409 });
+
+      const restore = () =>
+        Promise.all(
+          closed.map((row) =>
+            ctx.admin
+              .from("restaurant_table_bookings")
+              .update({ booking_status: row.booking_status, order_details: row.order_details, updated_at: new Date().toISOString() })
+              .eq("id", row.id)
+              .eq("restaurant_id", ctx.restaurantId)
+          )
+        );
+
+      const nextItems = closed.reduce(
+        (acc, row) => mergeLines(acc, normalizeItems(extractOrderItems(row))),
+        normalizeItems(extractOrderItems(target))
+      );
+      const prevDetails = target.order_details && typeof target.order_details === "object" ? target.order_details : {};
+      const mergedFrom = Array.isArray(prevDetails.merged_from) ? prevDetails.merged_from : [];
+      const { data: updated, error: upErr } = await ctx.admin
+        .from("restaurant_table_bookings")
+        .update({
+          order_items: nextItems,
+          order_details: {
+            ...prevDetails,
+            items: nextItems,
+            order_items: nextItems,
+            merged_from: [...mergedFrom, ...closed.map((r) => ({ order_id: r.id, table_no: Number(r.table_no), by: ctx.userId, at }))].slice(-50),
+          },
+          ...totalsFor(nextItems),
+          updated_at: at,
+        })
+        .eq("id", target.id)
+        .eq("restaurant_id", ctx.restaurantId)
+        .not("booking_status", "in", "(CANCELLED,COMPLETED,PAID)")
+        .not("payment_status", "in", "(PAID,COMPLETED)")
+        .select("id, total_amount");
+      if (upErr || !updated?.length) {
+        await restore();
+        return NextResponse.json({ ok: false, error: upErr?.message || "That bill changed. Try again." }, { status: upErr ? 400 : 409 });
+      }
+
+      return NextResponse.json({ ok: true, merged_count: closed.length, order_id: target.id, total_amount: updated[0].total_amount });
     }
 
     if (action !== "move_customers") {

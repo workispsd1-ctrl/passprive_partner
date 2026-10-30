@@ -16,7 +16,6 @@ import {
   MapPin,
 } from "lucide-react";
 
-const TAX_PERCENT = 15;
 const FINALIZE_RETRY_INTERVAL_MS = 3500;
 const MAX_FINALIZE_RETRIES = 5;
 
@@ -146,8 +145,6 @@ function PublicRestaurantMenuContent() {
   const tableFromQr = String(searchParams.get("table") || "").trim();
   const returnSessionId = String(searchParams.get("session_id") || "").trim();
   const returnOutcome = String(searchParams.get("outcome") || "").trim().toLowerCase();
-  // Secret per-table key from the table's QR link; the server needs it to read or add to the order.
-  // After a card payment the gateway sends the diner back without it, so it is kept for this tab.
   const tableKey = String(
     searchParams.get("key") || (typeof window !== "undefined" ? sessionStorage.getItem("public_menu_table_key") : "") || ""
   ).trim();
@@ -379,7 +376,6 @@ function PublicRestaurantMenuContent() {
       if (cancelled) return;
       if (!res.ok || !json?.ok) return;
       if (!json?.order?.id) {
-        // stale local pointer; allow next order click to create a fresh row
         setOrderRecordId("");
         setBillReady(false);
         setActiveOrderSnapshot(null);
@@ -496,8 +492,7 @@ function PublicRestaurantMenuContent() {
     [subtotalAmount, promoDiscountAmount]
   );
 
-  const taxAmount = useMemo(() => (discountedSubtotalAmount * TAX_PERCENT) / 100, [discountedSubtotalAmount]);
-  const totalAmount = useMemo(() => discountedSubtotalAmount + taxAmount, [discountedSubtotalAmount, taxAmount]);
+  const totalAmount = discountedSubtotalAmount;
 
   useEffect(() => {
     if (!appliedPromo?.offerId) return;
@@ -559,7 +554,7 @@ function PublicRestaurantMenuContent() {
     const trimmedRestaurantId = String(restaurantId || "").trim();
     const parsedTableNo = Number(tableNo);
     const roundedSubtotal = Number(discountedSubtotalAmount.toFixed(2));
-    const roundedTax = Number(taxAmount.toFixed(2));
+    const roundedTax = 0;
     const roundedTotal = Number(totalAmount.toFixed(2));
     const recomputedSubtotal = Number(
       (cartItems.reduce((sum, it) => sum + Number(it.price || 0) * Number(it.qty || 0), 0) - promoDiscountAmount).toFixed(2)
@@ -605,7 +600,6 @@ function PublicRestaurantMenuContent() {
       let nextTargetOrderId = String(orderRecordId || "").trim();
       let sessionIdForOrder = orderSessionId || makeSessionId();
 
-      // Final guard: never append items to a paid/closed order.
       if (nextTargetOrderId) {
         try {
           const currentRes = await orderRequest({ action: "get_status", order_id: nextTargetOrderId });
@@ -686,7 +680,6 @@ function PublicRestaurantMenuContent() {
 
       toast.success("Order updated. You can keep adding items.");
 
-      // Reset local batch after successful submit so next additions are continuation deltas.
       setCart({});
       setAppliedPromo(null);
       setPromoError("");
@@ -999,11 +992,7 @@ function PublicRestaurantMenuContent() {
             <div className="mt-2 text-xs font-semibold text-sky-900">
               Running total: {money(activeOrderSnapshot?.total_amount || 0)}
             </div>
-            <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-1 text-xs text-sky-900">
-              <div>Subtotal: {money(activeOrderSnapshot?.subtotal_amount || 0)}</div>
-              <div>Tax: {money(activeOrderSnapshot?.tax_amount || 0)}</div>
-              <div className="font-semibold">Total: {money(activeOrderSnapshot?.total_amount || 0)}</div>
-            </div>
+            <div className="mt-2 text-xs text-sky-900">Prices include VAT</div>
             {billReady ? (
               <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
                 <div className="text-sm font-semibold text-slate-900">Bill summary</div>
@@ -1164,7 +1153,7 @@ function PublicRestaurantMenuContent() {
                   {cartCount} item{cartCount > 1 ? "s" : ""} • {money(totalAmount)}
                 </div>
                 <div className="text-[11px] text-slate-500">
-                Subtotal {money(discountedSubtotalAmount)} + Tax {money(taxAmount)}
+                Prices include VAT
                 </div>
               </div>
             <button

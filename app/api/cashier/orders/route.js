@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import { resolveCashierRestaurant } from "../_shared";
 import { fromCents, menuIndex, priceLines } from "@/lib/server/menuPricing";
 
-const TAX_PERCENT = 15;
-
 function toFixed2(v) {
   return Number(Number(v || 0).toFixed(2));
 }
@@ -223,8 +221,8 @@ export async function POST(request) {
     }
     const normalizedItems = priced.lines;
     const subtotal = fromCents(priced.subtotalCents);
-    const tax = toFixed2((subtotal * TAX_PERCENT) / 100);
-    const total = toFixed2(subtotal + tax);
+    const tax = 0;
+    const total = subtotal;
 
     if (orderType === "TABLE") {
       const { data: existingRows, error: existingErr } = await ctx.admin
@@ -343,7 +341,6 @@ export async function POST(request) {
   }
 }
 
-// Update a pickup order's status / payment (restaurant_orders).
 export async function PATCH(request) {
   try {
     const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
