@@ -1,10 +1,32 @@
+import { addBillItems, setBillItemQty } from "@/lib/server/billItems";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { isBillClosed } from "@/lib/server/tableBill";
 import { readJson, reply, requireTerminal, serverError } from "../../staff/_terminal";
 
-const NEXT_STATUS = { PLACED: "PREPARING", CONFIRMED: "PREPARING", PREPARING: "SERVED" };
+const COMPLETABLE = ["PLACED", "CONFIRMED", "PREPARING", "SERVED"];
 const ORDER_COLUMNS =
-  "id, table_no, guest_count, customer_name, booking_status, payment_status, subtotal_amount, total_amount, order_items, created_at, updated_at, source";
+  "id, table_no, guest_count, customer_name, notes, booking_status, payment_status, subtotal_amount, total_amount, order_items, created_at, updated_at, source";
+
+function menuSections(menuJson) {
+  let menu = menuJson;
+  if (typeof menu === "string") {
+    try {
+      menu = JSON.parse(menu);
+    } catch {
+      menu = null;
+    }
+  }
+  return (Array.isArray(menu?.sections) ? menu.sections : [])
+    .map((section) => ({
+      id: String(section?.id || section?.name || ""),
+      name: String(section?.name || ""),
+      group: String(section?.group || "").trim() || "Other",
+      items: (Array.isArray(section?.items) ? section.items : [])
+        .filter((item) => item?.id && item.is_available !== false)
+        .map((item) => ({ id: String(item.id), name: String(item.name || ""), price: Number(item.price || 0) })),
+    }))
+    .filter((section) => section.items.length > 0);
+}
 
 async function liveTables({ admin, restaurantId }) {
   const [tablesRes, ordersRes] = await Promise.all([
@@ -40,11 +62,11 @@ async function advanceStatus({ admin, restaurantId }, orderId) {
     .eq("restaurant_id", restaurantId)
     .maybeSingle();
   if (error) throw error;
-  const next = NEXT_STATUS[String(row?.booking_status || "").toUpperCase()];
-  if (!row?.id || !next || isBillClosed(row)) return false;
+  const status = String(row?.booking_status || "").toUpperCase();
+  if (!row?.id || !COMPLETABLE.includes(status) || isBillClosed(row)) return false;
   const { error: upErr } = await admin
     .from("restaurant_table_bookings")
-    .update({ booking_status: next, updated_at: new Date().toISOString() })
+    .update({ booking_status: "COMPLETED", updated_at: new Date().toISOString() })
     .eq("id", orderId)
     .eq("restaurant_id", restaurantId)
     .eq("booking_status", row.booking_status);
@@ -64,6 +86,26 @@ export async function POST(request) {
     if (action === "advance") {
       const ok = await advanceStatus(ctx, String(body.order_id || ""));
       return ok ? reply({ ok: true, ...(await liveTables(ctx)) }) : reply({ ok: false, error: "invalid_status" }, 409);
+    }
+
+    if (action === "set_item_qty") {
+      const { status, body: out } = await setBillItemQty(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      return out.ok ? reply({ ok: true, ...(await liveTables(ctx)) }) : reply(out, status);
+    }
+
+    if (action === "menu") {
+      const { data, error } = await ctx.admin
+        .from("restaurants")
+        .select("menu_json")
+        .eq("id", ctx.restaurantId)
+        .maybeSingle();
+      if (error) throw error;
+      return reply({ ok: true, sections: menuSections(data?.menu_json) });
+    }
+
+    if (action === "add_items") {
+      const { status, body: out } = await addBillItems(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      return out.ok ? reply({ ok: true, ...(await liveTables(ctx)) }) : reply(out, status);
     }
 
     if (action === "settle") {

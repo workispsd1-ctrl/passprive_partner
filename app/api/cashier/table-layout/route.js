@@ -1,18 +1,10 @@
 import { NextResponse } from "next/server";
+import { setBillItemQty } from "@/lib/server/billItems";
 import { extractOrderItems, normalizeItems, settleTableBill } from "@/lib/server/settleBill";
 import { resolveCashierRestaurant } from "../_shared";
 import { bookingStatusChangeError, isBillClosed, isBillPaid, quickPaymentRecord } from "@/lib/server/tableBill";
 
 const isClosed = isBillClosed;
-
-function totalsFor(items) {
-  const subtotalCents = items.reduce((sum, it) => sum + Math.round(Number(it.unit_price || 0) * 100) * Number(it.qty || 0), 0);
-  return {
-    subtotal_amount: subtotalCents / 100,
-    tax_amount: 0,
-    total_amount: subtotalCents / 100,
-  };
-}
 
 function mergeLines(base, extra) {
   const out = base.map((it) => ({ ...it }));
@@ -171,81 +163,11 @@ export async function POST(request) {
     const action = String(body?.action || "").trim().toLowerCase();
 
     if (action === "cancel_item" || action === "set_item_qty") {
-      const orderId = String(body?.order_id || "").trim();
-      const itemKey = String(body?.item_key || "").trim();
-      const nextQty = action === "cancel_item" ? 0 : Number(body?.qty);
-      const reason = String(body?.reason || "").trim().slice(0, 120);
-      if (!orderId || !itemKey) {
-        return NextResponse.json({ ok: false, error: "order_id and item_key are required" }, { status: 400 });
-      }
-      if (!Number.isInteger(nextQty) || nextQty < 0 || nextQty > 999) {
-        return NextResponse.json({ ok: false, error: "Invalid quantity." }, { status: 400 });
-      }
-
-      const { data: row, error: rowErr } = await ctx.admin
-        .from("restaurant_table_bookings")
-        .select("id, restaurant_id, order_items, order_details, subtotal_amount, tax_amount, total_amount, payment_status, booking_status, updated_at")
-        .eq("id", orderId)
-        .eq("restaurant_id", ctx.restaurantId)
-        .maybeSingle();
-      if (rowErr) return NextResponse.json({ ok: false, error: rowErr.message }, { status: 400 });
-      if (!row?.id) return NextResponse.json({ ok: false, error: "Order not found." }, { status: 404 });
-      if (isClosed(row)) {
-        return NextResponse.json({ ok: false, error: "This bill is already closed." }, { status: 400 });
-      }
-
-      const existingItems = normalizeItems(extractOrderItems(row));
-      const idx = existingItems.findIndex(
-        (it) => String(it.item_id || it.name || "").toLowerCase() === itemKey.toLowerCase()
-      );
-      if (idx < 0) return NextResponse.json({ ok: false, error: "Item not found in this order." }, { status: 404 });
-
-      const line = existingItems[idx];
-      if (nextQty < line.qty && !reason) {
-        return NextResponse.json({ ok: false, error: "A reason is required to remove items." }, { status: 400 });
-      }
-      const nextItems =
-        nextQty === 0
-          ? existingItems.filter((_, i) => i !== idx)
-          : existingItems.map((it, i) =>
-              i === idx ? { ...it, qty: nextQty, line_total: Number((nextQty * it.unit_price).toFixed(2)) } : it
-            );
-
-      const prevDetails = row.order_details && typeof row.order_details === "object" ? row.order_details : {};
-      const voids = Array.isArray(prevDetails.voids) ? prevDetails.voids : [];
-      const updatedDetails = {
-        ...prevDetails,
-        items: nextItems,
-        order_items: nextItems,
-        voids:
-          nextQty < line.qty
-            ? [...voids, { item_id: line.item_id, name: line.name, from_qty: line.qty, to_qty: nextQty, unit_price: line.unit_price, reason, by: ctx.userId, at: new Date().toISOString() }].slice(-200)
-            : voids,
-      };
-
-      const totals = totalsFor(nextItems);
-      const { data: updatedRows, error: upErr } = await ctx.admin
-        .from("restaurant_table_bookings")
-        .update({
-          order_items: nextItems,
-          order_details: updatedDetails,
-          ...totals,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", orderId)
-        .eq("restaurant_id", ctx.restaurantId)
-        .eq("updated_at", row.updated_at)
-        .not("payment_status", "in", "(PAID,COMPLETED)")
-        .select("id, order_items, subtotal_amount, tax_amount, total_amount");
-      if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 400 });
-      if (!updatedRows?.length) {
-        return NextResponse.json({ ok: false, error: "This bill was just updated. Please try again." }, { status: 409 });
-      }
-
-      return NextResponse.json({
-        ok: true,
-        order: Array.isArray(updatedRows) ? updatedRows[0] || null : null,
+      const { status, body: out } = await setBillItemQty(ctx.admin, ctx.restaurantId, ctx.userId, {
+        ...body,
+        qty: action === "cancel_item" ? 0 : body?.qty,
       });
+      return NextResponse.json(out, { status });
     }
 
     if (action === "settle") {
