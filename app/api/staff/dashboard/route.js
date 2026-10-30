@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { readJson, requireTerminal, serverError } from "../_terminal";
 import { isStaffPlacedOrder } from "@/lib/staffOrder";
+import { mauritiusDayRange } from "@/lib/server/billHistory";
+import { loadSales } from "@/lib/server/tillStats";
 
 function getRangeDates(range, customFrom, customTo) {
   const now = new Date();
@@ -63,8 +65,10 @@ export async function POST(request) {
     const plus2h = new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
     const { from: rangeFrom, to: rangeTo } = getRangeDates(range, customFrom, customTo);
-    const fromISO = rangeFrom.toISOString();
-    const toISO = rangeTo.toISOString();
+    const mauritiusDay = mauritiusDayRange(new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString().slice(0, 10));
+    const isToday = !["month", "yesterday", "week", "custom"].includes(range);
+    const fromISO = isToday ? mauritiusDay.start : rangeFrom.toISOString();
+    const toISO = isToday ? mauritiusDay.end : rangeTo.toISOString();
 
     // 7 days ago for chart (always fixed)
     const sevenDaysAgo = new Date(now);
@@ -81,6 +85,7 @@ export async function POST(request) {
       todayBookingsRes,
       chartOrdersRes,
       latestPickupRes,
+      { sales },
     ] = await Promise.all([
       // 1. Reviews — all time for rating
       admin
@@ -154,6 +159,8 @@ export async function POST(request) {
         .neq("order_status", "CANCELLED")
         .order("created_at", { ascending: false })
         .limit(6),
+
+      loadSales(admin, restaurantId, fromISO, toISO),
     ]);
 
     const reviews = reviewsRes.data || [];
@@ -166,17 +173,7 @@ export async function POST(request) {
     const latestPickupOrders = latestPickupRes.data || [];
 
     // ── KPIs ──────────────────────────────────────────────────────────────────
-    const pickupRevenue = orders
-      .filter(o => String(o.payment_status || "").toUpperCase() === "PAID")
-      .reduce((s, o) => s + Number(o.total_amount || 0), 0);
-
-    const tableRevenue = tableOrders
-      .filter(o => {
-        const bs = String(o.booking_status || "").toUpperCase();
-        const ps = String(o.payment_status || "").toUpperCase();
-        return bs === "PAID" || ps === "PAID" || ps === "COMPLETED";
-      })
-      .reduce((s, o) => s + Number(o.total_amount || 0), 0);
+    const revenueCents = sales.reduce((sum, sale) => sum + sale.amount, 0);
 
     const ratings = reviews.map(r => Number(r.rating || 0)).filter(r => r > 0);
     const avgRating = ratings.length > 0
@@ -235,7 +232,7 @@ export async function POST(request) {
     return NextResponse.json({
       ok: true,
       kpis: {
-        revenue: Math.round(pickupRevenue + tableRevenue),
+        revenue: revenueCents / 100,
         total_bookings: bookings.length,
         total_orders: orders.length + tableOrders.length,
         cancellations,

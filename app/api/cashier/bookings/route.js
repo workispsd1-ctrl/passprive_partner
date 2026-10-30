@@ -24,7 +24,7 @@ export async function GET(request) {
     const dayFilter = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
     const bookingQuery = ctx.admin
       .from("restaurant_bookings")
-      .select("id,customer_name,customer_phone,customer_email,booking_date,booking_time,duration_minutes,party_size,status,source,created_at,booking_code,customer_booking_number,special_request,booked_slot_label,payment_status,notes_internal")
+      .select("id,customer_name,customer_phone,customer_email,booking_date,booking_time,duration_minutes,party_size,status,source,created_at,booking_code,customer_booking_number,special_request,booked_slot_label,payment_status,notes_internal,read,proposed_at")
       .eq("restaurant_id", ctx.restaurantId);
 
     const [bookingRes, tableOrderRes, layoutRes] = await Promise.all([
