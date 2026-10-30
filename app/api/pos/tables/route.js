@@ -1,6 +1,6 @@
 import { addBillItems, seatTable, setBillItemQty } from "@/lib/server/billItems";
 import { settleTableBill } from "@/lib/server/settleBill";
-import { claimPrintJob, pendingPrintJobs, releasePrintJob } from "@/lib/server/printJobs";
+import { claimPrintJob, isQrPending, pendingPrintJobs, releasePrintJob } from "@/lib/server/printJobs";
 import { heldPromos, PROMO_ERRORS, promoDue, quotePromo, releasePromo, reservePromo } from "@/lib/server/promoCode";
 import { isBillClosed } from "@/lib/server/tableBill";
 import { readJson, reply, requireTerminal, serverError } from "../../staff/_terminal";
@@ -15,7 +15,7 @@ function isPaidOnline(o) {
   return o?.source === "public_menu" && ["PAID", "COMPLETED"].includes(String(o?.payment_status || "").toUpperCase());
 }
 const ORDER_COLUMNS =
-  "id, table_no, guest_count, customer_name, notes, booking_status, payment_status, subtotal_amount, total_amount, order_items, created_at, updated_at, source";
+  "id, table_no, guest_count, customer_name, notes, booking_status, payment_status, subtotal_amount, total_amount, order_items, created_at, updated_at, source, qr_pending:order_details->qr_pending";
 
 function thumbnail(urls) {
   const url = Array.isArray(urls) ? String(urls[0] || "") : "";
@@ -76,7 +76,7 @@ async function liveTables({ admin, restaurantId }) {
   if (tablesRes.error) throw tablesRes.error;
   if (ordersRes.error) throw ordersRes.error;
 
-  const orders = (ordersRes.data || []).filter((o) => !isBillClosed(o) || isPaidOnline(o));
+  const orders = (ordersRes.data || []).filter((o) => !isQrPending(o) && (!isBillClosed(o) || isPaidOnline(o)));
   const promos = await heldPromos(admin, restaurantId, orders.map((o) => o.id));
   return {
     merchant: merchantRes.data || null,

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireTerminal, serverError } from "../_terminal";
+import { isQrPending } from "@/lib/server/printJobs";
 
 function parseMenu(menu) {
   if (!menu) return {};
@@ -61,7 +62,7 @@ export async function POST(request) {
       },
       menu: parseMenu(restaurantRow.menu_json),
       tables: tableRows || [],
-      open_orders: orderRows || [],
+      open_orders: (orderRows || []).filter((o) => !isQrPending(o)),
     });
   } catch (error) {
     return serverError(error);

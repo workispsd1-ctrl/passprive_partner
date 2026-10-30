@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { NOT_IN_PLAN, restaurantHasPlan } from "@/lib/server/plan";
 import { bookingStatusChangeError, isBillPaid, quickPaymentRecord } from "@/lib/server/tableBill";
+import { isQrPending } from "@/lib/server/printJobs";
 
 function serverClient() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
@@ -96,7 +97,7 @@ export async function GET(request) {
         name: ctx.restaurantName,
         logo: ctx.restaurantLogo,
       },
-      orders: data || [],
+      orders: (data || []).filter((o) => !isQrPending(o)),
     });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error?.message || "Unknown error" }, { status: 500 });

@@ -3,6 +3,7 @@ import { setBillItemQty } from "@/lib/server/billItems";
 import { extractOrderItems, normalizeItems, settleTableBill } from "@/lib/server/settleBill";
 import { resolveCashierRestaurant } from "../_shared";
 import { bookingStatusChangeError, isBillClosed, isBillPaid, quickPaymentRecord } from "@/lib/server/tableBill";
+import { isQrPending } from "@/lib/server/printJobs";
 
 const isClosed = isBillClosed;
 
@@ -81,13 +82,14 @@ export async function GET(request) {
     if (layoutRes.error?.code === "42703") layoutRes = await loadLayout("id, table_no, label, shape, capacity, pos_x, pos_y");
     if (layoutRes.error) return NextResponse.json({ ok: false, error: layoutRes.error.message }, { status: 400 });
     if (ordersRes.error) return NextResponse.json({ ok: false, error: ordersRes.error.message }, { status: 400 });
+    const liveOrders = (ordersRes.data || []).filter((o) => !isQrPending(o));
 
     return NextResponse.json({
       ok: true,
       restaurant_id: ctx.restaurantId,
-      tables: await releaseFinished(ctx, layoutRes.data || [], ordersRes.data),
+      tables: await releaseFinished(ctx, layoutRes.data || [], liveOrders),
       areas: areasRes.error ? [] : areasRes.data || [],
-      orders: ordersRes.data || [],
+      orders: liveOrders,
     });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error?.message || "Unknown error" }, { status: 500 });

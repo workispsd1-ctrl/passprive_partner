@@ -182,7 +182,7 @@ async function upsertOrder(admin, ctx, body) {
           order_details: {
             session_id: sessionId,
             loyalty_enrolled: loyalty,
-            ...(ctx.staffUserId ? { placed_by: "staff", staff_user_id: ctx.staffUserId } : {}),
+            ...(ctx.staffUserId ? { placed_by: "staff", staff_user_id: ctx.staffUserId } : { qr_pending: true }),
           },
           subtotal_amount: subtotal,
           tax_amount: tax,
@@ -202,6 +202,7 @@ async function upsertOrder(admin, ctx, body) {
         lines: items,
         notes,
         source: ctx.staffUserId ? "Staff" : "QR",
+        needsAck: !ctx.staffUserId,
       });
       return reply({ ok: true, order_id: data.id });
     }
@@ -240,6 +241,7 @@ async function upsertOrder(admin, ctx, body) {
         added: (current.order_items || []).length > 0,
         notes,
         source: ctx.staffUserId ? "Staff" : "QR",
+        needsAck: !ctx.staffUserId,
       });
       return reply({ ok: true, order_id: open.id });
     }

@@ -3,6 +3,7 @@ import { readJson, requireTerminal, serverError } from "../_terminal";
 import { isStaffPlacedOrder } from "@/lib/staffOrder";
 import { mauritiusDayRange } from "@/lib/server/billHistory";
 import { loadSales } from "@/lib/server/tillStats";
+import { isQrPending } from "@/lib/server/printJobs";
 
 function getRangeDates(range, customFrom, customTo) {
   const now = new Date();
@@ -128,7 +129,7 @@ export async function POST(request) {
       // 5. Live table orders — all active (not range-filtered)
       admin
         .from("restaurant_table_bookings")
-        .select("id,customer_name,total_amount,payment_status,booking_status,table_no,updated_at,created_at")
+        .select("id,customer_name,total_amount,payment_status,booking_status,table_no,updated_at,created_at,qr_pending:order_details->qr_pending")
         .eq("restaurant_id", restaurantId)
         .order("created_at", { ascending: false })
         .limit(50),
@@ -223,6 +224,7 @@ export async function POST(request) {
 
     // ── Live table orders (active only) ───────────────────────────────────────
     const liveTableOrders = allLiveTableOrders
+      .filter(o => !isQrPending(o))
       .filter(o => {
         const s = String(o.booking_status || "").toUpperCase();
         return s !== "COMPLETED" && s !== "PAID" && s !== "CANCELLED";
