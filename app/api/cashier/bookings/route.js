@@ -20,13 +20,17 @@ export async function GET(request) {
     const ctx = await resolveCashierRestaurant(token);
     if (ctx.error) return NextResponse.json({ ok: false, error: ctx.error }, { status: ctx.status });
 
+    const date = new URL(request.url).searchParams.get("date") || "";
+    const dayFilter = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
+    const bookingQuery = ctx.admin
+      .from("restaurant_bookings")
+      .select("id,customer_name,customer_phone,customer_email,booking_date,booking_time,duration_minutes,party_size,status,source,created_at,booking_code,customer_booking_number,special_request,booked_slot_label,payment_status,notes_internal")
+      .eq("restaurant_id", ctx.restaurantId);
+
     const [bookingRes, tableOrderRes, layoutRes] = await Promise.all([
-      ctx.admin
-        .from("restaurant_bookings")
-        .select("id,customer_name,customer_phone,customer_email,booking_date,booking_time,duration_minutes,party_size,status,source,created_at,booking_code,customer_booking_number,special_request,booked_slot_label,payment_status,notes_internal")
-        .eq("restaurant_id", ctx.restaurantId)
-        .order("created_at", { ascending: false })
-        .limit(200),
+      dayFilter
+        ? bookingQuery.eq("booking_date", dayFilter).order("booking_time", { ascending: true }).limit(500)
+        : bookingQuery.order("created_at", { ascending: false }).limit(200),
       ctx.admin
         .from("restaurant_table_bookings")
         .select("id,table_no,customer_name,customer_phone,created_at,booking_status,payment_status,total_amount,subtotal_amount,tax_amount,order_items,notes")

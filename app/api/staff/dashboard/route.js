@@ -2,11 +2,6 @@ import { NextResponse } from "next/server";
 import { readJson, requireTerminal, serverError } from "../_terminal";
 import { isStaffPlacedOrder } from "@/lib/staffOrder";
 
-function isPendingBooking(status) {
-  const s = String(status || "").toLowerCase();
-  return s === "pending" || s === "payment_successful" || s === "payment_successfull";
-}
-
 function getRangeDates(range, customFrom, customTo) {
   const now = new Date();
 
@@ -198,7 +193,14 @@ export async function POST(request) {
       orders.filter(o => o.order_status === "NEW").length +
       tableOrders.filter(o => String(o.booking_status || "").toUpperCase() === "PLACED" && !isStaffPlacedOrder(o)).length;
     const readyPickups = orders.filter(o => o.order_status === "READY_FOR_PICKUP").length;
-    const pendingBookings = bookings.filter(b => isPendingBooking(b.status)).length;
+    const mauritiusToday = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const { count: pendingBookings, error: pendingErr } = await admin
+      .from("restaurant_bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("restaurant_id", restaurantId)
+      .eq("status", "pending")
+      .gte("booking_date", mauritiusToday);
+    if (pendingErr) return serverError(pendingErr);
 
     // ── Performance chart (last 7 days) ───────────────────────────────────────
     const chartData = [];
@@ -242,7 +244,7 @@ export async function POST(request) {
       pending_actions: {
         new_orders: newOrders,
         ready_pickups: readyPickups,
-        pending_bookings: pendingBookings,
+        pending_bookings: pendingBookings ?? 0,
       },
       chart_data: chartData,
       upcoming_bookings: upcomingBookings,
