@@ -71,8 +71,7 @@ export default function BearerTableOrdersPage() {
     () => cartItems.reduce((sum, it) => sum + Number(it.unit_price || 0) * Number(it.qty || 0), 0),
     [cartItems]
   );
-  const tax = useMemo(() => Number(((subtotal * 15) / 100).toFixed(2)), [subtotal]);
-  const total = useMemo(() => Number((subtotal + tax).toFixed(2)), [subtotal, tax]);
+  const total = useMemo(() => Number(subtotal.toFixed(2)), [subtotal]);
 
   const addItem = (item, section) => {
     setCart((prev) => {
@@ -136,8 +135,7 @@ export default function BearerTableOrdersPage() {
 
       const orderSubtotal = cartItems.reduce((sum, it) => sum + Number(it.unit_price || 0) * Number(it.qty || 0), 0);
       const subtotalFixed = Number(orderSubtotal.toFixed(2));
-      const taxAmount = Number(((subtotalFixed * 15) / 100).toFixed(2));
-      const totalAmount = Number((subtotalFixed + taxAmount).toFixed(2));
+      const totalAmount = subtotalFixed;
 
       const payload = {
         action: "upsert",
@@ -156,7 +154,7 @@ export default function BearerTableOrdersPage() {
             line_total: Number((it.unit_price * it.qty).toFixed(2)),
           })),
           subtotal_amount: subtotalFixed,
-          tax_amount: taxAmount,
+          tax_amount: 0,
           total_amount: totalAmount,
           payment_method: "CASH",
           payment_status: "PENDING",
@@ -348,7 +346,6 @@ export default function BearerTableOrdersPage() {
             </div>
             <div className="mt-3 space-y-1 text-xs text-slate-700">
               <div className="flex items-center justify-between"><span>Subtotal</span><span>{money(subtotal)}</span></div>
-              <div className="flex items-center justify-between"><span>Tax</span><span>{money(tax)}</span></div>
               <div className="flex items-center justify-between text-sm font-semibold text-slate-900"><span>Total</span><span>{money(total)}</span></div>
             </div>
           </div>

@@ -77,8 +77,7 @@ export default function CashierOrdersPage() {
     () => cartItems.reduce((sum, it) => sum + Number(it.unit_price || 0) * Number(it.qty || 0), 0),
     [cartItems]
   );
-  const tax = useMemo(() => Number(((subtotal * 15) / 100).toFixed(2)), [subtotal]);
-  const total = useMemo(() => Number((subtotal + tax).toFixed(2)), [subtotal, tax]);
+  const total = useMemo(() => Number(subtotal.toFixed(2)), [subtotal]);
 
   const addItem = (item, section) => {
     setCart((prev) => {
@@ -364,7 +363,6 @@ export default function CashierOrdersPage() {
           </div>
           <div className="mt-3 space-y-1 text-xs text-slate-700">
             <div className="flex items-center justify-between"><span>Subtotal</span><span>{money(subtotal)}</span></div>
-            <div className="flex items-center justify-between"><span>Tax</span><span>{money(tax)}</span></div>
             <div className="flex items-center justify-between text-sm font-semibold text-slate-900"><span>Total</span><span>{money(total)}</span></div>
           </div>
         </div>

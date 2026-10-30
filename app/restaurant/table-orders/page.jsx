@@ -632,8 +632,6 @@ export default function TableOrdersPage() {
       </table>
 
       <section class="totals">
-        <div class="row"><span>Subtotal</span><span>${mur(order?.subtotal_amount || 0)}</span></div>
-        <div class="row"><span>Tax</span><span>${mur(order?.tax_amount || 0)}</span></div>
         <div class="row total"><span>Grand Total</span><span>${mur(order?.total_amount || 0)}</span></div>
       </section>
 
@@ -744,8 +742,6 @@ export default function TableOrdersPage() {
   function renderItemsWithBreakdown(order, items, preview) {
     const orderId = String(order?.id || "");
     const isOpen = openItemsPopoverId === orderId;
-    const subtotal = Number(order?.subtotal_amount || 0);
-    const tax = Number(order?.tax_amount || 0);
     const total = Number(order?.total_amount || 0);
 
     return (
@@ -794,12 +790,6 @@ export default function TableOrdersPage() {
             })}
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            <span className="inline-flex items-center rounded-full border border-slate-200 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-800">
-              Subtotal: MUR {money(subtotal)}
-            </span>
-            <span className="inline-flex items-center rounded-full border border-slate-200 bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-800">
-              Tax: MUR {money(tax)}
-            </span>
             <span className="inline-flex items-center rounded-full border border-slate-200 bg-sky-50 px-2 py-1 text-[10px] font-semibold text-sky-800">
               Total: MUR {money(total)}
             </span>
