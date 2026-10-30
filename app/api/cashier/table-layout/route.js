@@ -64,6 +64,33 @@ function mergeLines(base, extra) {
   return out;
 }
 
+async function releaseFinished(ctx, tables, orders) {
+  const active = new Set((orders || []).filter((o) => !isClosed(o)).map((o) => Number(o.table_no)));
+  const byId = new Map((tables || []).map((t) => [String(t.id), t]));
+  const finished = (tables || []).filter((t) => {
+    if (!t.attached_to || !t.attached_auto_release) return false;
+    const host = byId.get(String(t.attached_to));
+    return !active.has(Number(t.table_no)) && !(host && active.has(Number(host.table_no)));
+  });
+  if (!finished.length) return tables;
+  const ids = finished.map((t) => t.id);
+  const { error } = await ctx.admin
+    .from("restaurant_table_layouts")
+    .update({ attached_to: null, attached_auto_release: false })
+    .eq("restaurant_id", ctx.restaurantId)
+    .in("id", ids);
+  if (error) return tables;
+  return tables.map((t) => (ids.includes(t.id) ? { ...t, attached_to: null, attached_auto_release: false } : t));
+}
+
+function clearAttachment(ctx, tableNo) {
+  return ctx.admin
+    .from("restaurant_table_layouts")
+    .update({ attached_to: null, attached_auto_release: false })
+    .eq("restaurant_id", ctx.restaurantId)
+    .eq("table_no", tableNo);
+}
+
 export async function GET(request) {
   try {
     const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
@@ -80,10 +107,10 @@ export async function GET(request) {
         .order("table_no", { ascending: true });
 
     const [firstLayoutRes, areasRes, ordersRes] = await Promise.all([
-      loadLayout("id, table_no, label, shape, capacity, pos_x, pos_y, area_id"),
+      loadLayout("id, table_no, label, shape, capacity, pos_x, pos_y, area_id, attached_to, attached_auto_release"),
       ctx.admin
         .from("restaurant_table_areas")
-        .select("id, name, kind, sort_order, created_at")
+        .select("id, name, kind, sort_order, created_at, floor_objects")
         .eq("restaurant_id", ctx.restaurantId)
         .order("sort_order", { ascending: true }),
       ctx.admin
@@ -93,17 +120,16 @@ export async function GET(request) {
         .order("created_at", { ascending: false }),
     ]);
 
-    const layoutRes =
-      firstLayoutRes.error?.code === "42703"
-        ? await loadLayout("id, table_no, label, shape, capacity, pos_x, pos_y")
-        : firstLayoutRes;
+    let layoutRes = firstLayoutRes;
+    if (layoutRes.error?.code === "42703") layoutRes = await loadLayout("id, table_no, label, shape, capacity, pos_x, pos_y, area_id");
+    if (layoutRes.error?.code === "42703") layoutRes = await loadLayout("id, table_no, label, shape, capacity, pos_x, pos_y");
     if (layoutRes.error) return NextResponse.json({ ok: false, error: layoutRes.error.message }, { status: 400 });
     if (ordersRes.error) return NextResponse.json({ ok: false, error: ordersRes.error.message }, { status: 400 });
 
     return NextResponse.json({
       ok: true,
       restaurant_id: ctx.restaurantId,
-      tables: layoutRes.data || [],
+      tables: await releaseFinished(ctx, layoutRes.data || [], ordersRes.data),
       areas: areasRes.error ? [] : areasRes.data || [],
       orders: ordersRes.data || [],
     });
@@ -402,6 +428,59 @@ export async function POST(request) {
       return NextResponse.json({ ok: true, order: updatedRows[0] });
     }
 
+    if (action === "attach_table") {
+      const fromTable = Number(body?.from_table || 0);
+      const toTable = Number(body?.to_table || 0);
+      if (!Number.isInteger(fromTable) || !Number.isInteger(toTable) || fromTable <= 0 || toTable <= 0 || fromTable === toTable) {
+        return NextResponse.json({ ok: false, error: "Invalid table numbers" }, { status: 400 });
+      }
+
+      const { data: layout, error: layoutErr } = await ctx.admin
+        .from("restaurant_table_layouts")
+        .select("id, table_no, attached_to")
+        .eq("restaurant_id", ctx.restaurantId);
+      if (layoutErr) {
+        const missing = layoutErr.code === "42703";
+        return NextResponse.json({ ok: false, error: missing ? "Attaching tables isn't set up on the server yet." : layoutErr.message }, { status: missing ? 503 : 400 });
+      }
+      const source = (layout || []).find((t) => Number(t.table_no) === fromTable);
+      const target = (layout || []).find((t) => Number(t.table_no) === toTable);
+      if (!source || !target) return NextResponse.json({ ok: false, error: "Table not found." }, { status: 404 });
+      if (source.attached_to) return NextResponse.json({ ok: false, error: `T${fromTable} is already attached. Detach it first.` }, { status: 409 });
+      if (target.attached_to) return NextResponse.json({ ok: false, error: `T${toTable} is attached to another table. Pick that table instead.` }, { status: 409 });
+      if ((layout || []).some((t) => t.attached_to === source.id)) {
+        return NextResponse.json({ ok: false, error: `Other tables are attached to T${fromTable}. Detach them first.` }, { status: 409 });
+      }
+
+      const { data: rows, error: rowsErr } = await ctx.admin
+        .from("restaurant_table_bookings")
+        .select("booking_status, payment_status")
+        .eq("restaurant_id", ctx.restaurantId)
+        .in("table_no", [fromTable, toTable]);
+      if (rowsErr) return NextResponse.json({ ok: false, error: rowsErr.message }, { status: 400 });
+
+      const { data: done, error: upErr } = await ctx.admin
+        .from("restaurant_table_layouts")
+        .update({ attached_to: target.id, attached_auto_release: (rows || []).some((r) => !isClosed(r)) })
+        .eq("id", source.id)
+        .eq("restaurant_id", ctx.restaurantId)
+        .is("attached_to", null)
+        .select("id");
+      if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 400 });
+      if (!done?.length) return NextResponse.json({ ok: false, error: `T${fromTable} is already attached. Detach it first.` }, { status: 409 });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "detach_table") {
+      const tableNo = Number(body?.table_no || 0);
+      if (!Number.isInteger(tableNo) || tableNo <= 0) {
+        return NextResponse.json({ ok: false, error: "Invalid table number" }, { status: 400 });
+      }
+      const { error: upErr } = await clearAttachment(ctx, tableNo);
+      if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 400 });
+      return NextResponse.json({ ok: true });
+    }
+
     if (action === "merge_tables") {
       const fromTable = Number(body?.from_table || 0);
       const toTable = Number(body?.to_table || 0);
@@ -432,6 +511,7 @@ export async function POST(request) {
           .in("id", sources.map((r) => r.id))
           .select("id");
         if (moveErr) return NextResponse.json({ ok: false, error: moveErr.message }, { status: 400 });
+        await clearAttachment(ctx, fromTable);
         return NextResponse.json({ ok: true, merged_count: moved?.length || 0, order_id: moved?.[0]?.id || null });
       }
 
@@ -496,6 +576,7 @@ export async function POST(request) {
         return NextResponse.json({ ok: false, error: upErr?.message || "That bill changed. Try again." }, { status: upErr ? 400 : 409 });
       }
 
+      await clearAttachment(ctx, fromTable);
       return NextResponse.json({ ok: true, merged_count: closed.length, order_id: target.id, total_amount: updated[0].total_amount });
     }
 

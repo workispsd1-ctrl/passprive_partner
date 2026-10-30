@@ -13,11 +13,15 @@ import {
   Armchair,
   Users,
   Move,
+  Copy,
+  RotateCw,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { getActiveRestaurantId } from "@/lib/restaurant-partner/activeRestaurant";
 import { AREA_KINDS, areaKindMeta as kindMeta, sortAreas } from "@/lib/restaurant-partner/tableAreas";
 import { toast } from "sonner";
+import FloorItems from "@/components/restaurant-dashboard/FloorItems";
+import { FLOOR_ITEMS, floorItemMeta, snapPosition } from "@/lib/restaurant-partner/floorItems";
 
 const SHAPES = [
   { value: "circle", label: "Round" },
@@ -30,6 +34,14 @@ const CAPACITIES = [2, 4, 6, 8, 10, 12];
 const BASE_CANVAS_W = 960;
 const UNASSIGNED = "__unassigned__";
 const GRADIENT = "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)";
+
+const POOL_SHAPES = [
+  { value: "rect", label: "Rectangle" },
+  { value: "square", label: "Square" },
+  { value: "round", label: "Round" },
+  { value: "triangle", label: "Triangle" },
+];
+const MAX_ITEMS = 24;
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
@@ -440,6 +452,89 @@ function AddTableModal({ areas, defaultAreaId, nextTableNo, usedNumbers, onClose
   );
 }
 
+function ItemEditor({ item, onChange, onDuplicate, onDelete, onClose }) {
+  const meta = floorItemMeta(item.kind);
+  const isPool = meta.kind === "pool";
+  const locked = item.shape === "round" || item.shape === "square";
+  const setShape = (shape) => {
+    const side = Math.max(item.w, item.h);
+    onChange(shape === "round" || shape === "square" ? { shape, w: side, h: side } : { shape });
+  };
+  const slider = (label, value, min, max, step, onInput) => (
+    <label className="block">
+      <span className="flex justify-between text-xs font-semibold text-gray-700">
+        {label} <span className="font-medium text-gray-500">{value}</span>
+      </span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onInput(Number(e.target.value))}
+        className="mt-2 w-full accent-[#FF4800]"
+      />
+    </label>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-semibold text-gray-900">{meta.label}</div>
+        <button type="button" onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-gray-600">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      {isPool ? (
+      <div className="grid grid-cols-2 gap-2">
+        {POOL_SHAPES.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => setShape(o.value)}
+            className={`rounded-xl border px-3 py-2 text-sm font-semibold ${
+              item.shape === o.value ? "border-[#FF4800] bg-[#FFF7F4] text-[#FF4800]" : "border-gray-200 text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+      ) : null}
+
+      {locked ? (
+        slider("Size", item.w, 3, 60, 1, (v) => onChange({ w: v, h: v }))
+      ) : (
+        <>
+          {slider("Length", item.w, 2, 90, 1, (v) => onChange({ w: v }))}
+          {slider("Width", item.h, 1, 60, 0.5, (v) => onChange({ h: v }))}
+        </>
+      )}
+      {slider("Rotation", item.rotation || 0, 0, 345, 15, (v) => onChange({ rotation: v }))}
+
+      <SecondaryButton
+        onClick={() => onChange({ rotation: ((item.rotation || 0) + 90) % 360 })}
+        className="h-9 w-full px-3 text-xs"
+      >
+        <RotateCw className="h-3.5 w-3.5" /> Rotate 90°
+      </SecondaryButton>
+      <SecondaryButton onClick={onDuplicate} className="h-9 w-full px-3 text-xs">
+        <Copy className="h-3.5 w-3.5" /> Duplicate
+      </SecondaryButton>
+      <SecondaryButton onClick={onDelete} className="h-9 w-full px-3 text-xs text-rose-600 hover:bg-rose-50">
+        <Trash2 className="h-3.5 w-3.5" /> Delete
+      </SecondaryButton>
+
+      <p className="text-xs text-gray-500">
+        {isPool
+          ? "Duplicate and rotate a rectangle, then drag it onto the first: edges click into line and the two join into one L-shaped pool."
+          : "Drag it on the map. Edges click into line with other items."}
+      </p>
+    </div>
+  );
+}
+
 function ConfirmModal({ open, title, description, confirmText, onConfirm, onClose, loading }) {
   return (
     <Modal
@@ -574,6 +669,8 @@ export default function RestaurantTableLayoutPage() {
   const [dragId, setDragId] = useState(null);
   const [canvasScale, setCanvasScale] = useState(1);
   const canvasRef = useRef(null);
+  const [selectedItemId, setSelectedItemId] = useState(null);
+  const itemTimerRef = useRef(null);
   const nudgeTimerRef = useRef(null);
 
   const sortedAreas = useMemo(() => sortAreas(areas), [areas]);
@@ -587,6 +684,11 @@ export default function RestaurantTableLayoutPage() {
   }, [sortedAreas, tables, unassignedCount]);
 
   const activeArea = areaTabs.find((a) => a.id === activeAreaId) || null;
+  const activeItems = useMemo(
+    () => (Array.isArray(activeArea?.floor_objects) ? activeArea.floor_objects : []),
+    [activeArea]
+  );
+  const selectedItem = activeItems.find((p) => p.id === selectedItemId) || null;
 
   const areaTables = useMemo(
     () =>
@@ -627,7 +729,7 @@ export default function RestaurantTableLayoutPage() {
       const [areasRes, tablesRes] = await Promise.all([
         supabaseBrowser
           .from("restaurant_table_areas")
-          .select("id, name, kind, sort_order, created_at")
+          .select("id, name, kind, sort_order, created_at, floor_objects")
           .eq("restaurant_id", rid)
           .order("sort_order", { ascending: true }),
         supabaseBrowser
@@ -695,6 +797,110 @@ export default function RestaurantTableLayoutPage() {
     if (!silent) toast.success("Table saved.");
     return true;
   };
+
+  // ---------- Floor items ----------
+  const setAreaItems = (areaId, items) =>
+    setAreas((prev) => prev.map((a) => (a.id === areaId ? { ...a, floor_objects: items } : a)));
+
+  const persistItems = async (areaId, items) => {
+    const { error } = await supabaseBrowser
+      .from("restaurant_table_areas")
+      .update({ floor_objects: items, updated_at: new Date().toISOString() })
+      .eq("id", areaId)
+      .eq("restaurant_id", restaurantId);
+    if (error) {
+      toast.error(friendlyError(error, "Couldn't save the layout."));
+      await load();
+    }
+  };
+
+  const commitItems = (areaId, items) => {
+    setAreaItems(areaId, items);
+    persistItems(areaId, items);
+  };
+
+  const addItem = (kind) => {
+    if (activeItems.length >= MAX_ITEMS) {
+      toast.error(`You can add up to ${MAX_ITEMS} items per area.`);
+      return;
+    }
+    const { shape, w, h } = floorItemMeta(kind);
+    const item = { id: crypto.randomUUID(), kind, shape, w, h, x: 50, y: 50, rotation: 0 };
+    commitItems(activeAreaId, [...activeItems, item]);
+    setSelectedId(null);
+    setSelectedItemId(item.id);
+  };
+
+  const changeItem = (id, patch) => {
+    const areaId = activeAreaId;
+    const items = activeItems.map((p) => (p.id === id ? { ...p, ...patch } : p));
+    setAreaItems(areaId, items);
+    clearTimeout(itemTimerRef.current);
+    itemTimerRef.current = setTimeout(() => persistItems(areaId, items), 400);
+  };
+
+  const duplicateItem = (item) => {
+    if (activeItems.length >= MAX_ITEMS) {
+      toast.error(`You can add up to ${MAX_ITEMS} items per area.`);
+      return;
+    }
+    const copy = { ...item, id: crypto.randomUUID(), x: clamp(item.x + 4, 0, 100), y: clamp(item.y + 6, 0, 100) };
+    commitItems(activeAreaId, [...activeItems, copy]);
+    setSelectedItemId(copy.id);
+  };
+
+  const deleteItem = (id) => {
+    commitItems(activeAreaId, activeItems.filter((p) => p.id !== id));
+    setSelectedItemId(null);
+  };
+
+  const onItemPointerDown = (e, item) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const areaId = activeAreaId;
+    const items = activeItems;
+    const others = items.filter((p) => p.id !== item.id);
+    const rect = canvas.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let latest = { x: item.x, y: item.y };
+    let moved = false;
+
+    setSelectedId(null);
+    setSelectedItemId(item.id);
+
+    const withLatest = () => items.map((p) => (p.id === item.id ? { ...p, ...latest } : p));
+    const onMove = (mv) => {
+      const dx = mv.clientX - startX;
+      const dy = mv.clientY - startY;
+      if (!moved && Math.hypot(dx, dy) < 4) return;
+      moved = true;
+      const rawX = clamp(item.x + (dx / rect.width) * 100, 0, 100);
+      const rawY = clamp(item.y + (dy / rect.height) * 100, 0, 100);
+      const snapped = mv.altKey ? { x: rawX, y: rawY } : snapPosition(item, rawX, rawY, others);
+      latest = { x: Number(snapped.x.toFixed(2)), y: Number(snapped.y.toFixed(2)) };
+      setAreaItems(areaId, withLatest());
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      if (moved) persistItems(areaId, withLatest());
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  };
+
+  useEffect(() => {
+    if (selectedId) setSelectedItemId(null);
+  }, [selectedId]);
+
+  useEffect(() => () => clearTimeout(itemTimerRef.current), []);
 
   // ---------- Areas ----------
   const saveArea = async ({ name, kind }) => {
@@ -1064,6 +1270,19 @@ export default function RestaurantTableLayoutPage() {
             </div>
             {activeArea && activeArea.id !== UNASSIGNED ? (
               <div className="flex items-center gap-2">
+                <select
+                  value=""
+                  aria-label="Add a floor item"
+                  onChange={(e) => e.target.value && addItem(e.target.value)}
+                  className="h-9 rounded-xl border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-800 outline-none hover:bg-gray-50"
+                >
+                  <option value="">+ Add item</option>
+                  {FLOOR_ITEMS.map((i) => (
+                    <option key={i.kind} value={i.kind}>
+                      {i.label}
+                    </option>
+                  ))}
+                </select>
                 <SecondaryButton onClick={() => setAreaModal(activeArea)} className="h-9 px-3 text-xs">
                   <Pencil className="h-3.5 w-3.5" /> Edit area
                 </SecondaryButton>
@@ -1086,11 +1305,21 @@ export default function RestaurantTableLayoutPage() {
               tabIndex={0}
               onKeyDown={onCanvasKeyDown}
               onPointerDown={(e) => {
-                if (e.target === e.currentTarget) setSelectedId(null);
+                if (e.target === e.currentTarget) {
+                  setSelectedId(null);
+                  setSelectedItemId(null);
+                }
               }}
               aria-label={`${activeArea?.name || "Area"} floor map. Select a table, then drag it or use the arrow keys to move it.`}
               className="relative aspect-[16/10] w-full min-w-[640px] select-none overflow-hidden rounded-2xl border border-dashed border-gray-300 bg-[#FCFCFD] bg-[radial-gradient(circle,_#e5e7eb_1px,_transparent_1px)] outline-none [background-size:20px_20px] focus-visible:ring-2 focus-visible:ring-[#FF4800]/30"
             >
+              <FloorItems
+                items={activeItems}
+                selectedId={selectedItemId}
+                onPointerDown={onItemPointerDown}
+                onSelect={setSelectedItemId}
+              />
+
               {areaTables.map((t) => {
                 const isSelected = selectedId === t.id;
                 return (
@@ -1125,7 +1354,7 @@ export default function RestaurantTableLayoutPage() {
                 );
               })}
 
-              {areaTables.length === 0 ? (
+              {areaTables.length === 0 && activeItems.length === 0 ? (
                 <div className="absolute inset-0 grid place-items-center p-6 text-center">
                   <div>
                     <div className="text-sm font-semibold text-gray-800">No tables in {activeArea?.name || "this area"} yet</div>
@@ -1143,13 +1372,22 @@ export default function RestaurantTableLayoutPage() {
 
           <div className="mt-3 flex items-center gap-1.5 text-xs text-gray-500">
             <Move className="h-3.5 w-3.5 shrink-0" />
-            Drag tables to position them. Positions save automatically. Arrow keys nudge the selected table.
+            Drag tables and floor items to position them; edges click into line (hold Alt to place freely). Positions save automatically.
           </div>
         </div>
 
         {/* Selected table panel */}
         <div className="rounded-2xl border border-gray-200 bg-white p-4 xl:sticky xl:top-20 xl:self-start">
-          {!selected ? (
+          {selectedItem ? (
+            <ItemEditor
+              key={selectedItem.id}
+              item={selectedItem}
+              onChange={(patch) => changeItem(selectedItem.id, patch)}
+              onDuplicate={() => duplicateItem(selectedItem)}
+              onDelete={() => deleteItem(selectedItem.id)}
+              onClose={() => setSelectedItemId(null)}
+            />
+          ) : !selected ? (
             <div className="py-6 text-center">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-50 text-gray-400">
                 <Armchair className="h-5 w-5" />
