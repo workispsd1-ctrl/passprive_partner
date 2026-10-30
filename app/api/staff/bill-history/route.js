@@ -5,7 +5,7 @@ import {
   payBillBill,
   pickupBill,
   summarize,
-  tableBill,
+  tableBills,
 } from "@/lib/server/billHistory";
 import { readJson, reply, requireTerminal, serverError } from "../_terminal";
 
@@ -73,7 +73,7 @@ export async function POST(request) {
 
     const bills = billsInRange(
       [
-        ...(tableRes.data || []).map(tableBill),
+        ...(tableRes.data || []).flatMap(tableBills),
         ...(pickupRes.data || []).map(pickupBill),
         ...(bookingRes.data || []).map(bookingBill),
         ...(payBillRes.data || []).map(payBillBill),

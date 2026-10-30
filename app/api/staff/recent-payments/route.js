@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { bookingBill, payBillBill, pickupBill, tableBill } from "@/lib/server/billHistory";
+import { bookingBill, payBillBill, pickupBill, tableBills } from "@/lib/server/billHistory";
 import { requireTerminal, serverError } from "../_terminal";
 
 const LIMIT = 5;
@@ -59,7 +59,7 @@ export async function POST(request) {
     }
 
     const payments = [
-      ...(tableRes.data || []).map(tableBill),
+      ...(tableRes.data || []).flatMap(tableBills),
       ...(pickupRes.data || []).map(pickupBill),
       ...(bookingRes.data || []).map(bookingBill),
       ...(billRes.data || []).map(payBillBill),
