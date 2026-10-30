@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { serviceClient } from "@/lib/server/deviceSession";
 import { PAY_BILL_PLANS } from "@/lib/server/plan";
+import { queueOrderTicket } from "@/lib/server/printJobs";
 
 const MAX_LINES = 100;
 const MAX_QTY = 50;
@@ -35,7 +36,7 @@ function sameSecret(given, expected) {
 function isOpen(row) {
   const booking = String(row?.booking_status || "").toUpperCase();
   const payment = String(row?.payment_status || "").toUpperCase();
-  return !["CANCELLED", "PAID", "COMPLETED"].includes(booking) && !["PAID", "COMPLETED"].includes(payment);
+  return !["CANCELLED", "PAID"].includes(booking) && !["PAID", "COMPLETED"].includes(payment);
 }
 
 function menuPrices(menuJson) {
@@ -195,6 +196,13 @@ async function upsertOrder(admin, ctx, body) {
         .select("id")
         .single();
       if (error) return serverError(error);
+      await queueOrderTicket(admin, ctx.restaurant.id, {
+        orderId: data.id,
+        tableNo: ctx.tableNo,
+        lines: items,
+        notes,
+        source: ctx.staffUserId ? "Staff" : "QR",
+      });
       return reply({ ok: true, order_id: data.id });
     }
 
@@ -224,7 +232,17 @@ async function upsertOrder(admin, ctx, body) {
       .eq("updated_at", current.updated_at)
       .select("id");
     if (saveErr) return serverError(saveErr);
-    if (saved?.length) return reply({ ok: true, order_id: open.id });
+    if (saved?.length) {
+      await queueOrderTicket(admin, ctx.restaurant.id, {
+        orderId: open.id,
+        tableNo: ctx.tableNo,
+        lines: items,
+        added: (current.order_items || []).length > 0,
+        notes,
+        source: ctx.staffUserId ? "Staff" : "QR",
+      });
+      return reply({ ok: true, order_id: open.id });
+    }
   }
   return fail("The table's order was just updated. Please try again.", 409);
 }

@@ -9,6 +9,11 @@ const STORAGE_OBJECT_PATH = "/storage/v1/object/public/";
 const STORAGE_RENDER_PATH = "/storage/v1/render/image/public/";
 const THUMB_WIDTH = 320;
 const COMPLETABLE = ["PLACED", "CONFIRMED", "PREPARING", "SERVED"];
+const PAID_ONLINE_HOURS = 12;
+
+function isPaidOnline(o) {
+  return o?.source === "public_menu" && ["PAID", "COMPLETED"].includes(String(o?.payment_status || "").toUpperCase());
+}
 const ORDER_COLUMNS =
   "id, table_no, guest_count, customer_name, notes, booking_status, payment_status, subtotal_amount, total_amount, order_items, created_at, updated_at, source";
 
@@ -58,7 +63,7 @@ async function liveTables({ admin, restaurantId }) {
       .select(ORDER_COLUMNS)
       .eq("restaurant_id", restaurantId)
       .not("booking_status", "in", "(CANCELLED,PAID)")
-      .not("payment_status", "in", "(PAID,COMPLETED)")
+      .or(`payment_status.not.in.(PAID,COMPLETED),and(source.eq.public_menu,booking_status.neq.COMPLETED,created_at.gte.${new Date(Date.now() - PAID_ONLINE_HOURS * 3600000).toISOString()})`)
       .order("created_at", { ascending: true })
       .limit(100),
     admin
@@ -71,7 +76,7 @@ async function liveTables({ admin, restaurantId }) {
   if (tablesRes.error) throw tablesRes.error;
   if (ordersRes.error) throw ordersRes.error;
 
-  const orders = (ordersRes.data || []).filter((o) => !isBillClosed(o));
+  const orders = (ordersRes.data || []).filter((o) => !isBillClosed(o) || isPaidOnline(o));
   const promos = await heldPromos(admin, restaurantId, orders.map((o) => o.id));
   return {
     merchant: merchantRes.data || null,
@@ -95,13 +100,13 @@ async function isReadyToPay({ admin, restaurantId }, orderId) {
 async function advanceStatus({ admin, restaurantId }, orderId) {
   const { data: row, error } = await admin
     .from("restaurant_table_bookings")
-    .select("id, booking_status, payment_status")
+    .select("id, booking_status, payment_status, source")
     .eq("id", orderId)
     .eq("restaurant_id", restaurantId)
     .maybeSingle();
   if (error) throw error;
   const status = String(row?.booking_status || "").toUpperCase();
-  if (!row?.id || !COMPLETABLE.includes(status) || isBillClosed(row)) return false;
+  if (!row?.id || !COMPLETABLE.includes(status) || (isBillClosed(row) && !isPaidOnline(row))) return false;
   const { error: upErr } = await admin
     .from("restaurant_table_bookings")
     .update({ booking_status: "COMPLETED", updated_at: new Date().toISOString() })
