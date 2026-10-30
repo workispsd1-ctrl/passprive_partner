@@ -46,12 +46,12 @@ export async function resolveCashierRestaurant(token) {
     return { error: "Access denied", status: 403 };
   }
 
-  const { data: staffRow } = await admin
+  const { data: staffRowRows } = await admin
     .from("restaurant_staff")
     .select("restaurant_id, role")
     .eq("user_id", userId)
-    .limit(1)
-    .maybeSingle();
+    .limit(2);
+  const staffRow = staffRowRows?.length === 1 ? staffRowRows[0] : null;
 
   if (!staffRow?.restaurant_id) {
     return { error: "No restaurant assigned for this cashier account.", status: 403 };

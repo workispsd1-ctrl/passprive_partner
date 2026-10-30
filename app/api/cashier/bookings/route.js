@@ -23,7 +23,7 @@ export async function GET(request) {
     const [bookingRes, tableOrderRes, layoutRes] = await Promise.all([
       ctx.admin
         .from("restaurant_bookings")
-        .select("id,customer_name,customer_phone,booking_date,booking_time,duration_minutes,party_size,status,created_at,booking_code,special_request,booked_slot_label,payment_status,notes_internal")
+        .select("id,customer_name,customer_phone,customer_email,booking_date,booking_time,duration_minutes,party_size,status,source,created_at,booking_code,customer_booking_number,special_request,booked_slot_label,payment_status,notes_internal")
         .eq("restaurant_id", ctx.restaurantId)
         .order("created_at", { ascending: false })
         .limit(200),
@@ -293,6 +293,35 @@ export async function PATCH(request) {
     const status = String(body?.status || "").trim().toLowerCase();
     const allowed = new Set(["pending", "confirmed", "payment_successfull", "completed", "cancelled", "no_show"]);
     if (!id) return NextResponse.json({ ok: false, error: "id is required" }, { status: 400 });
+
+    if (action === "ack") {
+      const { error } = await ctx.admin
+        .from("restaurant_bookings")
+        .update({ read: true, updated_at: new Date().toISOString() })
+        .eq("id", id)
+        .eq("restaurant_id", ctx.restaurantId);
+      if (error) return NextResponse.json({ ok: false, error: "Could not update this booking." }, { status: 400 });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "respond") {
+      const response = String(body?.response || "").trim().toLowerCase();
+      if (!["accept", "reject", "propose"].includes(response)) {
+        return NextResponse.json({ ok: false, error: "Invalid response." }, { status: 400 });
+      }
+      const { data, error } = await ctx.admin.rpc("merchant_respond_booking", {
+        p_restaurant_id: ctx.restaurantId,
+        p_booking_id: id,
+        p_action: response,
+        p_reason: response === "reject" ? "Rejected by restaurant" : null,
+        p_proposed_date: response === "propose" ? String(body?.proposed_date || "") : null,
+        p_proposed_time: response === "propose" ? String(body?.proposed_time || "").slice(0, 5) : null,
+      });
+      if (error) return NextResponse.json({ ok: false, error: "generic" }, { status: 400 });
+      return NextResponse.json(data?.ok ? { ok: true } : { ok: false, error: data?.error || "generic" }, {
+        status: data?.ok ? 200 : 409,
+      });
+    }
 
     if (action === "map_table") {
       const tableNo = Number(body?.table_no || 0);

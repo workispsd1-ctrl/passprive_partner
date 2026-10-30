@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireTerminal, serverError } from "../_terminal";
 
-const LIMIT = 8;
+const LIMIT = 5;
 
 export async function POST(request) {
   try {
@@ -26,7 +26,7 @@ export async function POST(request) {
         .limit(LIMIT + 4),
       admin
         .from("payment_sessions")
-        .select("id,amount_major,payment_provider,updated_at")
+        .select("id,tracking_id,amount_major,payment_provider,updated_at")
         .eq("restaurant_id", restaurantId)
         .eq("payment_context", "BILL_PAYMENT")
         .in("status", ["VERIFIED_SUCCESS", "FINALIZED"])
@@ -45,6 +45,7 @@ export async function POST(request) {
         .map((r) => ({
           id: `table-${r.id}`,
           kind: "table",
+          reference: `T-${String(r.id).slice(0, 8).toUpperCase()}`,
           table_no: r.table_no,
           amount: Number(r.total_amount || 0),
           method: String(r.order_details?.payment?.method || r.payment_method || "ONLINE").toUpperCase(),
@@ -55,6 +56,7 @@ export async function POST(request) {
         .map((r) => ({
           id: `pickup-${r.id}`,
           kind: "pickup",
+          reference: r.order_number,
           order_number: r.order_number,
           amount: Number(r.total_amount || 0),
           method: String(r.payment_method || "ONLINE").toUpperCase(),
@@ -63,6 +65,7 @@ export async function POST(request) {
       ...(billRes.data || []).map((r) => ({
         id: `bill-${r.id}`,
         kind: "bill",
+        reference: r.tracking_id || `O-${String(r.id).slice(0, 8).toUpperCase()}`,
         amount: Number(r.amount_major || 0),
         method: "ONLINE",
         at: r.updated_at,

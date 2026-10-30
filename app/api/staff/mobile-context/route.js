@@ -39,7 +39,7 @@ export async function POST(request) {
         .from("restaurant_table_bookings")
         .select("id, table_no, guest_count, customer_name, customer_phone, booking_status, payment_status, subtotal_amount, tax_amount, total_amount, order_items, notes, created_at, updated_at, source, order_details")
         .eq("restaurant_id", restaurantId)
-        .not("booking_status", "in", "(CANCELLED,COMPLETED,PAID)")
+        .not("booking_status", "in", "(CANCELLED,PAID)")
         .not("payment_status", "in", "(PAID,COMPLETED)")
         .order("updated_at", { ascending: false })
         .limit(100),

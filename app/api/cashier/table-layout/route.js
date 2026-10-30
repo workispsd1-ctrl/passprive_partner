@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveCashierRestaurant } from "../_shared";
+import { bookingStatusChangeError, isBillClosed, isBillPaid, quickPaymentRecord } from "@/lib/server/tableBill";
 
 function extractOrderItems(row) {
   if (Array.isArray(row?.order_items) && row.order_items.length) return row.order_items;
@@ -35,11 +36,7 @@ function normalizeItems(items) {
 
 const PAYMENT_METHODS = ["CASH", "CARD", "JUICE", "OTHER"];
 
-function isClosed(row) {
-  const payment = String(row?.payment_status || "").toUpperCase();
-  const booking = String(row?.booking_status || "").toUpperCase();
-  return ["PAID", "COMPLETED"].includes(payment) || ["PAID", "COMPLETED", "CANCELLED"].includes(booking);
-}
+const isClosed = isBillClosed;
 
 function totalsFor(items) {
   const subtotalCents = items.reduce((sum, it) => sum + Math.round(Number(it.unit_price || 0) * 100) * Number(it.qty || 0), 0);
@@ -110,7 +107,7 @@ export async function GET(request) {
       loadLayout("id, table_no, label, shape, capacity, pos_x, pos_y, area_id, attached_to, attached_auto_release"),
       ctx.admin
         .from("restaurant_table_areas")
-        .select("id, name, kind, sort_order, created_at, floor_objects")
+        .select("id, name, kind, sort_order, created_at, floor_objects, table_scale")
         .eq("restaurant_id", ctx.restaurantId)
         .order("sort_order", { ascending: true }),
       ctx.admin
@@ -220,7 +217,7 @@ export async function POST(request) {
 
       const { data: row, error: rowErr } = await ctx.admin
         .from("restaurant_table_bookings")
-        .select("id, restaurant_id, order_items, order_details, subtotal_amount, tax_amount, total_amount, payment_status, booking_status")
+        .select("id, restaurant_id, order_items, order_details, subtotal_amount, tax_amount, total_amount, payment_status, booking_status, updated_at")
         .eq("id", orderId)
         .eq("restaurant_id", ctx.restaurantId)
         .maybeSingle();
@@ -270,8 +267,13 @@ export async function POST(request) {
         })
         .eq("id", orderId)
         .eq("restaurant_id", ctx.restaurantId)
+        .eq("updated_at", row.updated_at)
+        .not("payment_status", "in", "(PAID,COMPLETED)")
         .select("id, order_items, subtotal_amount, tax_amount, total_amount");
       if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 400 });
+      if (!updatedRows?.length) {
+        return NextResponse.json({ ok: false, error: "This bill was just updated. Please try again." }, { status: 409 });
+      }
 
       return NextResponse.json({
         ok: true,
@@ -293,7 +295,7 @@ export async function POST(request) {
 
       const { data: row, error: rowErr } = await ctx.admin
         .from("restaurant_table_bookings")
-        .select("id, order_items, order_details, total_amount, payment_status, booking_status")
+        .select("id, order_items, order_details, total_amount, payment_status, booking_status, updated_at")
         .eq("id", orderId)
         .eq("restaurant_id", ctx.restaurantId)
         .maybeSingle();
@@ -339,9 +341,13 @@ export async function POST(request) {
         .eq("id", orderId)
         .eq("restaurant_id", ctx.restaurantId)
         .not("payment_status", "in", "(PAID,COMPLETED)")
+        .neq("booking_status", "PAID")
+        .eq("updated_at", row.updated_at)
         .select("id");
       if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 400 });
-      if (!updated?.length) return NextResponse.json({ ok: false, error: "This bill is already closed." }, { status: 409 });
+      if (!updated?.length) {
+        return NextResponse.json({ ok: false, error: "This bill changed while paying. Check it and try again." }, { status: 409 });
+      }
 
       return NextResponse.json({ ok: true, payment });
     }
@@ -363,7 +369,7 @@ export async function POST(request) {
       if (isClosed(row)) return NextResponse.json({ ok: false, error: "This bill is already closed." }, { status: 400 });
 
       const prevDetails = row.order_details && typeof row.order_details === "object" ? row.order_details : {};
-      const { error: upErr } = await ctx.admin
+      const { data: voided, error: upErr } = await ctx.admin
         .from("restaurant_table_bookings")
         .update({
           booking_status: "CANCELLED",
@@ -371,8 +377,12 @@ export async function POST(request) {
           updated_at: new Date().toISOString(),
         })
         .eq("id", orderId)
-        .eq("restaurant_id", ctx.restaurantId);
+        .eq("restaurant_id", ctx.restaurantId)
+        .not("payment_status", "in", "(PAID,COMPLETED)")
+        .neq("booking_status", "PAID")
+        .select("id");
       if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 400 });
+      if (!voided?.length) return NextResponse.json({ ok: false, error: "This bill is already closed." }, { status: 409 });
       return NextResponse.json({ ok: true });
     }
 
@@ -396,27 +406,31 @@ export async function POST(request) {
       const patch = { updated_at: new Date().toISOString() };
       if (nextBookingStatus) patch.booking_status = nextBookingStatus;
       if (nextPaymentStatus) patch.payment_status = nextPaymentStatus;
-      const query = ctx.admin.from("restaurant_table_bookings");
+      const { data: row, error: rowErr } = await ctx.admin
+        .from("restaurant_table_bookings")
+        .select("order_details, total_amount, payment_status, booking_status")
+        .eq("id", orderId)
+        .eq("restaurant_id", ctx.restaurantId)
+        .maybeSingle();
+      if (rowErr) return NextResponse.json({ ok: false, error: rowErr.message }, { status: 400 });
+      if (!row) return NextResponse.json({ ok: false, error: "Order not found." }, { status: 404 });
+      const blocked = bookingStatusChangeError(row, nextBookingStatus, nextPaymentStatus);
+      if (blocked) return NextResponse.json({ ok: false, error: blocked }, { status: 409 });
+
       if (nextPaymentStatus === "PAID" || nextPaymentStatus === "COMPLETED") {
-        const { data: row } = await ctx.admin
-          .from("restaurant_table_bookings")
-          .select("order_details, total_amount, payment_status")
-          .eq("id", orderId)
-          .eq("restaurant_id", ctx.restaurantId)
-          .maybeSingle();
-        const prevDetails = row?.order_details && typeof row.order_details === "object" ? row.order_details : {};
+        if (Number(row.total_amount || 0) <= 0) {
+          return NextResponse.json({ ok: false, error: "There is nothing to pay on this bill." }, { status: 400 });
+        }
+        const prevDetails = row.order_details && typeof row.order_details === "object" ? row.order_details : {};
         patch.booking_status = "COMPLETED";
         patch.payment_method = "CASH";
-        if (!prevDetails.payment && !["PAID", "COMPLETED"].includes(String(row?.payment_status || "").toUpperCase())) {
-          const due = Number(row?.total_amount || 0);
-          patch.order_details = {
-            ...prevDetails,
-            payment: { method: "CASH", amount_due: due, amount_received: due, change: 0, reference: null, by: ctx.userId, at: patch.updated_at, via: "quick_mark" },
-          };
+        if (!prevDetails.payment && !isBillPaid(row)) {
+          patch.order_details = { ...prevDetails, payment: quickPaymentRecord(row, ctx.userId, patch.updated_at) };
         }
       }
 
-      const { data: updatedRows, error: upErr } = await query
+      const { data: updatedRows, error: upErr } = await ctx.admin
+        .from("restaurant_table_bookings")
         .update(patch)
         .eq("id", orderId)
         .eq("restaurant_id", ctx.restaurantId)

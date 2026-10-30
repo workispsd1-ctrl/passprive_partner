@@ -45,12 +45,12 @@ async function resolveKitchenRestaurant(token) {
     return { error: "Access denied", status: 403 };
   }
 
-  const { data: staffRow, error: staffErr } = await admin
+  const { data: staffRowRows, error: staffErr } = await admin
     .from("restaurant_staff")
     .select("restaurant_id, role")
     .eq("user_id", userId)
-    .limit(1)
-    .maybeSingle();
+    .limit(2);
+  const staffRow = staffRowRows?.length === 1 ? staffRowRows[0] : null;
 
   if (staffErr) return { error: staffErr.message, status: 400 };
 

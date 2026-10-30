@@ -1,6 +1,7 @@
 import { mauritiusDayRange } from "@/lib/server/billHistory";
 import {
   billPaymentSale,
+  bookingSale,
   bookingStats,
   isPaidTable,
   pickupSale,
@@ -33,7 +34,7 @@ export async function POST(request) {
     const { start } = from;
     const { end } = to;
 
-    const [tableRes, pickupRes, billRes, bookingRes, collectRes] = await Promise.all([
+    const [tableRes, pickupRes, billRes, bookingRes, collectRes, advanceRes] = await Promise.all([
       admin
         .from("restaurant_table_bookings")
         .select("total_amount,tax_amount,payment_method,payment_status,booking_status,source,guest_count,order_items,order_details,created_at,updated_at")
@@ -73,12 +74,23 @@ export async function POST(request) {
         .gte("created_at", start)
         .lt("created_at", end)
         .limit(5000),
+      admin
+        .from("restaurant_bookings")
+        .select("payment_amount,created_at")
+        .eq("restaurant_id", restaurantId)
+        .eq("payment_status", "paid")
+        .gt("payment_amount", 0)
+        .neq("status", "cancelled")
+        .gte("created_at", start)
+        .lt("created_at", end)
+        .limit(5000),
     ]);
     if (tableRes.error) return serverError(tableRes.error);
     if (pickupRes.error) return serverError(pickupRes.error);
     if (billRes.error) return serverError(billRes.error);
     if (bookingRes.error) return serverError(bookingRes.error);
     if (collectRes.error) return serverError(collectRes.error);
+    if (advanceRes.error) return serverError(advanceRes.error);
 
     const tables = tableRes.data || [];
     const inPeriod = (sale) => new Date(sale.at) >= new Date(start) && new Date(sale.at) < new Date(end);
@@ -87,6 +99,7 @@ export async function POST(request) {
       ...tables.filter((r) => isPaidTable(r) && live(r.booking_status)).map(tableSale).filter(inPeriod),
       ...(pickupRes.data || []).filter((r) => live(r.order_status)).map(pickupSale),
       ...(billRes.data || []).map(billPaymentSale),
+      ...(advanceRes.data || []).map(bookingSale),
     ];
 
     const stats = tillStats(sales, tables.map((r) => voidSummary(r, start, end)));

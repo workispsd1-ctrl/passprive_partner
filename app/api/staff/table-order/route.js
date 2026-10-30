@@ -1,4 +1,5 @@
 import { fromCents, menuIndex, priceLines } from "@/lib/server/menuPricing";
+import { bookingStatusChangeError } from "@/lib/server/tableBill";
 import { readJson, reply, requireTerminal, serverError } from "../_terminal";
 
 const STATUSES = ["CONFIRMED", "PREPARING", "SERVED", "COMPLETED", "CANCELLED"];
@@ -70,6 +71,16 @@ export async function PATCH(request) {
       return reply({ ok: false, error: "invalid_order" }, 400);
     }
     if (!STATUSES.includes(status)) return reply({ ok: false, error: "invalid_status" }, 400);
+
+    const { data: existing, error: existingErr } = await admin
+      .from("restaurant_table_bookings")
+      .select("booking_status, payment_status")
+      .eq("id", orderId)
+      .eq("restaurant_id", restaurantId)
+      .maybeSingle();
+    if (existingErr) return serverError(existingErr);
+    if (!existing) return reply({ ok: false, error: "order_not_found" }, 404);
+    if (bookingStatusChangeError(existing, status)) return reply({ ok: false, error: "bill_closed" }, 409);
 
     const { data, error } = await admin
       .from("restaurant_table_bookings")

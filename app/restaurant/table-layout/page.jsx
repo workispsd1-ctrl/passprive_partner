@@ -15,13 +15,15 @@ import {
   Move,
   Copy,
   RotateCw,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { getActiveRestaurantId } from "@/lib/restaurant-partner/activeRestaurant";
 import { AREA_KINDS, areaKindMeta as kindMeta, sortAreas } from "@/lib/restaurant-partner/tableAreas";
 import { toast } from "sonner";
 import FloorItems from "@/components/restaurant-dashboard/FloorItems";
-import { FLOOR_ITEMS, floorItemMeta, snapPosition } from "@/lib/restaurant-partner/floorItems";
+import { FLOOR_ITEMS, floorItemMeta, snapPosition, zoomFloor } from "@/lib/restaurant-partner/floorItems";
 
 const SHAPES = [
   { value: "circle", label: "Round" },
@@ -688,6 +690,7 @@ export default function RestaurantTableLayoutPage() {
     () => (Array.isArray(activeArea?.floor_objects) ? activeArea.floor_objects : []),
     [activeArea]
   );
+  const tableScale = Number(activeArea?.table_scale) || 1;
   const selectedItem = activeItems.find((p) => p.id === selectedItemId) || null;
 
   const areaTables = useMemo(
@@ -729,7 +732,7 @@ export default function RestaurantTableLayoutPage() {
       const [areasRes, tablesRes] = await Promise.all([
         supabaseBrowser
           .from("restaurant_table_areas")
-          .select("id, name, kind, sort_order, created_at, floor_objects")
+          .select("id, name, kind, sort_order, created_at, floor_objects, table_scale")
           .eq("restaurant_id", rid)
           .order("sort_order", { ascending: true }),
         supabaseBrowser
@@ -901,6 +904,44 @@ export default function RestaurantTableLayoutPage() {
   }, [selectedId]);
 
   useEffect(() => () => clearTimeout(itemTimerRef.current), []);
+
+  const zoom = async (factor) => {
+    if (busy === "zoom" || !activeArea || activeAreaId === UNASSIGNED) return;
+    const result = zoomFloor(areaTables, activeItems, tableScale, factor);
+    if (result.limit) return;
+    if (result.noRoom) {
+      toast.error("Move items towards the middle to zoom in further.");
+      return;
+    }
+    clearTimeout(itemTimerRef.current);
+    const areaId = activeAreaId;
+    setBusy("zoom");
+    setTables((prev) => prev.map((t) => result.tables.find((n) => n.id === t.id) || t));
+    setAreas((prev) =>
+      prev.map((a) => (a.id === areaId ? { ...a, floor_objects: result.items, table_scale: result.scale } : a))
+    );
+    const now = new Date().toISOString();
+    const saved = await Promise.all([
+      ...result.tables.map((t) =>
+        supabaseBrowser
+          .from("restaurant_table_layouts")
+          .update({ pos_x: t.pos_x, pos_y: t.pos_y, updated_at: now })
+          .eq("id", t.id)
+          .eq("restaurant_id", restaurantId)
+      ),
+      supabaseBrowser
+        .from("restaurant_table_areas")
+        .update({ floor_objects: result.items, table_scale: result.scale, updated_at: now })
+        .eq("id", areaId)
+        .eq("restaurant_id", restaurantId),
+    ]);
+    const failed = saved.find((res) => res.error);
+    if (failed) {
+      toast.error(friendlyError(failed.error, "Couldn't save the zoom."));
+      await load();
+    }
+    setBusy("");
+  };
 
   // ---------- Areas ----------
   const saveArea = async ({ name, kind }) => {
@@ -1269,7 +1310,28 @@ export default function RestaurantTableLayoutPage() {
               </div>
             </div>
             {activeArea && activeArea.id !== UNASSIGNED ? (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex h-9 items-center rounded-xl border border-gray-200 bg-white">
+                  <button
+                    type="button"
+                    onClick={() => zoom(0.8)}
+                    disabled={busy === "zoom"}
+                    aria-label="Zoom out"
+                    className="flex h-9 w-9 items-center justify-center rounded-l-xl text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <ZoomOut className="h-4 w-4" />
+                  </button>
+                  <span className="w-11 text-center text-xs font-semibold text-gray-700">{Math.round(tableScale * 100)}%</span>
+                  <button
+                    type="button"
+                    onClick={() => zoom(1.25)}
+                    disabled={busy === "zoom"}
+                    aria-label="Zoom in"
+                    className="flex h-9 w-9 items-center justify-center rounded-r-xl text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <ZoomIn className="h-4 w-4" />
+                  </button>
+                </div>
                 <select
                   value=""
                   aria-label="Add a floor item"
@@ -1343,7 +1405,7 @@ export default function RestaurantTableLayoutPage() {
                       capacity={t.capacity}
                       label={t.label}
                       sublabel={`${t.capacity} seats`}
-                      scale={canvasScale}
+                      scale={canvasScale * tableScale}
                       className={`transition-shadow ${
                         isSelected
                           ? "ring-2 ring-[#FF4800] shadow-[0_12px_28px_rgba(255,72,0,0.22)]"
@@ -1372,7 +1434,7 @@ export default function RestaurantTableLayoutPage() {
 
           <div className="mt-3 flex items-center gap-1.5 text-xs text-gray-500">
             <Move className="h-3.5 w-3.5 shrink-0" />
-            Drag tables and floor items to position them; edges click into line (hold Alt to place freely). Positions save automatically.
+            Drag tables and floor items to position them; edges click into line (hold Alt to place freely). Zoom out to fit more. Everything saves automatically and shows the same in the Partner App.
           </div>
         </div>
 

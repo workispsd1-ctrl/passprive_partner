@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveCashierRestaurant } from "../_shared";
 import { fromCents, menuIndex, priceLines } from "@/lib/server/menuPricing";
+import { isBillClosed } from "@/lib/server/tableBill";
 
 function toFixed2(v) {
   return Number(Number(v || 0).toFixed(2));
@@ -11,11 +12,7 @@ function randomCode(prefix = "") {
 }
 
 function isTableOccupied(row) {
-  const booking = String(row?.booking_status || "").toUpperCase();
-  const payment = String(row?.payment_status || "").toUpperCase();
-  if (booking === "CANCELLED") return false;
-  if (payment === "PAID" || payment === "COMPLETED") return false;
-  return true;
+  return !isBillClosed(row);
 }
 
 function mergeOrderItems(existingItems, incomingItems) {
@@ -227,7 +224,7 @@ export async function POST(request) {
     if (orderType === "TABLE") {
       const { data: existingRows, error: existingErr } = await ctx.admin
         .from("restaurant_table_bookings")
-        .select("id, customer_name, customer_phone, order_items, order_details, subtotal_amount, tax_amount, total_amount, booking_status, payment_status")
+        .select("id, customer_name, customer_phone, order_items, order_details, subtotal_amount, tax_amount, total_amount, booking_status, payment_status, updated_at")
         .eq("restaurant_id", ctx.restaurantId)
         .eq("table_no", tableNo)
         .order("updated_at", { ascending: false })
@@ -270,8 +267,14 @@ export async function POST(request) {
             updated_at: new Date().toISOString(),
           })
           .eq("id", openExisting.id)
+          .eq("restaurant_id", ctx.restaurantId)
+          .eq("updated_at", openExisting.updated_at)
+          .not("payment_status", "in", "(PAID,COMPLETED)")
           .select("id, table_no, total_amount, booking_status, payment_status");
         if (updateErr) return NextResponse.json({ ok: false, error: updateErr.message }, { status: 400 });
+        if (!updatedRows?.length) {
+          return NextResponse.json({ ok: false, error: "This table was just updated. Please try again." }, { status: 409 });
+        }
         return NextResponse.json({ ok: true, order_type: "TABLE", continued: true, order: Array.isArray(updatedRows) ? updatedRows[0] || null : null });
       }
 

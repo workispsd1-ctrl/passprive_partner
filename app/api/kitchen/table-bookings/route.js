@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { NOT_IN_PLAN, restaurantHasPlan } from "@/lib/server/plan";
+import { bookingStatusChangeError, isBillPaid, quickPaymentRecord } from "@/lib/server/tableBill";
 
 function serverClient() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
@@ -26,12 +27,12 @@ async function resolveRestaurant(token) {
   const userId = userRes.user.id;
 
   // 1. Try staff assignment
-  const { data: staffRow } = await admin
+  const { data: staffRowRows } = await admin
     .from("restaurant_staff")
     .select("restaurant_id")
     .eq("user_id", userId)
-    .limit(1)
-    .maybeSingle();
+    .limit(2);
+  const staffRow = staffRowRows?.length === 1 ? staffRowRows[0] : null;
 
   let restaurantId = staffRow?.restaurant_id || null;
 
@@ -132,7 +133,7 @@ export async function PATCH(request) {
     // Verify the booking belongs to this restaurant (security check)
     const { data: existing, error: existErr } = await ctx.admin
       .from("restaurant_table_bookings")
-      .select("id, restaurant_id, booking_status")
+      .select("id, restaurant_id, booking_status, payment_status, total_amount, order_details")
       .eq("id", booking_id)
       .eq("restaurant_id", ctx.restaurantId)
       .maybeSingle();
@@ -142,9 +143,23 @@ export async function PATCH(request) {
       return NextResponse.json({ ok: false, error: "Booking not found or access denied" }, { status: 404 });
     }
 
+    const blocked = bookingStatusChangeError(existing, nextStatus);
+    if (blocked) return NextResponse.json({ ok: false, error: blocked }, { status: 409 });
+
+    const patch = { booking_status: nextStatus, updated_at: new Date().toISOString() };
+    if (nextStatus === "PAID" && !isBillPaid(existing)) {
+      if (Number(existing.total_amount || 0) <= 0) {
+        return NextResponse.json({ ok: false, error: "There is nothing to pay on this bill." }, { status: 400 });
+      }
+      const details = existing.order_details && typeof existing.order_details === "object" ? existing.order_details : {};
+      patch.payment_status = "PAID";
+      patch.payment_method = "CASH";
+      patch.order_details = { ...details, payment: quickPaymentRecord(existing, ctx.userId, patch.updated_at) };
+    }
+
     const { data: updated, error: updateErr } = await ctx.admin
       .from("restaurant_table_bookings")
-      .update({ booking_status: nextStatus, updated_at: new Date().toISOString() })
+      .update(patch)
       .eq("id", booking_id)
       .eq("restaurant_id", ctx.restaurantId)
       .select("id, booking_status, updated_at")

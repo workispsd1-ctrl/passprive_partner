@@ -31,12 +31,12 @@ async function resolveStaff(token) {
     .eq("id", userId)
     .maybeSingle();
 
-  const { data: staffRow } = await admin
+  const { data: staffRowRows } = await admin
     .from("restaurant_staff")
     .select("restaurant_id")
     .eq("user_id", userId)
-    .limit(1)
-    .maybeSingle();
+    .limit(2);
+  const staffRow = staffRowRows?.length === 1 ? staffRowRows[0] : null;
 
   let restaurantId = staffRow?.restaurant_id || null;
   if (!restaurantId) {
