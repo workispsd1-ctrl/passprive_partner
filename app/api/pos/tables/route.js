@@ -110,6 +110,19 @@ async function advanceStatus({ admin, restaurantId }, orderId) {
   return true;
 }
 
+async function reopenBill({ admin, restaurantId }, orderId) {
+  const { data, error } = await admin
+    .from("restaurant_table_bookings")
+    .update({ booking_status: "PREPARING", updated_at: new Date().toISOString() })
+    .eq("id", orderId)
+    .eq("restaurant_id", restaurantId)
+    .in("booking_status", ["SERVED", "COMPLETED"])
+    .not("payment_status", "in", "(PAID,COMPLETED)")
+    .select("id");
+  if (error) throw error;
+  return Boolean(data?.length);
+}
+
 export async function POST(request) {
   try {
     const ctx = await requireTerminal(request);
@@ -121,6 +134,11 @@ export async function POST(request) {
 
     if (action === "advance") {
       const ok = await advanceStatus(ctx, String(body.order_id || ""));
+      return ok ? reply({ ok: true, ...(await liveTables(ctx)) }) : reply({ ok: false, error: "invalid_status" }, 409);
+    }
+
+    if (action === "reopen") {
+      const ok = await reopenBill(ctx, String(body.order_id || ""));
       return ok ? reply({ ok: true, ...(await liveTables(ctx)) }) : reply({ ok: false, error: "invalid_status" }, 409);
     }
 
