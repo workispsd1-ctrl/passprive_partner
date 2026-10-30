@@ -2,6 +2,7 @@ import { mauritiusDayRange } from "@/lib/server/billHistory";
 import {
   billPaymentSale,
   bookingStats,
+  isPaidTable,
   pickupSale,
   pickupStats,
   serviceStats,
@@ -14,7 +15,6 @@ import { readJson, reply, requireTerminal, serverError } from "../_terminal";
 const NO_ACCESS = /waiter|bearer|kitchen/;
 const MAX_DAYS = 366;
 const DAY_MS = 24 * 60 * 60 * 1000;
-const PAID = ["PAID", "COMPLETED"];
 
 export async function POST(request) {
   try {
@@ -46,7 +46,7 @@ export async function POST(request) {
         .from("restaurant_orders")
         .select("total_amount,tax_amount,payment_method,order_status,items,updated_at")
         .eq("restaurant_id", restaurantId)
-        .in("payment_status", PAID)
+        .or("payment_status.in.(PAID,COMPLETED),order_status.in.(PICKED_UP,COMPLETED)")
         .gte("updated_at", start)
         .lt("updated_at", end)
         .limit(5000),
@@ -81,10 +81,10 @@ export async function POST(request) {
     if (collectRes.error) return serverError(collectRes.error);
 
     const tables = tableRes.data || [];
-    const isPaid = (r) => PAID.includes(String(r.payment_status || "").toUpperCase());
+    const inPeriod = (sale) => new Date(sale.at) >= new Date(start) && new Date(sale.at) < new Date(end);
     const live = (status) => String(status || "").toUpperCase() !== "CANCELLED";
     const sales = [
-      ...tables.filter((r) => isPaid(r) && live(r.booking_status)).map(tableSale),
+      ...tables.filter((r) => isPaidTable(r) && live(r.booking_status)).map(tableSale).filter(inPeriod),
       ...(pickupRes.data || []).filter((r) => live(r.order_status)).map(pickupSale),
       ...(billRes.data || []).map(billPaymentSale),
     ];
@@ -96,7 +96,7 @@ export async function POST(request) {
         ...stats,
         bookings: bookingStats(bookingRes.data || []),
         collect: pickupStats(collectRes.data || []),
-        service: serviceStats(tables.filter((r) => isPaid(r) && live(r.booking_status)), stats.hours),
+        service: serviceStats(tables.filter((r) => isPaidTable(r) && live(r.booking_status)), stats.hours),
       },
     });
   } catch (error) {

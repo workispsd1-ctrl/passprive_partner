@@ -18,7 +18,7 @@ export async function POST(request) {
       .from("restaurant_table_bookings")
       .select("id,table_no,total_amount,payment_method,payment_reference,booking_status,order_items,order_details,guest_count,customer_name,updated_at")
       .eq("restaurant_id", ctx.restaurantId)
-      .in("payment_status", ["PAID", "COMPLETED"])
+      .or("payment_status.in.(PAID,COMPLETED),booking_status.eq.PAID")
       .neq("booking_status", "CANCELLED");
     query = range
       ? query.gte("updated_at", range.start).lt("updated_at", range.end)

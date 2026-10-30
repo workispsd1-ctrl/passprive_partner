@@ -14,7 +14,7 @@ export async function POST(request) {
         .from("restaurant_table_bookings")
         .select("id,table_no,total_amount,payment_method,booking_status,order_details,updated_at")
         .eq("restaurant_id", restaurantId)
-        .in("payment_status", ["PAID", "COMPLETED"])
+        .or("payment_status.in.(PAID,COMPLETED),booking_status.eq.PAID")
         .order("updated_at", { ascending: false })
         .limit(LIMIT + 4),
       admin
