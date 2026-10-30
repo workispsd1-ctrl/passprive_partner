@@ -1,5 +1,6 @@
 import { addBillItems, seatTable, setBillItemQty } from "@/lib/server/billItems";
 import { settleTableBill } from "@/lib/server/settleBill";
+import { claimPrintJob, pendingPrintJobs, releasePrintJob } from "@/lib/server/printJobs";
 import { isBillClosed } from "@/lib/server/tableBill";
 import { readJson, reply, requireTerminal, serverError } from "../../staff/_terminal";
 
@@ -45,7 +46,7 @@ function menuSections(menuJson) {
 }
 
 async function liveTables({ admin, restaurantId }) {
-  const [tablesRes, ordersRes, merchantRes] = await Promise.all([
+  const [tablesRes, ordersRes, merchantRes, printJobs] = await Promise.all([
     admin
       .from("restaurant_table_layouts")
       .select("table_no, label, capacity")
@@ -64,12 +65,14 @@ async function liveTables({ admin, restaurantId }) {
       .select("name, registered_name, brn, full_address, phone")
       .eq("id", restaurantId)
       .maybeSingle(),
+    pendingPrintJobs(admin, restaurantId).catch(() => []),
   ]);
   if (tablesRes.error) throw tablesRes.error;
   if (ordersRes.error) throw ordersRes.error;
 
   return {
     merchant: merchantRes.data || null,
+    print_jobs: printJobs,
     tables: tablesRes.data || [],
     orders: (ordersRes.data || [])
       .filter((o) => !isBillClosed(o)),
@@ -144,6 +147,16 @@ export async function POST(request) {
     if (action === "add_items") {
       const { status, body: out } = await addBillItems(ctx.admin, ctx.restaurantId, ctx.userId, body);
       return out.ok ? reply({ ok: true, ...(await liveTables(ctx)) }) : reply(out, status);
+    }
+
+    if (action === "claim_print") {
+      const ok = await claimPrintJob(ctx.admin, ctx.restaurantId, ctx.terminalId, String(body.job_id || ""));
+      return reply({ ok: true, claimed: ok });
+    }
+
+    if (action === "release_print") {
+      await releasePrintJob(ctx.admin, ctx.restaurantId, ctx.terminalId, String(body.job_id || ""));
+      return reply({ ok: true });
     }
 
     if (action === "settle") {

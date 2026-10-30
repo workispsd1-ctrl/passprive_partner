@@ -3,6 +3,7 @@ import { seatTable } from "@/lib/server/billItems";
 import { resolveCashierRestaurant } from "../_shared";
 import { fromCents, menuIndex, priceLines } from "@/lib/server/menuPricing";
 import { isBillClosed } from "@/lib/server/tableBill";
+import { queueOrderTicket } from "@/lib/server/printJobs";
 
 function toFixed2(v) {
   return Number(Number(v || 0).toFixed(2));
@@ -181,7 +182,7 @@ export async function POST(request) {
     if (orderType === "TABLE") {
       const { data: existingRows, error: existingErr } = await ctx.admin
         .from("restaurant_table_bookings")
-        .select("id, customer_name, customer_phone, order_items, order_details, subtotal_amount, tax_amount, total_amount, booking_status, payment_status, updated_at")
+        .select("id, customer_name, customer_phone, guest_count, order_items, order_details, subtotal_amount, tax_amount, total_amount, booking_status, payment_status, updated_at")
         .eq("restaurant_id", ctx.restaurantId)
         .eq("table_no", tableNo)
         .order("updated_at", { ascending: false })
@@ -232,6 +233,15 @@ export async function POST(request) {
         if (!updatedRows?.length) {
           return NextResponse.json({ ok: false, error: "This table was just updated. Please try again." }, { status: 409 });
         }
+        await queueOrderTicket(ctx.admin, ctx.restaurantId, {
+          orderId: openExisting.id,
+          tableNo,
+          guests: openExisting.guest_count,
+          lines: normalizedItems,
+          added: Array.isArray(openExisting.order_items) && openExisting.order_items.length > 0,
+          notes,
+          source: "Till",
+        });
         return NextResponse.json({ ok: true, order_type: "TABLE", continued: true, order: Array.isArray(updatedRows) ? updatedRows[0] || null : null });
       }
 
@@ -262,6 +272,7 @@ export async function POST(request) {
         .select("id, table_no, total_amount, booking_status, payment_status")
         .single();
       if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+      await queueOrderTicket(ctx.admin, ctx.restaurantId, { orderId: data.id, tableNo, lines: normalizedItems, notes, source: "Till" });
       return NextResponse.json({ ok: true, order_type: "TABLE", continued: false, order: data });
     }
 
