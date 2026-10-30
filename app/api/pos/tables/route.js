@@ -3,9 +3,20 @@ import { settleTableBill } from "@/lib/server/settleBill";
 import { isBillClosed } from "@/lib/server/tableBill";
 import { readJson, reply, requireTerminal, serverError } from "../../staff/_terminal";
 
+const STORAGE_OBJECT_PATH = "/storage/v1/object/public/";
+const STORAGE_RENDER_PATH = "/storage/v1/render/image/public/";
+const THUMB_WIDTH = 320;
 const COMPLETABLE = ["PLACED", "CONFIRMED", "PREPARING", "SERVED"];
 const ORDER_COLUMNS =
   "id, table_no, guest_count, customer_name, notes, booking_status, payment_status, subtotal_amount, total_amount, order_items, created_at, updated_at, source";
+
+function thumbnail(urls) {
+  const url = Array.isArray(urls) ? String(urls[0] || "") : "";
+  if (!url.startsWith("http")) return "";
+  return url.includes(STORAGE_OBJECT_PATH)
+    ? `${url.replace(STORAGE_OBJECT_PATH, STORAGE_RENDER_PATH)}?width=${THUMB_WIDTH}&quality=60`
+    : url;
+}
 
 function menuSections(menuJson) {
   let menu = menuJson;
@@ -23,7 +34,12 @@ function menuSections(menuJson) {
       group: String(section?.group || "").trim() || "Other",
       items: (Array.isArray(section?.items) ? section.items : [])
         .filter((item) => item?.id && item.is_available !== false)
-        .map((item) => ({ id: String(item.id), name: String(item.name || ""), price: Number(item.price || 0) })),
+        .map((item) => ({
+          id: String(item.id),
+          name: String(item.name || ""),
+          price: Number(item.price || 0),
+          image: thumbnail(item.image_urls),
+        })),
     }))
     .filter((section) => section.items.length > 0);
 }
@@ -52,6 +68,17 @@ async function liveTables({ admin, restaurantId }) {
     orders: (ordersRes.data || [])
       .filter((o) => !isBillClosed(o)),
   };
+}
+
+async function isReadyToPay({ admin, restaurantId }, orderId) {
+  const { data, error } = await admin
+    .from("restaurant_table_bookings")
+    .select("booking_status")
+    .eq("id", orderId)
+    .eq("restaurant_id", restaurantId)
+    .maybeSingle();
+  if (error) throw error;
+  return ["SERVED", "COMPLETED"].includes(String(data?.booking_status || "").toUpperCase());
 }
 
 async function advanceStatus({ admin, restaurantId }, orderId) {
@@ -109,6 +136,9 @@ export async function POST(request) {
     }
 
     if (action === "settle") {
+      if (!body.gateway && !(await isReadyToPay(ctx, String(body.order_id || "")))) {
+        return reply({ ok: false, error: "Mark this table completed first." }, 409);
+      }
       const { status, body: out } = await settleTableBill(ctx.admin, ctx.restaurantId, ctx.userId, {
         ...body,
         gateway: body.gateway ? { ...body.gateway, terminal_id: ctx.terminalId } : undefined,
