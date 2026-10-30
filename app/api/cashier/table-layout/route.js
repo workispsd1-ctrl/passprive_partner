@@ -1,40 +1,7 @@
 import { NextResponse } from "next/server";
+import { extractOrderItems, normalizeItems, settleTableBill } from "@/lib/server/settleBill";
 import { resolveCashierRestaurant } from "../_shared";
 import { bookingStatusChangeError, isBillClosed, isBillPaid, quickPaymentRecord } from "@/lib/server/tableBill";
-
-function extractOrderItems(row) {
-  if (Array.isArray(row?.order_items) && row.order_items.length) return row.order_items;
-  const details = row?.order_details;
-  if (details && typeof details === "object") {
-    if (Array.isArray(details.items) && details.items.length) return details.items;
-    if (Array.isArray(details.order_items) && details.order_items.length) return details.order_items;
-    const snapshot = details.order_snapshot;
-    if (snapshot && typeof snapshot === "object") {
-      if (Array.isArray(snapshot.items) && snapshot.items.length) return snapshot.items;
-      if (Array.isArray(snapshot.order_items) && snapshot.order_items.length) return snapshot.order_items;
-    }
-  }
-  return [];
-}
-
-function normalizeItems(items) {
-  return (Array.isArray(items) ? items : [])
-    .map((it) => {
-      const qty = Number(it?.qty || 0);
-      const unit = Number(it?.unit_price || 0);
-      const line = Number(it?.line_total || qty * unit);
-      return {
-        item_id: String(it?.item_id || it?.id || it?.name || "").trim(),
-        name: String(it?.name || "Item").trim(),
-        qty: Number(qty.toFixed(3)),
-        unit_price: Number(unit.toFixed(2)),
-        line_total: Number(line.toFixed(2)),
-      };
-    })
-    .filter((it) => it.item_id && it.qty > 0 && it.unit_price >= 0 && it.line_total >= 0);
-}
-
-const PAYMENT_METHODS = ["CASH", "CARD", "JUICE", "OTHER"];
 
 const isClosed = isBillClosed;
 
@@ -282,74 +249,8 @@ export async function POST(request) {
     }
 
     if (action === "settle") {
-      const orderId = String(body?.order_id || "").trim();
-      const method = String(body?.method || "").trim().toUpperCase();
-      const reference = String(body?.reference || "").trim().slice(0, 60);
-      const idempotencyKey = String(body?.idempotency_key || "").trim().slice(0, 64);
-      if (!orderId || !idempotencyKey) {
-        return NextResponse.json({ ok: false, error: "order_id and idempotency_key are required" }, { status: 400 });
-      }
-      if (!PAYMENT_METHODS.includes(method)) {
-        return NextResponse.json({ ok: false, error: "Pick a payment method." }, { status: 400 });
-      }
-
-      const { data: row, error: rowErr } = await ctx.admin
-        .from("restaurant_table_bookings")
-        .select("id, order_items, order_details, total_amount, payment_status, booking_status, updated_at")
-        .eq("id", orderId)
-        .eq("restaurant_id", ctx.restaurantId)
-        .maybeSingle();
-      if (rowErr) return NextResponse.json({ ok: false, error: rowErr.message }, { status: 400 });
-      if (!row?.id) return NextResponse.json({ ok: false, error: "Order not found." }, { status: 404 });
-
-      const prevDetails = row.order_details && typeof row.order_details === "object" ? row.order_details : {};
-      if (prevDetails.payment?.idempotency_key === idempotencyKey) {
-        return NextResponse.json({ ok: true, payment: prevDetails.payment });
-      }
-      if (isClosed(row)) return NextResponse.json({ ok: false, error: "This bill is already closed." }, { status: 409 });
-
-      const dueCents = Math.round(Number(row.total_amount || 0) * 100);
-      if (dueCents <= 0 || !normalizeItems(extractOrderItems(row)).length) {
-        return NextResponse.json({ ok: false, error: "There is nothing to pay on this bill." }, { status: 400 });
-      }
-      const receivedCents = method === "CASH" ? Math.round(Number(body?.amount_received) * 100) : dueCents;
-      if (!Number.isFinite(receivedCents) || receivedCents < dueCents || receivedCents > dueCents + 10_000_000) {
-        return NextResponse.json({ ok: false, error: "Amount received is less than the total." }, { status: 400 });
-      }
-
-      const payment = {
-        method,
-        amount_due: dueCents / 100,
-        amount_received: receivedCents / 100,
-        change: (receivedCents - dueCents) / 100,
-        reference: reference || null,
-        by: ctx.userId,
-        at: new Date().toISOString(),
-        idempotency_key: idempotencyKey,
-      };
-
-      const { data: updated, error: upErr } = await ctx.admin
-        .from("restaurant_table_bookings")
-        .update({
-          payment_status: "PAID",
-          booking_status: "COMPLETED",
-          payment_method: method,
-          payment_reference: reference || null,
-          order_details: { ...prevDetails, payment },
-          updated_at: payment.at,
-        })
-        .eq("id", orderId)
-        .eq("restaurant_id", ctx.restaurantId)
-        .not("payment_status", "in", "(PAID,COMPLETED)")
-        .neq("booking_status", "PAID")
-        .eq("updated_at", row.updated_at)
-        .select("id");
-      if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 400 });
-      if (!updated?.length) {
-        return NextResponse.json({ ok: false, error: "This bill changed while paying. Check it and try again." }, { status: 409 });
-      }
-
-      return NextResponse.json({ ok: true, payment });
+      const { status, body: out } = await settleTableBill(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      return NextResponse.json(out, { status });
     }
 
     if (action === "void_order") {
