@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { mauritiusDayRange } from "@/lib/server/billHistory";
 import { readJson, requireTerminal, serverError } from "../_terminal";
 
 function startOfDayUTC(d) {
@@ -24,7 +25,9 @@ export async function POST(request) {
     const range = String(body?.range || "30").trim();
 
     const seriesDays = range === "7" ? 7 : range === "30" ? 30 : range === "90" ? 90 : null;
-    const fromIso = seriesDays ? daysAgoUTC(seriesDays - 1).toISOString() : null;
+    const dayRange = body?.date ? mauritiusDayRange(body.date) : null;
+    if (body?.date && !dayRange) return NextResponse.json({ ok: false, error: "invalid_date" }, { status: 400 });
+    const fromIso = dayRange?.start || (seriesDays ? daysAgoUTC(seriesDays - 1).toISOString() : null);
 
     let query = admin
       .from("payment_sessions")
@@ -36,6 +39,7 @@ export async function POST(request) {
       .limit(3000);
 
     if (fromIso) query = query.gte("created_at", fromIso);
+    if (dayRange) query = query.lt("created_at", dayRange.end);
 
     const { data: rows, error: psErr } = await query;
     if (psErr) return serverError(psErr);

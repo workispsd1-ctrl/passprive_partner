@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { mauritiusDayRange } from "@/lib/server/billHistory";
 import { readJson, requireTerminal, serverError } from "../_terminal";
 
 const POS_WORDS = ["good", "great", "excellent", "amazing", "nice", "love", "perfect", "tasty", "delicious", "friendly", "clean"];
@@ -66,28 +67,44 @@ export async function POST(request) {
     const range = String(body?.range || "30").trim();
 
     const seriesDays = range === "7" ? 7 : range === "30" ? 30 : range === "90" ? 90 : 30;
+    const dayRange = body?.date ? mauritiusDayRange(body.date) : null;
+    if (body?.date && !dayRange) return NextResponse.json({ ok: false, error: "invalid_date" }, { status: 400 });
     const fromDate = daysAgoUTC(seriesDays - 1);
-    const fromIso = fromDate.toISOString();
+    const fromIso = dayRange?.start || fromDate.toISOString();
+    const upTo = (query) => (dayRange ? query.lt("created_at", dayRange.end) : query);
 
     const [bookingsRes, reviewsRes, tableBookingsRes, offersRes] = await Promise.all([
-      admin
-        .from("restaurant_bookings")
-        .select("id, customer_name, party_size, status, source, created_at")
-        .eq("restaurant_id", restaurantId)
-        .gte("created_at", fromIso)
+      upTo(
+        admin
+          .from("restaurant_bookings")
+          .select("id, customer_name, party_size, status, source, created_at")
+          .eq("restaurant_id", restaurantId)
+          .gte("created_at", fromIso)
+      )
         .order("created_at", { ascending: false })
         .limit(2000),
-      admin
-        .from("restaurant_reviews")
-        .select("id, rating, review_text, username_snapshot, created_at, owner_reply_text, owner_reply_at")
-        .eq("restaurant_id", restaurantId)
+      (dayRange
+        ? upTo(
+            admin
+              .from("restaurant_reviews")
+              .select("id, rating, review_text, username_snapshot, created_at, owner_reply_text, owner_reply_at")
+              .eq("restaurant_id", restaurantId)
+              .gte("created_at", dayRange.start)
+          )
+        : admin
+            .from("restaurant_reviews")
+            .select("id, rating, review_text, username_snapshot, created_at, owner_reply_text, owner_reply_at")
+            .eq("restaurant_id", restaurantId)
+      )
         .order("created_at", { ascending: false })
         .limit(500),
-      admin
-        .from("restaurant_table_bookings")
-        .select("id, payment_status, total_amount, created_at")
-        .eq("restaurant_id", restaurantId)
-        .gte("created_at", fromIso)
+      upTo(
+        admin
+          .from("restaurant_table_bookings")
+          .select("id, payment_status, total_amount, created_at")
+          .eq("restaurant_id", restaurantId)
+          .gte("created_at", fromIso)
+      )
         .order("created_at", { ascending: false })
         .limit(2000),
       admin
@@ -110,12 +127,14 @@ export async function POST(request) {
     // Build day series
     const daily = {};
     const base = startOfDayUTC(new Date());
-    for (let i = seriesDays - 1; i >= 0; i--) {
+    for (let i = dayRange ? -1 : seriesDays - 1; i >= 0; i--) {
       const d = new Date(base);
       d.setUTCDate(d.getUTCDate() - i);
       const key = isoDayUTC(d);
       daily[key] = { bookings: 0, guests: 0 };
     }
+
+    if (dayRange) daily[body.date] = { bookings: 0, guests: 0 };
 
     const statusCounts = { pending: 0, confirmed: 0, completed: 0, cancelled: 0, no_show: 0 };
     const sourceCounts = {};
@@ -133,7 +152,7 @@ export async function POST(request) {
 
       const d = b.created_at ? new Date(b.created_at) : null;
       if (d && !isNaN(d.getTime())) {
-        const key = isoDayUTC(d);
+        const key = dayRange ? body.date : isoDayUTC(d);
         if (daily[key]) {
           daily[key].bookings += 1;
           daily[key].guests += Number.isFinite(ps) ? ps : 0;

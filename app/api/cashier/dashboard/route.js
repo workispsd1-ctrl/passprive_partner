@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveCashierRestaurant } from "../_shared";
+import { mauritiusDayRange } from "@/lib/server/billHistory";
 
 export async function GET(request) {
   try {
@@ -9,6 +10,7 @@ export async function GET(request) {
     const ctx = await resolveCashierRestaurant(token);
     if (ctx.error) return NextResponse.json({ ok: false, error: ctx.error }, { status: ctx.status });
 
+    const dayRange = mauritiusDayRange(new URL(request.url).searchParams.get("date"));
     const now = new Date();
     const startOfDay = new Date(now);
     startOfDay.setHours(0, 0, 0, 0);
@@ -28,10 +30,18 @@ export async function GET(request) {
         .eq("restaurant_id", ctx.restaurantId)
         .order("created_at", { ascending: false })
         .limit(200),
-      ctx.admin
-        .from("restaurant_orders")
-        .select("id,order_number,customer_name,customer_phone,order_status,payment_status,total_amount,created_at,pickup_code", { count: "exact" })
-        .eq("restaurant_id", ctx.restaurantId)
+      (dayRange
+        ? ctx.admin
+            .from("restaurant_orders")
+            .select("id,order_number,customer_name,customer_phone,order_status,payment_status,total_amount,created_at,pickup_code", { count: "exact" })
+            .eq("restaurant_id", ctx.restaurantId)
+            .gte("created_at", dayRange.start)
+            .lt("created_at", dayRange.end)
+        : ctx.admin
+            .from("restaurant_orders")
+            .select("id,order_number,customer_name,customer_phone,order_status,payment_status,total_amount,created_at,pickup_code", { count: "exact" })
+            .eq("restaurant_id", ctx.restaurantId)
+      )
         .order("created_at", { ascending: false })
         .limit(200),
       ctx.admin
