@@ -1,7 +1,7 @@
 import { addBillItems, seatTable, setBillItemQty } from "@/lib/server/billItems";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { claimPrintJob, isQrPending, pendingPrintJobs, releasePrintJob } from "@/lib/server/printJobs";
-import { heldPromos, PROMO_ERRORS, promoDue, quotePromo, releasePromo, reservePromo } from "@/lib/server/promoCode";
+import { heldPromos, PROMO_ERRORS, promoDue, promoLocked, quotePromo, recordPromoAttempt, releasePromo, reservePromo } from "@/lib/server/promoCode";
 import { isBillClosed } from "@/lib/server/tableBill";
 import { readJson, reply, requireTerminal, serverError } from "../../staff/_terminal";
 
@@ -195,7 +195,12 @@ export async function POST(request) {
       if (error) throw error;
       if (!row || isBillClosed(row)) return reply({ ok: false, error: "This bill is already closed." }, 409);
       const billCents = Math.round(Number(row.total_amount || 0) * 100);
+      if (await promoLocked(ctx.admin, ctx.restaurantId, ctx.terminalId)) {
+        return reply({ ok: false, error: PROMO_ERRORS.locked }, 429);
+      }
       const quote = await quotePromo(ctx.admin, ctx.restaurantId, body.code, billCents);
+      const guessed = quote.error === "not_found" || quote.error === "not_here" || quote.error === "invalid_code";
+      await recordPromoAttempt(ctx.admin, ctx.restaurantId, ctx.terminalId, !guessed);
       if (quote.error) return reply({ ok: false, error: PROMO_ERRORS[quote.error] }, 409);
       const reserved = await reservePromo(ctx.admin, ctx.restaurantId, orderId, quote, billCents, ctx.terminalId);
       if (reserved.error) return reply({ ok: false, error: PROMO_ERRORS[reserved.error] }, 409);
