@@ -216,7 +216,7 @@ export async function POST(request) {
     const full_name = String(body?.full_name || "").trim();
     const phone = String(body?.phone || "").trim() || null;
     const role = normalizeStaffRole(body?.role);
-    const pin = validatePin(body?.pin);
+    const pin = body?.pin ? validatePin(body.pin) : null;
 
     if (role === "restaurant_admin" && !owner.isMaster) {
       return NextResponse.json(
@@ -229,8 +229,8 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: "Full name is required." }, { status: 400 });
     }
 
-    if (!pin) {
-      return NextResponse.json({ ok: false, error: "PIN must be exactly 4 digits." }, { status: 400 });
+    if (body?.pin && !pin) {
+      return NextResponse.json({ ok: false, error: "PIN must be 4 digits." }, { status: 400 });
     }
 
     const email = createSyntheticEmail(owner.restaurantId, role);
@@ -274,14 +274,16 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: staffInsertErr.message }, { status: 400 });
     }
 
-    const { error: pinErr } = await admin.rpc("staff_set_pin", {
-      p_restaurant_id: owner.restaurantId,
-      p_user_id: newUserId,
-      p_pin: pin,
-    });
-    if (pinErr) {
-      await removeNewStaff(admin, newUserId);
-      return NextResponse.json({ ok: false, error: pinError(pinErr) }, { status: 400 });
+    if (pin) {
+      const { error: pinErr } = await admin.rpc("staff_set_pin", {
+        p_restaurant_id: owner.restaurantId,
+        p_user_id: newUserId,
+        p_pin: pin,
+      });
+      if (pinErr) {
+        await removeNewStaff(admin, newUserId);
+        return NextResponse.json({ ok: false, error: pinError(pinErr) }, { status: 400 });
+      }
     }
 
     return NextResponse.json({ ok: true, user_id: newUserId, role });

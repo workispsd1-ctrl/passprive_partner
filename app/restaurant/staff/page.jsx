@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { UserPlus, Users, Loader2, Eye, Pencil, Trash2, KeyRound, QrCode } from "lucide-react";
+import { UserPlus, Users, Loader2, Eye, Pencil, Trash2, QrCode } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { getActiveRestaurantId } from "@/lib/restaurant-partner/activeRestaurant";
 import { toast } from "sonner";
@@ -46,7 +46,6 @@ function SelectField({ label, value, onChange, options }) {
 export default function RestaurantStaffPage() {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
-  const [pin, setPin] = useState("");
   const [role, setRole] = useState("restaurant_cashier");
   const [loading, setLoading] = useState(false);
   const [loadingMembers, setLoadingMembers] = useState(true);
@@ -60,14 +59,10 @@ export default function RestaurantStaffPage() {
   const [devices, setDevices] = useState([]);
   const [loadingDevices, setLoadingDevices] = useState(true);
   const [revokingDeviceId, setRevokingDeviceId] = useState("");
-  const [setupCode, setSetupCode] = useState("");
-  const [resettingSetup, setResettingSetup] = useState(false);
-  const [setupQr, setSetupQr] = useState("");
-  const setupUrl = setupCode && typeof window !== "undefined"
-    ? `${window.location.origin}/staff-pin?code=${encodeURIComponent(setupCode)}`
-    : "";
+  const [staffKey, setStaffKey] = useState(null);
+  const [keyQr, setKeyQr] = useState("");
+  const [keyBusyId, setKeyBusyId] = useState("");
 
-  // Staff devices are POS terminals paired with the restaurant's permanent setup code; the QR carries it to /staff-pin.
   const loadDevices = async () => {
     const id = await getActiveRestaurantId();
     setRestaurantId(id || "");
@@ -92,33 +87,23 @@ export default function RestaurantStaffPage() {
     setDevices(data || []);
   };
 
-  const loadSetupCode = async (id, reset = false) => {
-    const { data, error } = await supabaseBrowser.rpc("pos_get_setup_code", {
-      p_restaurant_id: id,
-      p_store_id: null,
-      p_reset: reset,
+  const onGenerateKey = async (member) => {
+    setKeyBusyId(member.user_id);
+    const { data, error } = await supabaseBrowser.rpc("staff_create_key", {
+      p_restaurant_id: restaurantId,
+      p_user_id: member.user_id,
     });
-    if (error || !data) {
-      toast.error(error?.message || "Failed to load setup QR.");
-      return false;
+    setKeyBusyId("");
+    if (error || !data?.code) {
+      toast.error(error?.message || "Failed to generate key.");
+      return;
     }
-    setSetupCode(data);
-    return true;
-  };
-
-  const onResetSetupCode = async () => {
-    const yes = window.confirm(
-      "Reset the setup QR? The old QR stops working for new devices. Devices already paired stay signed in."
-    );
-    if (!yes || !restaurantId) return;
-    setResettingSetup(true);
-    const ok = await loadSetupCode(restaurantId, true);
-    setResettingSetup(false);
-    if (ok) toast.success("New setup QR created.");
+    setStaffKey({ ...data, name: member.full_name });
+    setKeyQr(await QRCode.toDataURL(data.code, { width: 200, margin: 1 }).catch(() => ""));
   };
 
   const onRevokeDevice = async (device) => {
-    const yes = window.confirm("Revoke this device? It will need to scan the setup QR again to sign in.");
+    const yes = window.confirm("Revoke this device? It will need a new key to sign in again.");
     if (!yes) return;
     setRevokingDeviceId(device.id);
     const { error } = await supabaseBrowser.rpc("pos_revoke_terminal", { p_terminal_id: device.id });
@@ -136,16 +121,13 @@ export default function RestaurantStaffPage() {
   }, []);
 
   useEffect(() => {
-    if (restaurantId) loadSetupCode(restaurantId);
-  }, [restaurantId]);
-
-  useEffect(() => {
-    if (!setupUrl) {
-      setSetupQr("");
-      return;
-    }
-    QRCode.toDataURL(setupUrl, { width: 200, margin: 1 }).then(setSetupQr).catch(() => setSetupQr(""));
-  }, [setupUrl]);
+    if (!staffKey) return undefined;
+    const timer = setTimeout(() => {
+      setStaffKey(null);
+      setKeyQr("");
+    }, Math.max(new Date(staffKey.expires_at).getTime() - Date.now(), 0));
+    return () => clearTimeout(timer);
+  }, [staffKey]);
 
   const loadMembers = async () => {
     setLoadingMembers(true);
@@ -198,7 +180,6 @@ export default function RestaurantStaffPage() {
         body: JSON.stringify({ restaurant_id: await getActiveRestaurantId(),
           full_name: fullName,
           phone,
-          pin,
           role,
         }),
       });
@@ -206,10 +187,9 @@ export default function RestaurantStaffPage() {
       const json = await res.json();
       if (!res.ok || !json?.ok) throw new Error(json?.error || "Failed to create staff.");
 
-      toast.success("Staff PIN login created.");
+      toast.success("Staff member added. Generate a key to sign them in.");
       setFullName("");
       setPhone("");
-      setPin("");
       setRole("restaurant_cashier");
       await loadMembers();
     } catch (e) {
@@ -252,27 +232,6 @@ export default function RestaurantStaffPage() {
     setSavingEdit(false);
   };
 
-  const onResetPin = async (member) => {
-    const nextPin = window.prompt(`Enter new 4-digit PIN for ${member.full_name}:`, "");
-    if (!nextPin) return;
-
-    const { data: sess } = await supabaseBrowser.auth.getSession();
-    const token = sess?.session?.access_token;
-    if (!token) return;
-
-    const res = await fetch("/api/restaurant/staff", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ restaurant_id: await getActiveRestaurantId(), action: "reset_pin", user_id: member.user_id, pin: nextPin }),
-    });
-    const json = await res.json();
-    if (!res.ok || !json?.ok) {
-      toast.error(json?.error || "Failed to reset PIN.");
-      return;
-    }
-    toast.success("PIN reset successful.");
-  };
-
   const onDelete = async (member) => {
     const yes = window.confirm(`Delete staff login for ${member.full_name || member.email}?`);
     if (!yes) return;
@@ -305,7 +264,7 @@ export default function RestaurantStaffPage() {
           </div>
           <div>
             <h1 className="text-xl font-semibold text-gray-900">Restaurant Staff</h1>
-            <p className="mt-1 text-sm text-gray-700">Create role-based PIN logins and manage staff access.</p>
+            <p className="mt-1 text-sm text-gray-700">Add staff and generate a login key for each device. A key expires after 15 minutes; the device stays signed in until it logs out or is revoked.</p>
           </div>
         </div>
       </div>
@@ -316,19 +275,18 @@ export default function RestaurantStaffPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Staff name" />
             <Field label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number" />
-            <Field label="PIN (4 digits)" type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="Enter PIN" />
             <SelectField label="Role" value={role} onChange={(e) => setRole(e.target.value)} options={ROLE_OPTIONS} />
           </div>
           <div className="mt-4 flex items-center gap-3">
             <button
               type="button"
               onClick={onCreate}
-              disabled={loading || !fullName.trim() || !/^\d{4}$/.test(pin)}
+              disabled={loading || !fullName.trim()}
               className="inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-60"
               style={{ background: "linear-gradient(91.59deg, #FF4800 2.56%, #FFA680 97.05%)" }}
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-              Create Staff PIN Login
+              Add Staff Member
             </button>
           </div>
         </div>
@@ -336,53 +294,20 @@ export default function RestaurantStaffPage() {
         <div className="rounded-2xl border border-gray-200 bg-white p-5">
           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
             <QrCode className="h-4 w-4" />
-            Staff QR Setup
+            Login Key
           </div>
-          <p className="text-xs text-gray-600">New device: scan this QR, then enter PIN. Paired devices need PIN only.</p>
-          {setupQr ? (
-            <img alt="Staff setup QR" className="mt-3 h-40 w-40 rounded-xl border border-gray-200" src={setupQr} />
-          ) : (
-            <div className="mt-3 h-40 w-40 rounded-xl bg-gray-100 animate-pulse" />
-          )}
-          {setupCode ? (
+          {staffKey ? (
             <>
-              <p className="mt-2 font-mono text-sm font-bold tracking-widest text-gray-900">
-                {setupCode.match(/.{1,4}/g).join("-")}
+              <p className="text-xs text-gray-600">Scan or type this on the new device. It signs in as {staffKey.name}.</p>
+              {keyQr ? <img alt="Staff login key" className="mt-3 h-40 w-40 rounded-xl border border-gray-200" src={keyQr} /> : null}
+              <p className="mt-3 font-mono text-lg font-semibold tracking-widest text-gray-900">
+                {staffKey.code.slice(0, 4)}-{staffKey.code.slice(4)}
               </p>
-              <p className="text-[11px] text-gray-500">This QR stays the same. Print it or keep it at the counter.</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => window.open(setupUrl, "_blank", "noopener,noreferrer")}
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                >
-                  Open Link
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(setupUrl);
-                      toast.success("Setup link copied.");
-                    } catch {
-                      toast.error("Unable to copy link.");
-                    }
-                  }}
-                  className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
-                >
-                  Copy Link
-                </button>
-                <button
-                  type="button"
-                  onClick={onResetSetupCode}
-                  disabled={resettingSetup}
-                  className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
-                >
-                  {resettingSetup ? "Resetting..." : "Reset QR"}
-                </button>
-              </div>
+              <p className="text-xs text-gray-500">Works once. Expires in 15 minutes.</p>
             </>
-          ) : null}
+          ) : (
+            <p className="text-xs text-gray-600">Tap Generate key next to a staff member below.</p>
+          )}
         </div>
       </div>
 
@@ -417,7 +342,9 @@ export default function RestaurantStaffPage() {
                   <div className="flex items-center justify-end gap-2">
                     <button type="button" onClick={() => setViewMember(m)} className="rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-slate-700 hover:bg-slate-100"><Eye className="h-4 w-4" /></button>
                     <button type="button" onClick={() => openEditModal(m)} className="rounded-lg border border-amber-200 bg-amber-50 p-1.5 text-amber-700 hover:bg-amber-100"><Pencil className="h-4 w-4" /></button>
-                    <button type="button" onClick={() => onResetPin(m)} className="rounded-lg border border-indigo-200 bg-indigo-50 p-1.5 text-indigo-700 hover:bg-indigo-100"><KeyRound className="h-4 w-4" /></button>
+                    <button type="button" onClick={() => onGenerateKey(m)} disabled={keyBusyId === m.user_id} className="rounded-lg border border-indigo-200 bg-indigo-50 p-1.5 text-indigo-700 hover:bg-indigo-100">
+                      {keyBusyId === m.user_id ? "Generating..." : "Generate key"}
+                    </button>
                     <button type="button" onClick={() => onDelete(m)} className="rounded-lg border border-rose-200 bg-rose-50 p-1.5 text-rose-700 hover:bg-rose-100"><Trash2 className="h-4 w-4" /></button>
                   </div>
                 </td>

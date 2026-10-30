@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { randomUUID } from "node:crypto";
-import { issueSession, serviceClient } from "@/lib/server/deviceSession";
+import { issueSession, serviceClient, terminalEmail } from "@/lib/server/deviceSession";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 const ERROR_STATUS = { device_not_paired: 401, wrong_pin: 401, locked: 423, pin_not_set: 409 };
@@ -31,25 +30,8 @@ export async function POST(request) {
     return reply({ ok: false, error: data?.error || "wrong_pin", locked_until: data?.locked_until || null }, ERROR_STATUS[data?.error] || 401);
   }
 
-  let email;
-  if (data.auth_user_id) {
-    const { data: found, error: findErr } = await admin.auth.admin.getUserById(data.auth_user_id);
-    if (findErr || !found?.user?.email) return reply({ ok: false, error: "server_error" }, 500);
-    email = found.user.email;
-  } else {
-    email = `pos-${randomUUID()}@terminals.passprive.com`;
-    const { data: created, error: createErr } = await admin.auth.admin.createUser({
-      email,
-      email_confirm: true,
-      app_metadata: { role: "pos_terminal", terminal_id: data.terminal_id },
-    });
-    if (createErr || !created?.user?.id) return reply({ ok: false, error: "server_error" }, 500);
-    const { error: attachErr } = await admin.rpc("pos_attach_auth_user", {
-      p_terminal_id: data.terminal_id,
-      p_user_id: created.user.id,
-    });
-    if (attachErr) return reply({ ok: false, error: "server_error" }, 500);
-  }
+  const email = await terminalEmail(admin, data);
+  if (!email) return reply({ ok: false, error: "server_error" }, 500);
 
   const session = await issueSession(admin, email);
   if (!session) return reply({ ok: false, error: "server_error" }, 500);

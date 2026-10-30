@@ -60,17 +60,21 @@ async function deviceList({ admin, restaurantId, terminalId }) {
   };
 }
 
-async function approve({ admin, restaurantId }, id) {
-  const { count, error: countErr } = await admin
+async function approve({ admin, restaurantId, userId }, id) {
+  const { data: device, error: findErr } = await admin
     .from("pos_terminals")
-    .select("id", { count: "exact", head: true })
+    .select("label")
+    .eq("id", id)
     .eq("restaurant_id", restaurantId)
-    .eq("needs_approval", true)
-    .in("status", ["active", "revoked"]);
-  if (countErr) throw countErr;
+    .maybeSingle();
+  if (findErr) throw findErr;
+  if (device?.label === INVITE_LABEL) {
+    const { error: nameErr } = await admin.from("pos_terminals").update({ label: "MultiPOS device" }).eq("id", id);
+    if (nameErr) throw nameErr;
+  }
   const { data, error } = await admin
     .from("pos_terminals")
-    .update({ status: "active", label: `MultiPOS ${(count || 0) + 1}` })
+    .update({ status: "active", staff_user_id: userId })
     .eq("id", id)
     .eq("restaurant_id", restaurantId)
     .eq("status", "awaiting")

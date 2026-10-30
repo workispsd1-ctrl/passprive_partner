@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { KeyRound, Loader2, Lock, MonitorSmartphone, Plus, RefreshCw } from "lucide-react";
+import { Loader2, Lock, MonitorSmartphone, Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
@@ -33,10 +33,6 @@ function StatusPill({ terminal }) {
 
 export default function PosTerminalsPanel({ restaurantId = null, storeId = null }) {
   const merchant = { p_restaurant_id: restaurantId, p_store_id: storeId };
-  const [pinStatus, setPinStatus] = useState(null);
-  const [pin, setPin] = useState("");
-  const [pinConfirm, setPinConfirm] = useState("");
-  const [savingPin, setSavingPin] = useState(false);
   const [terminals, setTerminals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [label, setLabel] = useState("");
@@ -48,8 +44,7 @@ export default function PosTerminalsPanel({ restaurantId = null, storeId = null 
     if (!restaurantId && !storeId) return;
     setLoading(true);
     const filterColumn = restaurantId ? "restaurant_id" : "store_id";
-    const [statusRes, listRes] = await Promise.all([
-      supabaseBrowser.rpc("pos_pin_status", { p_restaurant_id: restaurantId, p_store_id: storeId }),
+    const [listRes] = await Promise.all([
       supabaseBrowser
         .from("pos_terminals")
         .select(COLUMNS)
@@ -57,11 +52,10 @@ export default function PosTerminalsPanel({ restaurantId = null, storeId = null 
         .order("created_at", { ascending: false }),
     ]);
     setLoading(false);
-    if (statusRes.error || listRes.error) {
-      toast.error((statusRes.error || listRes.error).message || "Failed to load POS terminals.");
+    if (listRes.error) {
+      toast.error(listRes.error.message || "Failed to load POS terminals.");
       return;
     }
-    setPinStatus(statusRes.data?.[0] || { has_pin: false });
     const now = new Date();
     setTerminals((listRes.data || []).filter((t) => t.label !== "MultiPOS invite").filter((t) => t.status !== "pending" || new Date(t.pairing_expires_at) > now));
   }, [restaurantId, storeId]);
@@ -79,24 +73,6 @@ export default function PosTerminalsPanel({ restaurantId = null, storeId = null 
     }, Math.max(ms, 0));
     return () => clearTimeout(timer);
   }, [pairing, load]);
-
-  const savePin = async () => {
-    if (pin !== pinConfirm) {
-      toast.error("PINs do not match.");
-      return;
-    }
-    setSavingPin(true);
-    const { error } = await supabaseBrowser.rpc("pos_set_pin", { ...merchant, p_pin: pin });
-    setSavingPin(false);
-    if (error) {
-      toast.error(error.message || "Failed to save PIN.");
-      return;
-    }
-    setPin("");
-    setPinConfirm("");
-    toast.success("POS PIN saved. Use it on every linked terminal.");
-    load();
-  };
 
   const createPairing = async () => {
     setCreating(true);
@@ -124,7 +100,6 @@ export default function PosTerminalsPanel({ restaurantId = null, storeId = null 
     load();
   };
 
-  const pinValid = /^\d{4,6}$/.test(pin) && pin === pinConfirm;
   const code = pairing?.code ? `${pairing.code.slice(0, 4)}-${pairing.code.slice(4)}` : "";
 
   return (
@@ -137,54 +112,13 @@ export default function PosTerminalsPanel({ restaurantId = null, storeId = null 
           <div>
             <h1 className="text-xl font-semibold text-gray-900">POS Terminals</h1>
             <p className="mt-1 text-sm text-gray-700">
-              Link a POS machine once with a pairing code. After that, staff unlock it with your POS PIN.
+              Link a POS machine once with a key that expires in 15 minutes. It stays signed in until it logs out or is revoked.
             </p>
           </div>
         </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
-          <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-gray-900">
-            <KeyRound className="h-4 w-4" />
-            POS PIN
-          </div>
-          <p className="mb-4 text-xs text-gray-600">
-            {pinStatus?.has_pin ? `PIN set. Last changed ${stamp(pinStatus.updated_at)}.` : "No PIN set yet. Terminals cannot be unlocked until you set one."}
-            {" "}Avoid easy PINs like 1234 or 1111. Changing it also unlocks any locked terminal.
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <input
-              type="password"
-              inputMode="numeric"
-              autoComplete="new-password"
-              value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              placeholder={pinStatus?.has_pin ? "New PIN (4-6 digits)" : "PIN (4-6 digits)"}
-              className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-[#FF4800]"
-            />
-            <input
-              type="password"
-              inputMode="numeric"
-              autoComplete="new-password"
-              value={pinConfirm}
-              onChange={(e) => setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              placeholder="Confirm PIN"
-              className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-[#FF4800]"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={savePin}
-            disabled={savingPin || !pinValid}
-            className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-60"
-            style={BRAND_GRADIENT}
-          >
-            {savingPin ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
-            {pinStatus?.has_pin ? "Change PIN" : "Set PIN"}
-          </button>
-        </div>
-
         <div className="rounded-2xl border border-gray-200 bg-white p-5">
           <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-gray-900">
             <Plus className="h-4 w-4" />
