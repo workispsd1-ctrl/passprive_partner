@@ -1,4 +1,4 @@
-import { addBillItems, setBillItemQty } from "@/lib/server/billItems";
+import { addBillItems, seatTable, setBillItemQty } from "@/lib/server/billItems";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { isBillClosed } from "@/lib/server/tableBill";
 import { readJson, reply, requireTerminal, serverError } from "../../staff/_terminal";
@@ -45,10 +45,10 @@ function menuSections(menuJson) {
 }
 
 async function liveTables({ admin, restaurantId }) {
-  const [tablesRes, ordersRes] = await Promise.all([
+  const [tablesRes, ordersRes, merchantRes] = await Promise.all([
     admin
       .from("restaurant_table_layouts")
-      .select("table_no, label")
+      .select("table_no, label, capacity")
       .eq("restaurant_id", restaurantId)
       .order("table_no", { ascending: true }),
     admin
@@ -59,11 +59,17 @@ async function liveTables({ admin, restaurantId }) {
       .not("payment_status", "in", "(PAID,COMPLETED)")
       .order("created_at", { ascending: true })
       .limit(100),
+    admin
+      .from("restaurants")
+      .select("name, registered_name, brn, full_address, phone")
+      .eq("id", restaurantId)
+      .maybeSingle(),
   ]);
   if (tablesRes.error) throw tablesRes.error;
   if (ordersRes.error) throw ordersRes.error;
 
   return {
+    merchant: merchantRes.data || null,
     tables: tablesRes.data || [],
     orders: (ordersRes.data || [])
       .filter((o) => !isBillClosed(o)),
@@ -128,6 +134,11 @@ export async function POST(request) {
         .maybeSingle();
       if (error) throw error;
       return reply({ ok: true, sections: menuSections(data?.menu_json) });
+    }
+
+    if (action === "seat") {
+      const { status, body: out } = await seatTable(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      return reply(out, status);
     }
 
     if (action === "add_items") {

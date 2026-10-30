@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { seatTable } from "@/lib/server/billItems";
 import { resolveCashierRestaurant } from "../_shared";
 import { fromCents, menuIndex, priceLines } from "@/lib/server/menuPricing";
 import { isBillClosed } from "@/lib/server/tableBill";
@@ -135,52 +136,8 @@ export async function POST(request) {
     const body = await request.json();
 
     if (body?.action === "seat") {
-      const seatTable = Number(body?.table_no || 0);
-      const guests = Number(body?.guest_count || 0);
-      if (!Number.isInteger(seatTable) || seatTable <= 0) {
-        return NextResponse.json({ ok: false, error: "Valid table number is required." }, { status: 400 });
-      }
-      if (!Number.isInteger(guests) || guests < 1 || guests > 99) {
-        return NextResponse.json({ ok: false, error: "Guests must be between 1 and 99." }, { status: 400 });
-      }
-      const guestName = String(body?.customer_name || "").trim().slice(0, 80);
-      const guestPhone = String(body?.customer_phone || "").replace(/[^\d+]/g, "").slice(0, 16);
-      if (guestPhone && !/^\+?\d{7,15}$/.test(guestPhone)) {
-        return NextResponse.json({ ok: false, error: "Enter a valid phone number." }, { status: 400 });
-      }
-      const { data: rows, error: rowsErr } = await ctx.admin
-        .from("restaurant_table_bookings")
-        .select("id, booking_status, payment_status")
-        .eq("restaurant_id", ctx.restaurantId)
-        .eq("table_no", seatTable)
-        .order("updated_at", { ascending: false })
-        .limit(20);
-      if (rowsErr) return NextResponse.json({ ok: false, error: rowsErr.message }, { status: 400 });
-      const open = (rows || []).find(isTableOccupied);
-      if (open) return NextResponse.json({ ok: false, error: "table_occupied", order_id: open.id }, { status: 409 });
-
-      const { data: seated, error: seatErr } = await ctx.admin
-        .from("restaurant_table_bookings")
-        .insert({
-          restaurant_id: ctx.restaurantId,
-          table_no: seatTable,
-          guest_count: guests,
-          customer_name: guestName || "Walk-in",
-          customer_phone: guestPhone || null,
-          order_items: [],
-          order_details: { source_channel: "cashier_orders", cashier_user_id: ctx.userId, created_by: "cashier" },
-          subtotal_amount: 0,
-          tax_amount: 0,
-          total_amount: 0,
-          payment_method: "CASH",
-          payment_status: "PENDING",
-          booking_status: "SEATED",
-          source: "cashier",
-        })
-        .select("id, table_no, guest_count, booking_status")
-        .single();
-      if (seatErr) return NextResponse.json({ ok: false, error: seatErr.message }, { status: 400 });
-      return NextResponse.json({ ok: true, order: seated });
+      const { status, body: out } = await seatTable(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      return NextResponse.json(out, { status });
     }
 
     const orderType = String(body?.order_type || "").trim().toUpperCase();
