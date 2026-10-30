@@ -3,6 +3,7 @@ import { readJson, requireTerminal, serverError } from "../_terminal";
 import { isStaffPlacedOrder } from "@/lib/staffOrder";
 import { mauritiusDayRange } from "@/lib/server/billHistory";
 import { loadSales } from "@/lib/server/tillStats";
+import { promoDue } from "@/lib/server/promoCode";
 import { isQrPending } from "@/lib/server/printJobs";
 
 function getRangeDates(range, customFrom, customTo) {
@@ -87,6 +88,7 @@ export async function POST(request) {
       chartOrdersRes,
       latestPickupRes,
       { sales },
+      due,
     ] = await Promise.all([
       // 1. Reviews — all time for rating
       admin
@@ -162,6 +164,7 @@ export async function POST(request) {
         .limit(6),
 
       loadSales(admin, restaurantId, fromISO, toISO),
+      promoDue(admin, restaurantId),
     ]);
 
     const reviews = reviewsRes.data || [];
@@ -235,6 +238,7 @@ export async function POST(request) {
       ok: true,
       kpis: {
         revenue: revenueCents / 100,
+        passprive_due: due.due_cents / 100,
         total_bookings: bookings.length,
         total_orders: orders.length + tableOrders.length,
         cancellations,
