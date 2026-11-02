@@ -243,7 +243,7 @@ export async function POST(request) {
       kpis: {
         revenue: revenueCents / 100,
         passprive_due: due.due_cents / 100,
-        total_bookings: bookings.length,
+        total_bookings: bookings.filter((b) => !["cancelled", "canceled", "rejected"].includes(String(b.status || "").toLowerCase())).length,
         total_orders: orders.length + tableOrders.length,
         cancellations,
         rating: avgRating,
