@@ -38,7 +38,11 @@ const BOOKING_SELECT_FIELDS = `
   updated_at,
   proposed_date,
   proposed_time,
-  proposed_at
+  proposed_at,
+  cover_charge_amount,
+  cover_request_status,
+  cover_request_total,
+  cover_request_due_at
 `;
 
 function normalizeBookingStatus(status) {
@@ -53,6 +57,7 @@ function getBookingStatusLabel(status) {
   const labels = {
     pending: "Pending",
     proposed: "New time proposed",
+    cover_requested: "Awaiting cover charge",
     payment_successful: "Paid",
     payment_successfull: "Paid",
     confirmed: "Confirmed",
@@ -66,6 +71,7 @@ function getBookingStatusLabel(status) {
 
 function displayStatus(booking) {
   const normalized = normalizeBookingStatus(booking?.status);
+  if (booking?.cover_request_status === "requested" && !["cancelled", "canceled"].includes(normalized)) return "cover_requested";
   return normalized === "pending" && booking?.proposed_at ? "proposed" : normalized;
 }
 
@@ -462,6 +468,12 @@ export default function RestaurantBookingsPage() {
                 label="Status"
                 value={getBookingStatusLabel(displayStatus(activeBooking))}
               />
+              {Number(activeBooking.cover_charge_amount) > 0 && (
+                <DetailRow label="Cover charge paid" value={`MUR ${Number(activeBooking.cover_charge_amount)} · comes off the bill`} />
+              )}
+              {activeBooking.cover_request_status === "requested" && (
+                <DetailRow label="Cover charge requested" value={`MUR ${Number(activeBooking.cover_request_total || 0)} · waiting for the guest to pay`} />
+              )}
               {proposedLabel(activeBooking) && (
                 <DetailRow label="Proposed new time" value={proposedLabel(activeBooking)} />
               )}
@@ -543,6 +555,7 @@ function StatusPill({ status }) {
   const map = {
     pending: ["Pending", "#92400e", "rgba(245,158,11,.15)"],
     proposed: ["New time proposed", "#B83400", "rgba(255,72,0,.12)"],
+    cover_requested: ["Awaiting cover charge", "#B83400", "rgba(255,72,0,.12)"],
     payment_successful: ["Paid", "#92400e", "rgba(245,158,11,.15)"],
     payment_successfull: ["Paid", "#92400e", "rgba(245,158,11,.15)"],
     confirmed: ["Confirmed", "#166534", "rgba(34,197,94,.15)"],

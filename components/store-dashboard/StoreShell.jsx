@@ -2,6 +2,7 @@
 
 import StoreSidebar from "./StoreSidebar";
 import StoreTopbar from "./StoreTopbar";
+import AppointmentAlert from "./AppointmentAlert";
 import { useMobileNav } from "@/components/ui/MobileNav";
 
 export default function StoreShell({ children }) {
@@ -10,7 +11,7 @@ export default function StoreShell({ children }) {
   return (
     <div
       className="min-h-screen bg-white text-gray-900"
-      style={{ ["--accent"]: "#3F6DF2" }} // blue accent
+      style={{ ["--accent"]: "#3F6DF2" }}
     >
       <div className="flex">
         <StoreSidebar mobileOpen={mobileNav.open} onMobileClose={mobileNav.close} />
@@ -20,6 +21,7 @@ export default function StoreShell({ children }) {
           <main className="px-4 sm:px-6 lg:px-8 py-6">{children}</main>
         </div>
       </div>
+      <AppointmentAlert />
     </div>
   );
 }

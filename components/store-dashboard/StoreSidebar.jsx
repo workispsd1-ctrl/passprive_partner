@@ -39,6 +39,7 @@ const ACTIVE_STORE_KEY = "store_partner_selected_store_id";
 const baseNav = [
   { label: "Dashboard", href: "/store-partner/dashboard", icon: LayoutDashboard },
   { label: "Pickup Orders", href: "/store-partner/pickup-orders", icon: ShoppingCart, key: "pickup-orders", premium: true },
+  { label: "Appointments", href: "/store-partner/appointments", icon: Clock3 },
   { label: "Catalogue", href: "/store-partner/catalogue", icon: Boxes, key: "pickup-catalogue", dynamicLabel: true },
   { label: "Top Items", href: "/store-partner/top-items", icon: Star },
   { label: "Inventory", href: "/store-partner/inventory", icon: Package, key: "inventory", premium: true },

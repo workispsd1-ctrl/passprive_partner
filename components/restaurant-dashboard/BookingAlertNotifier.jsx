@@ -7,7 +7,7 @@ import { useI18n } from "@/lib/i18n";
 
 const ESCALATION_DELAY_MS = 3 * 60 * 1000;
 
-const RESPOND_ERRORS = ["payment_pending", "booking_paid", "invalid_time", "already_handled", "not_found"];
+const RESPOND_ERRORS = ["payment_pending", "booking_paid", "invalid_time", "already_handled", "not_found", "amount_too_low", "invalid_amount", "cover_request_pending", "slot_passed"];
 
 const BOOKING_SELECT_FIELDS = [
   "id",
@@ -25,6 +25,8 @@ const BOOKING_SELECT_FIELDS = [
   "booking_code",
   "customer_booking_number",
   "created_at",
+  "cover_charge_amount",
+  "cover_request_status",
   "restaurants(booking_service_type)",
 ].join(",");
 
@@ -38,6 +40,8 @@ export default function BookingAlertNotifier() {
   const [proposeDate, setProposeDate] = useState("");
   const [proposeTime, setProposeTime] = useState("");
   const [respondError, setRespondError] = useState("");
+  const [coverMode, setCoverMode] = useState(false);
+  const [coverAmount, setCoverAmount] = useState("");
 
   const channelRef = useRef(null);
   const pollRef = useRef(null);
@@ -177,6 +181,7 @@ export default function BookingAlertNotifier() {
     stopBuzzer();
     setAckLoading(false);
     setProposing(false);
+    setCoverMode(false);
     setRespondError("");
     setVisible(false);
     setActiveBooking(null);
@@ -218,6 +223,13 @@ export default function BookingAlertNotifier() {
       return;
     }
     closeActive();
+  };
+
+  const openCover = () => {
+    silence();
+    setCoverAmount("");
+    setRespondError("");
+    setCoverMode(true);
   };
 
   const openPropose = () => {
@@ -359,7 +371,43 @@ export default function BookingAlertNotifier() {
 
         <div className="border-t border-gray-100 bg-gray-50 px-5 py-4">
           {respondError && <p className="mb-3 text-sm text-red-600">{respondError}</p>}
-          {!isRequest ? (
+          {coverMode ? (
+            <div className="space-y-3">
+              <label className="block text-xs font-medium text-gray-700">
+                {t("bookingAlert.coverAmount")}
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  value={coverAmount}
+                  onChange={(e) => setCoverAmount(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
+                  className="mt-1 h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900"
+                />
+              </label>
+              <p className="text-xs text-gray-600">
+                {t("bookingAlert.coverHint", { min: Math.max(Number(activeBooking.cover_charge_amount || 0), 20) })}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCoverMode(false)}
+                  disabled={!!ackLoading}
+                  className="h-10 flex-1 rounded-xl border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-60"
+                >
+                  {t("common.back")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => respond("request_cover", { p_cover_amount: Number(coverAmount) })}
+                  disabled={!!ackLoading || !Number(coverAmount)}
+                  className="h-10 flex-1 rounded-xl bg-amber-600 px-4 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+                >
+                  {ackLoading === "request_cover" ? t("bookingAlert.sending") : t("bookingAlert.sendCover")}
+                </button>
+              </div>
+            </div>
+          ) : !isRequest ? (
+            <div className="space-y-2">
             <button
               type="button"
               onClick={acknowledgeBooking}
@@ -368,6 +416,15 @@ export default function BookingAlertNotifier() {
             >
               {ackLoading ? t("common.saving") : t("common.ok")}
             </button>
+            <button
+              type="button"
+              onClick={openCover}
+              disabled={!!ackLoading}
+              className="h-10 w-full rounded-xl border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-60"
+            >
+              {t("bookingAlert.requestCover")}
+            </button>
+            </div>
           ) : proposing ? (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
@@ -410,6 +467,7 @@ export default function BookingAlertNotifier() {
               </div>
             </div>
           ) : (
+            <div className="space-y-2">
             <div className="flex gap-2">
               <button
                 type="button"
@@ -435,6 +493,15 @@ export default function BookingAlertNotifier() {
               >
                 {ackLoading === "accept" ? t("common.accepting") : t("common.accept")}
               </button>
+            </div>
+            <button
+              type="button"
+              onClick={openCover}
+              disabled={!!ackLoading}
+              className="h-10 w-full rounded-xl border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-60"
+            >
+              {t("bookingAlert.requestCover")}
+            </button>
             </div>
           )}
         </div>

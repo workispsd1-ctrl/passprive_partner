@@ -24,7 +24,7 @@ export async function GET(request) {
     const dayFilter = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
     const bookingQuery = ctx.admin
       .from("restaurant_bookings")
-      .select("id,customer_name,customer_phone,customer_email,booking_date,booking_time,duration_minutes,party_size,status,source,created_at,booking_code,customer_booking_number,special_request,booked_slot_label,payment_status,notes_internal,read,proposed_at")
+      .select("id,customer_name,customer_phone,customer_email,booking_date,booking_time,duration_minutes,party_size,status,source,created_at,booking_code,customer_booking_number,special_request,booked_slot_label,payment_status,notes_internal,read,proposed_at,cover_charge_amount,cover_request_status,cover_request_total,cover_request_due_at")
       .eq("restaurant_id", ctx.restaurantId);
 
     const [bookingRes, tableOrderRes, layoutRes] = await Promise.all([
@@ -310,7 +310,7 @@ export async function PATCH(request) {
 
     if (action === "respond") {
       const response = String(body?.response || "").trim().toLowerCase();
-      if (!["accept", "reject", "propose"].includes(response)) {
+      if (!["accept", "reject", "propose", "request_cover"].includes(response)) {
         return NextResponse.json({ ok: false, error: "Invalid response." }, { status: 400 });
       }
       const { data, error } = await ctx.admin.rpc("merchant_respond_booking", {
@@ -320,6 +320,8 @@ export async function PATCH(request) {
         p_reason: response === "reject" ? "Rejected by restaurant" : null,
         p_proposed_date: response === "propose" ? String(body?.proposed_date || "") : null,
         p_proposed_time: response === "propose" ? String(body?.proposed_time || "").slice(0, 5) : null,
+        p_cover_amount: response === "request_cover" ? Number(body?.cover_amount) || null : null,
+        p_handled_by: "merchant",
       });
       if (error) return NextResponse.json({ ok: false, error: "generic" }, { status: 400 });
       return NextResponse.json(data?.ok ? { ok: true } : { ok: false, error: data?.error || "generic" }, {
