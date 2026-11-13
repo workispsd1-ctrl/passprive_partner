@@ -92,6 +92,16 @@ export default function DashboardAccessGuard({ scope, children }) {
     };
   }, [pathname, router, scope]);
 
+  useEffect(() => {
+    const { data } = supabaseBrowser.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT" || (event !== "INITIAL_SESSION" && !session)) {
+        setAllowed(false);
+        router.replace("/sign-in");
+      }
+    });
+    return () => data.subscription.unsubscribe();
+  }, [router]);
+
   if (!ready) {
     return (
       <div className="min-h-[50vh] grid place-items-center">
