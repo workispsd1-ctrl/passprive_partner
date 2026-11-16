@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
-import AppointmentActions, { APPOINTMENT_SELECT, servicesLabel, slotLabel } from "./AppointmentActions";
+import AppointmentActions, { APPOINTMENT_SELECT, guestConfirmedInfo, servicesLabel, slotLabel } from "./AppointmentActions";
 
 export default function AppointmentAlert() {
   const [queue, setQueue] = useState([]);
@@ -22,21 +22,28 @@ export default function AppointmentAlert() {
 
   useEffect(() => {
     load();
-    const timer = setInterval(load, 20000);
+    const timer = setInterval(load, 5000);
     return () => clearInterval(timer);
   }, [load]);
 
   const active = queue[0];
   if (!active) return null;
+  const confirmed = guestConfirmedInfo(active);
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-xl">
-        <div className="border-b border-amber-200 bg-amber-50 px-5 py-4">
-          <h3 className="text-lg font-semibold text-amber-900">
-            {String(active.status).toUpperCase() === "NEW" ? "New appointment request" : "New appointment"}
+      <div className={`w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-xl ${confirmed ? "border border-green-300" : ""}`}>
+        <div className={`border-b px-5 py-4 ${confirmed ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
+          <h3 className={`text-lg font-semibold ${confirmed ? "text-green-900" : "text-amber-900"}`}>
+            {confirmed ? "Appointment confirmed" : String(active.status).toUpperCase() === "NEW" ? "New appointment request" : "New appointment"}
           </h3>
-          <p className="text-xs text-amber-800">
+          {confirmed?.paid ? (
+            <p className="text-sm font-medium text-green-800">Guest paid MUR {confirmed.paid.toLocaleString("en-US")} cover charge</p>
+          ) : null}
+          {confirmed?.acceptedTime ? (
+            <p className="text-sm font-medium text-green-800">Guest accepted the new time: {confirmed.acceptedTime}</p>
+          ) : null}
+          <p className={`text-xs ${confirmed ? "text-green-800" : "text-amber-800"}`}>
             {active.stores?.name || "Your store"}
             {queue.length > 1 ? ` · ${queue.length - 1} more waiting` : ""}
           </p>

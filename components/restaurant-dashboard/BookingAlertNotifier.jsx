@@ -7,6 +7,14 @@ import { useI18n } from "@/lib/i18n";
 
 const ESCALATION_DELAY_MS = 3 * 60 * 1000;
 
+function needsAttention(b) {
+  if (!b) return false;
+  if (b.cover_request_status === "requested") return false;
+  const status = String(b.status || "").toLowerCase();
+  if (status === "pending") return !b.proposed_at;
+  return ["confirmed", "payment_successfull", "payment_successful"].includes(status) && !b.read;
+}
+
 const RESPOND_ERRORS = ["payment_pending", "booking_paid", "invalid_time", "already_handled", "not_found", "amount_too_low", "invalid_amount", "cover_request_pending", "slot_passed"];
 
 const BOOKING_SELECT_FIELDS = [
@@ -27,6 +35,9 @@ const BOOKING_SELECT_FIELDS = [
   "created_at",
   "cover_charge_amount",
   "cover_request_status",
+  "cover_request_total",
+  "read",
+  "proposed_at",
   "restaurants(booking_service_type)",
 ].join(",");
 
@@ -56,6 +67,12 @@ export default function BookingAlertNotifier() {
   useEffect(() => {
     activeBookingRef.current = activeBooking;
   }, [activeBooking]);
+
+  const queueRef = useRef([]);
+  const closeActiveRef = useRef(null);
+  useEffect(() => {
+    queueRef.current = queue;
+  }, [queue]);
 
   useEffect(() => {
     const audio = new Audio("/sound.wav");
@@ -166,9 +183,14 @@ export default function BookingAlertNotifier() {
     });
   };
 
+  const activeStatus = String(activeBooking?.status || "").toLowerCase();
+  const paidNow = activeStatus !== "pending" && activeBooking?.cover_request_status === "paid";
+  const acceptedNewTime = activeStatus !== "pending" && !!activeBooking?.proposed_at;
+  const guestConfirmed = paidNow || acceptedNewTime;
   const isRequest =
-    String(activeBooking?.status || "").toLowerCase() === "pending" ||
-    String(activeBooking?.restaurants?.booking_service_type || "").toLowerCase() === "request";
+    !guestConfirmed &&
+    (activeStatus === "pending" ||
+      String(activeBooking?.restaurants?.booking_service_type || "").toLowerCase() === "request");
 
   const silence = () => {
     pendingPlayRef.current = false;
@@ -190,6 +212,8 @@ export default function BookingAlertNotifier() {
       showNextBooking();
     }, 120);
   };
+
+  closeActiveRef.current = closeActive;
 
   const acknowledgeBooking = async () => {
     if (!activeBooking?.id || ackLoading) return;
@@ -228,6 +252,8 @@ export default function BookingAlertNotifier() {
   const openCover = () => {
     silence();
     setCoverAmount("");
+    setProposeDate("");
+    setProposeTime("");
     setRespondError("");
     setCoverMode(true);
   };
@@ -237,6 +263,7 @@ export default function BookingAlertNotifier() {
     setProposeDate(String(activeBooking?.booking_date || "").slice(0, 10));
     setProposeTime(String(activeBooking?.booking_time || "").slice(0, 5));
     setRespondError("");
+    setCoverAmount("");
     setProposing(true);
   };
 
@@ -244,7 +271,7 @@ export default function BookingAlertNotifier() {
     let active = true;
 
     const maybeQueueBooking = (booking) => {
-      if (!booking?.id) return;
+      if (!booking?.id || !needsAttention(booking)) return;
       const bookingId = String(booking.id);
       if (seenBookingIdsRef.current.has(bookingId)) return;
       seenBookingIdsRef.current.add(bookingId);
@@ -257,7 +284,25 @@ export default function BookingAlertNotifier() {
       });
     };
 
+    const dropHandled = (rows) => {
+      const done = new Set(rows.filter((r) => !needsAttention(r)).map((r) => String(r.id)));
+      if (!done.size) return;
+      setQueue((prev) => prev.filter((b) => !done.has(String(b.id))));
+      if (done.has(String(activeBookingRef.current?.id || ""))) closeActiveRef.current?.();
+    };
+
+    const recheckOpen = async () => {
+      const ids = [activeBookingRef.current?.id, ...queueRef.current.map((b) => b.id)].filter(Boolean);
+      if (!ids.length) return;
+      const { data } = await supabaseBrowser
+        .from("restaurant_bookings")
+        .select("id, status, read, proposed_at, cover_request_status")
+        .in("id", ids);
+      dropHandled(data || []);
+    };
+
     const pullRecentBookings = async () => {
+      await recheckOpen();
       const { data } = await supabaseBrowser
         .from("restaurant_bookings")
         .select(BOOKING_SELECT_FIELDS)
@@ -294,14 +339,23 @@ export default function BookingAlertNotifier() {
               .eq("id", newId)
               .maybeSingle();
 
-            // If current user cannot read this booking due to RLS, ignore it.
             if (!fullBooking) return;
             maybeQueueBooking(fullBooking);
           }
         )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "restaurant_bookings",
+          },
+          (payload) => {
+            if (payload?.new?.id) dropHandled([payload.new]);
+          }
+        )
         .subscribe();
 
-      // Fallback polling path if realtime event is missed.
       await pullRecentBookings();
       pollRef.current = window.setInterval(pullRecentBookings, 5000);
     };
@@ -334,12 +388,22 @@ export default function BookingAlertNotifier() {
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-xl rounded-2xl border border-amber-300 bg-white shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between border-b border-amber-200 bg-amber-50 px-5 py-4">
+      <div className={`w-full max-w-xl rounded-2xl border bg-white shadow-2xl overflow-hidden ${guestConfirmed ? "border-green-300" : "border-amber-300"}`}>
+        <div className={`flex items-center justify-between border-b px-5 py-4 ${guestConfirmed ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
           <div>
-            <h3 className="text-base font-semibold text-amber-900">
-              {isRequest ? t("bookingAlert.titleRequest") : t("bookingAlert.title")}
+            <h3 className={`text-base font-semibold ${guestConfirmed ? "text-green-900" : "text-amber-900"}`}>
+              {guestConfirmed ? t("bookingAlert.confirmedTitle") : isRequest ? t("bookingAlert.titleRequest") : t("bookingAlert.title")}
             </h3>
+            {paidNow && (
+              <p className="mt-0.5 text-sm font-medium text-green-800">
+                {t("bookingAlert.guestPaid", { amount: Number(activeBooking.cover_request_total || activeBooking.cover_charge_amount || 0).toLocaleString("en-US") })}
+              </p>
+            )}
+            {acceptedNewTime && (
+              <p className="mt-0.5 text-sm font-medium text-green-800">
+                {t("bookingAlert.guestAcceptedTime", { when: `${fmt.dateLong(`${String(activeBooking.booking_date).slice(0, 10)}T12:00:00+04:00`)}, ${String(activeBooking.booking_time || "").slice(0, 5)}` })}
+              </p>
+            )}
             {isRequest && (
               <p className="mt-0.5 text-xs text-amber-800">{t("bookingAlert.requestHint")}</p>
             )}
@@ -384,6 +448,27 @@ export default function BookingAlertNotifier() {
                   className="mt-1 h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900"
                 />
               </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="text-xs font-medium text-gray-700">
+                  {t("bookingAlert.newDate")}
+                  <input
+                    type="date"
+                    value={proposeDate}
+                    onChange={(e) => setProposeDate(e.target.value)}
+                    className="mt-1 h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900"
+                  />
+                </label>
+                <label className="text-xs font-medium text-gray-700">
+                  {t("bookingAlert.newTime")}
+                  <input
+                    type="time"
+                    value={proposeTime}
+                    onChange={(e) => setProposeTime(e.target.value)}
+                    className="mt-1 h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900"
+                  />
+                </label>
+              </div>
+              <p className="text-xs text-gray-600">{t("bookingAlert.coverNewTimeHint")}</p>
               <p className="text-xs text-gray-600">
                 {t("bookingAlert.coverHint", { min: Math.max(Number(activeBooking.cover_charge_amount || 0), 20) })}
               </p>
@@ -398,11 +483,19 @@ export default function BookingAlertNotifier() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => respond("request_cover", { p_cover_amount: Number(coverAmount) })}
+                  onClick={() =>
+                    proposeTime
+                      ? respond("propose", {
+                          p_proposed_date: proposeDate || String(activeBooking?.booking_date || "").slice(0, 10),
+                          p_proposed_time: proposeTime.slice(0, 5),
+                          p_cover_amount: Number(coverAmount),
+                        })
+                      : respond("request_cover", { p_cover_amount: Number(coverAmount) })
+                  }
                   disabled={!!ackLoading || !Number(coverAmount)}
                   className="h-10 flex-1 rounded-xl bg-amber-600 px-4 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
                 >
-                  {ackLoading === "request_cover" ? t("bookingAlert.sending") : t("bookingAlert.sendCover")}
+                  {ackLoading ? t("bookingAlert.sending") : t("bookingAlert.sendCover")}
                 </button>
               </div>
             </div>
@@ -412,18 +505,18 @@ export default function BookingAlertNotifier() {
               type="button"
               onClick={acknowledgeBooking}
               disabled={!!ackLoading}
-              className="h-10 w-full rounded-xl bg-amber-600 px-4 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+              className={`h-10 w-full rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-60 ${guestConfirmed ? "bg-green-600 hover:bg-green-700" : "bg-amber-600 hover:bg-amber-700"}`}
             >
               {ackLoading ? t("common.saving") : t("common.ok")}
             </button>
-            <button
+            {!guestConfirmed && <button
               type="button"
               onClick={openCover}
               disabled={!!ackLoading}
               className="h-10 w-full rounded-xl border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-60"
             >
               {t("bookingAlert.requestCover")}
-            </button>
+            </button>}
             </div>
           ) : proposing ? (
             <div className="space-y-3">
@@ -447,6 +540,17 @@ export default function BookingAlertNotifier() {
                   />
                 </label>
               </div>
+              <label className="block text-xs font-medium text-gray-700">
+                {t("bookingAlert.proposeCover")}
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  value={coverAmount}
+                  onChange={(e) => setCoverAmount(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
+                  className="mt-1 h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900"
+                />
+              </label>
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -458,7 +562,7 @@ export default function BookingAlertNotifier() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => respond("propose", { p_proposed_date: proposeDate, p_proposed_time: proposeTime.slice(0, 5) })}
+                  onClick={() => respond("propose", { p_proposed_date: proposeDate, p_proposed_time: proposeTime.slice(0, 5), p_cover_amount: Number(coverAmount) || null })}
                   disabled={!!ackLoading || !proposeDate || !proposeTime}
                   className="h-10 flex-1 rounded-xl bg-amber-600 px-4 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
                 >
