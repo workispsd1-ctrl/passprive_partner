@@ -5,6 +5,7 @@ import { resolveCashierRestaurant } from "../_shared";
 import { bookingStatusChangeError, isBillClosed, isBillPaid, quickPaymentRecord } from "@/lib/server/tableBill";
 import { isQrPending } from "@/lib/server/printJobs";
 import { mergeLines } from "@/lib/server/menuPricing";
+import { payBillPart } from "@/lib/server/splitBill";
 
 const isClosed = isBillClosed;
 
@@ -156,6 +157,11 @@ export async function POST(request) {
         ...body,
         qty: action === "cancel_item" ? 0 : body?.qty,
       });
+      return NextResponse.json(out, { status });
+    }
+
+    if (action === "pay_part") {
+      const { status, body: out } = await payBillPart(ctx.admin, ctx.restaurantId, ctx.userId, body);
       return NextResponse.json(out, { status });
     }
 

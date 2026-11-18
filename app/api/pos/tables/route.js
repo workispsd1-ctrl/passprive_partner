@@ -1,6 +1,7 @@
 import { addBillItems, seatTable, setBillItemQty } from "@/lib/server/billItems";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { payBillPart } from "@/lib/server/splitBill";
+import { VAT_RATE, vatSplit } from "@/lib/server/tillStats";
 import { claimPrintJob, confirmPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, releasePrintJob, unleasePrintJob } from "@/lib/server/printJobs";
 import { heldPromos, PROMO_ERRORS, promoDue, promoLocked, quotePromo, recordPromoAttempt, releasePromo, reservePromo } from "@/lib/server/promoCode";
 import { isBillClosed } from "@/lib/server/tableBill";
@@ -17,7 +18,7 @@ function isPaidOnline(o) {
   return o?.source === "public_menu" && ["PAID", "COMPLETED"].includes(String(o?.payment_status || "").toUpperCase());
 }
 const ORDER_COLUMNS =
-  "id, table_no, guest_count, customer_name, notes, booking_status, payment_status, subtotal_amount, total_amount, tip_amount, order_items, created_at, updated_at, source, qr_pending:order_details->qr_pending, payments:order_details->payments";
+  "id, table_no, guest_count, customer_name, notes, booking_status, payment_status, subtotal_amount, total_amount, tax_amount, tip_amount, order_items, created_at, updated_at, source, qr_pending:order_details->qr_pending, payments:order_details->payments";
 
 function thumbnail(urls) {
   const url = Array.isArray(urls) ? String(urls[0] || "") : "";
@@ -92,7 +93,12 @@ async function liveTables({ admin, restaurantId }) {
     merchant: merchantRes.data || null,
     print_jobs: printJobs,
     tables: tablesRes.data || [],
-    orders: orders.map((o) => (promos.has(o.id) ? { ...o, promo: promos.get(o.id) } : o)),
+    orders: orders.map((o) => {
+      const gross = Math.round(Number(o.total_amount || 0) * 100);
+      const vat = vatSplit(gross, Math.round(Number(o.tax_amount || 0) * 100)).tax;
+      const out = { ...o, vat_rate: VAT_RATE * 100, vat_amount: vat / 100, net_amount: (gross - vat) / 100 };
+      return promos.has(o.id) ? { ...out, promo: promos.get(o.id) } : out;
+    }),
   };
 }
 
