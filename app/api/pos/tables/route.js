@@ -4,7 +4,7 @@ import { claimPrintJob, isQrPending, pendingPrintJobs, releasePrintJob } from "@
 import { heldPromos, PROMO_ERRORS, promoDue, promoLocked, quotePromo, recordPromoAttempt, releasePromo, reservePromo } from "@/lib/server/promoCode";
 import { isBillClosed } from "@/lib/server/tableBill";
 import { readJson, reply, requireTerminal, serverError } from "../../staff/_terminal";
-import { publicModifierGroups, publicSubcategories } from "@/lib/server/menuPricing";
+import { publicModifierGroups, publicSubcategories, publicVariants } from "@/lib/server/menuPricing";
 
 const STORAGE_OBJECT_PATH = "/storage/v1/object/public/";
 const STORAGE_RENDER_PATH = "/storage/v1/render/image/public/";
@@ -42,9 +42,10 @@ function menuSections(menuJson) {
       group: String(section?.group || "").trim() || "Other",
       subcategories: publicSubcategories(section),
       items: (Array.isArray(section?.items) ? section.items : [])
-        .filter((item) => item?.id && item.is_available !== false)
+        .filter((item) => item?.id && item.is_available !== false && (!(item.variants || []).length || publicVariants(item).length))
         .map((item) => {
           const groups = publicModifierGroups(item);
+          const variants = publicVariants(item);
           return {
             id: String(item.id),
             name: String(item.name || ""),
@@ -52,6 +53,7 @@ function menuSections(menuJson) {
             image: thumbnail(item.image_urls),
             subcategory_id: item.subcategory_id ? String(item.subcategory_id) : null,
             ...(groups.length ? { modifier_groups: groups } : {}),
+            ...(variants.length ? { variants, price: Math.min(...variants.map((v) => v.price)) } : {}),
           };
         }),
     }))

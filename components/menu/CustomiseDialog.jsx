@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Check, Minus, Plus, X } from "lucide-react";
-import { MAX_NOTE, publicModifierGroups } from "@/lib/server/menuPricing";
+import { MAX_NOTE, publicModifierGroups, publicVariants } from "@/lib/server/menuPricing";
 
 function rule(g) {
   if (g.min > 0 && g.min === g.max) return `Required · pick ${g.min}`;
@@ -10,8 +10,10 @@ function rule(g) {
   return g.max === 1 ? "Optional · pick 1" : `Optional · up to ${g.max}`;
 }
 
-export default function CustomiseDialog({ item, money, onClose, onAdd }) {
+export default function CustomiseDialog({ item, money, onClose, onAdd, initialVariantId = "" }) {
   const groups = useMemo(() => (item ? publicModifierGroups(item).filter((g) => g.options.length) : []), [item]);
+  const variants = useMemo(() => (item ? publicVariants(item) : []), [item]);
+  const [variantId, setVariantId] = useState(initialVariantId);
   const [picked, setPicked] = useState({});
   const [note, setNote] = useState("");
   const [qty, setQty] = useState(1);
@@ -36,11 +38,13 @@ export default function CustomiseDialog({ item, money, onClose, onAdd }) {
 
   const missing = groups.filter((g) => (picked[g.id] || []).length < g.min);
   const mods = groups.flatMap((g) => g.options.filter((o) => (picked[g.id] || []).includes(o.id)));
-  const unit = Number(item.price || 0) + mods.reduce((s, m) => s + Number(m.price || 0), 0);
+  const variant = variants.find((v) => v.id === variantId) || null;
+  const needVariant = variants.length > 0 && !variant;
+  const unit = Number(variant ? variant.price : item.price || 0) + mods.reduce((s, m) => s + Number(m.price || 0), 0);
 
   const submit = () => {
-    if (missing.length) return setTried(true);
-    onAdd(mods, note.trim(), qty);
+    if (missing.length || needVariant) return setTried(true);
+    onAdd(mods, note.trim(), qty, variant);
   };
 
   return (
@@ -55,7 +59,9 @@ export default function CustomiseDialog({ item, money, onClose, onAdd }) {
         <div className="flex items-start gap-3 px-4 pt-4 pb-2">
           <div className="flex-1 min-w-0">
             <div className="text-lg font-bold text-slate-900">{item.name}</div>
-            <div className="text-sm text-slate-500">{money(item.price)}</div>
+            <div className="text-sm text-slate-500">
+              {variants.length ? `from ${money(Math.min(...variants.map((v) => v.price)))}` : money(item.price)}
+            </div>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="h-9 w-9 rounded-lg hover:bg-slate-100 grid place-items-center">
             <X className="h-5 w-5 text-slate-600" />
@@ -63,6 +69,38 @@ export default function CustomiseDialog({ item, money, onClose, onAdd }) {
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 pb-2 space-y-4">
+          {variants.length ? (
+            <fieldset className="space-y-2">
+              <legend className="flex w-full items-baseline justify-between gap-2">
+                <span className="text-sm font-bold text-slate-900">Choose one</span>
+                <span className={`text-xs font-medium ${tried && needVariant ? "text-rose-600" : "text-slate-500"}`}>Required · pick 1</span>
+              </legend>
+              {variants.map((v) => {
+                const on = v.id === variantId;
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => setVariantId(v.id)}
+                    className={`w-full min-h-[52px] flex items-center gap-3 rounded-xl border px-3 py-2 text-left ${
+                      on ? "border-[#DA3224] bg-rose-50" : tried && needVariant ? "border-rose-300" : "border-slate-200"
+                    }`}
+                  >
+                    <span className={`h-5 w-5 shrink-0 grid place-items-center rounded-full border-2 ${on ? "border-[#DA3224] bg-[#DA3224]" : "border-slate-400"}`}>
+                      {on ? <Check className="h-3 w-3 text-white" strokeWidth={3} /> : null}
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-sm font-medium text-slate-900">{v.is_veg ? "🌿 " : ""}{v.name}</span>
+                      {v.description ? <span className="block text-xs text-slate-500">{v.description}</span> : null}
+                    </span>
+                    <span className="text-sm font-semibold text-slate-900">{money(v.price)}</span>
+                  </button>
+                );
+              })}
+            </fieldset>
+          ) : null}
           {groups.map((g) => {
             const sel = picked[g.id] || [];
             const bad = tried && missing.includes(g);
@@ -129,9 +167,9 @@ export default function CustomiseDialog({ item, money, onClose, onAdd }) {
           <button
             type="button"
             onClick={submit}
-            className={`flex-1 h-11 rounded-xl bg-[#DA3224] px-3 text-sm font-semibold text-white ${missing.length ? "opacity-60" : "hover:opacity-90"}`}
+            className={`flex-1 h-11 rounded-xl bg-[#DA3224] px-3 text-sm font-semibold text-white ${missing.length || needVariant ? "opacity-60" : "hover:opacity-90"}`}
           >
-            {missing.length && tried ? `Choose ${missing[0].name}` : `Add · ${money(unit * qty)}`}
+            {needVariant ? "Choose one" : missing.length && tried ? `Choose ${missing[0].name}` : `Add · ${money(unit * qty)}`}
           </button>
         </div>
       </div>

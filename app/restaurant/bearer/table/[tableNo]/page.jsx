@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import CustomiseDialog from "@/components/menu/CustomiseDialog";
-import { lineKey, publicModifierGroups } from "@/lib/server/menuPricing";
+import { lineKey, publicModifierGroups, publicVariants } from "@/lib/server/menuPricing";
 
 const mur = (n) => `MUR ${Number(n || 0).toLocaleString("en-US")}`;
 
@@ -147,12 +147,21 @@ export default function BearerTableOrderPage() {
 
   const qtyOf = (id) => cartItems.reduce((n, l) => n + (l.id === id ? Number(l.qty || 0) : 0), 0);
 
-  const addLine = (item, mods, note, qty) => {
-    const key = lineKey({ item_id: String(item.id), modifiers: mods, note });
-    const unit = Number(item.price || 0) + mods.reduce((sum, m) => sum + Number(m.price || 0), 0);
+  const addLine = (item, mods, note, qty, variant = null) => {
+    const key = lineKey({ item_id: String(item.id), variant_id: variant?.id, modifiers: mods, note });
+    const unit = Number(variant ? variant.price : item.price || 0) + mods.reduce((sum, m) => sum + Number(m.price || 0), 0);
     setCart(prev => ({
       ...prev,
-      [key]: { ...item, key, mods: mods.map(m => ({ id: m.id, name: m.name })), note, price: unit, qty: (prev[key]?.qty || 0) + qty },
+      [key]: {
+        ...item,
+        key,
+        variant_id: variant?.id || null,
+        name: variant ? `${item.name} – ${variant.name}` : item.name,
+        mods: mods.map(m => ({ id: m.id, name: m.name })),
+        note,
+        price: unit,
+        qty: (prev[key]?.qty || 0) + qty,
+      },
     }));
     toast.success(`Added ${item.name}`, { duration: 1000 });
   };
@@ -162,7 +171,7 @@ export default function BearerTableOrderPage() {
       setCart(prev => (prev[item.key] ? { ...prev, [item.key]: { ...prev[item.key], qty: prev[item.key].qty + 1 } } : prev));
       return;
     }
-    if (publicModifierGroups(item).some(g => g.options.length)) return setCustomising(item);
+    if (publicVariants(item).length || publicModifierGroups(item).some(g => g.options.length)) return setCustomising(item);
     addLine(item, [], "", 1);
   };
 
@@ -198,6 +207,7 @@ export default function BearerTableOrderPage() {
         customer_phone: null,
         order_items: cartItems.map(it => ({
           item_id: it.id,
+          variant_id: it.variant_id || undefined,
           qty: Number(it.qty),
           modifiers: (it.mods || []).map(m => m.id),
           note: it.note || undefined,
@@ -505,8 +515,8 @@ export default function BearerTableOrderPage() {
         item={customising}
         money={mur}
         onClose={() => setCustomising(null)}
-        onAdd={(mods, note, qty) => {
-          if (customising) addLine(customising, mods, note, qty);
+        onAdd={(mods, note, qty, variant) => {
+          if (customising) addLine(customising, mods, note, qty, variant);
           setCustomising(null);
         }}
       />

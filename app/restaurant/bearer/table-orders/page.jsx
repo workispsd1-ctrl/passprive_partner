@@ -6,7 +6,7 @@ import { Plus, Minus, ShoppingCart, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 import CustomiseDialog from "@/components/menu/CustomiseDialog";
-import { lineKey, publicModifierGroups } from "@/lib/server/menuPricing";
+import { lineKey, publicModifierGroups, publicVariants } from "@/lib/server/menuPricing";
 
 function money(n) {
   const num = Number(n);
@@ -76,15 +76,16 @@ export default function BearerTableOrdersPage() {
   );
   const total = useMemo(() => Number(subtotal.toFixed(2)), [subtotal]);
 
-  const addLine = (item, section, mods, note, qty) => {
-    const key = lineKey({ item_id: String(item.id), modifiers: mods, note });
-    const unit = Number(item.price || 0) + mods.reduce((sum, m) => sum + Number(m.price || 0), 0);
+  const addLine = (item, section, mods, note, qty, variant = null) => {
+    const key = lineKey({ item_id: String(item.id), variant_id: variant?.id, modifiers: mods, note });
+    const unit = Number(variant ? variant.price : item.price || 0) + mods.reduce((sum, m) => sum + Number(m.price || 0), 0);
     setCart((prev) => ({
       ...prev,
       [key]: {
         key,
         item_id: String(item.id),
-        name: item.name,
+        variant_id: variant?.id || null,
+        name: variant ? `${item.name} – ${variant.name}` : item.name,
         unit_price: Number(unit.toFixed(2)),
         mods: mods.map((m) => ({ id: m.id, name: m.name })),
         note,
@@ -95,7 +96,7 @@ export default function BearerTableOrdersPage() {
   };
 
   const addItem = (item, section) => {
-    if (publicModifierGroups(item).some((g) => g.options.length)) return setCustomising({ item, section });
+    if (publicVariants(item).length || publicModifierGroups(item).some((g) => g.options.length)) return setCustomising({ item, section });
     addLine(item, section, [], "", 1);
   };
 
@@ -156,6 +157,7 @@ export default function BearerTableOrdersPage() {
           notes: notes.trim() || null,
           order_items: cartItems.map((it) => ({
             item_id: it.item_id,
+            variant_id: it.variant_id || undefined,
             qty: Number(it.qty || 0),
             modifiers: (it.mods || []).map((m) => m.id),
             note: it.note || undefined,
@@ -380,8 +382,8 @@ export default function BearerTableOrdersPage() {
         item={customising?.item || null}
         money={money}
         onClose={() => setCustomising(null)}
-        onAdd={(mods, note, qty) => {
-          if (customising) addLine(customising.item, customising.section, mods, note, qty);
+        onAdd={(mods, note, qty, variant) => {
+          if (customising) addLine(customising.item, customising.section, mods, note, qty, variant);
           setCustomising(null);
         }}
       />

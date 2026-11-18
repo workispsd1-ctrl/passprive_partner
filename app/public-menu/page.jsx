@@ -7,7 +7,7 @@ import { fetchRestaurantPublicMenuData } from "@/lib/restaurantData";
 import { createPublicMenuSession, finalizePublicMenuPayment } from "@/lib/publicMenuPayments";
 import { toast } from "sonner";
 import CustomiseDialog from "@/components/menu/CustomiseDialog";
-import { lineKey, publicModifierGroups } from "@/lib/server/menuPricing";
+import { lineKey, publicModifierGroups, publicVariants } from "@/lib/server/menuPricing";
 import {
   Leaf,
   CircleDot,
@@ -36,7 +36,7 @@ function rekeyCart(raw) {
     if (!e?.itemId || !(Number(e.qty) > 0)) continue;
     const mods = Array.isArray(e.mods) ? e.mods : [];
     const note = String(e.note || "");
-    const key = lineKey({ item_id: e.itemId, modifiers: mods, note });
+    const key = lineKey({ item_id: e.itemId, variant_id: e.variantId, modifiers: mods, note });
     out[key] = { ...e, key, mods, note, qty: Number(e.qty) + Number(out[key]?.qty || 0) };
   }
   return out;
@@ -514,20 +514,22 @@ function PublicRestaurantMenuContent() {
     }
   }, [appliedPromo, promoDiscountAmount]);
 
-  const addLine = (section, item, mods, note, qty) => {
+  const addLine = (section, item, mods, note, qty, variant = null) => {
     if (billReady) {
       toast.error("Order is completed. Please proceed to bill payment.");
       return;
     }
     if (!orderSessionId) setOrderSessionId(makeSessionId());
-    const key = lineKey({ item_id: item.id, modifiers: mods, note });
-    const unit = Number(item.price || 0) + mods.reduce((sum, m) => sum + Number(m.price || 0), 0);
+    const key = lineKey({ item_id: item.id, variant_id: variant?.id, modifiers: mods, note });
+    const unit = Number(variant ? variant.price : item.price || 0) + mods.reduce((sum, m) => sum + Number(m.price || 0), 0);
     setCart((prev) => ({
       ...prev,
       [key]: {
         key,
         itemId: item.id,
-        name: item.name,
+        variantId: variant?.id || null,
+        variantName: variant?.name || null,
+        name: variant ? `${item.name} – ${variant.name}` : item.name,
         price: Number(unit.toFixed(2)),
         mods: mods.map((m) => ({ id: m.id, name: m.name, price: m.price })),
         note,
@@ -538,12 +540,12 @@ function PublicRestaurantMenuContent() {
     }));
   };
 
-  const addToCart = (section, item) => {
+  const addToCart = (section, item, variant = null) => {
     if (hasOptions(item)) {
       if (billReady) return toast.error("Order is completed. Please proceed to bill payment.");
-      return setCustomising({ section, item });
+      return setCustomising({ section, item, variantId: variant?.id || "" });
     }
-    addLine(section, item, [], "", 1);
+    addLine(section, item, [], "", 1, variant);
   };
 
   const removeOneFromCart = (key) => {
@@ -658,6 +660,7 @@ function PublicRestaurantMenuContent() {
         customer_phone: enrollLoyalty ? normalizedPhone : "",
         order_items: cartItems.map((it) => ({
           item_id: it.itemId,
+          variant_id: it.variantId || undefined,
           qty: Number(it.qty || 0),
           modifiers: (it.mods || []).map((m) => m.id),
           note: it.note || undefined,
@@ -1061,6 +1064,7 @@ function PublicRestaurantMenuContent() {
                       ...group.items.map((item) => {
                       const img = Array.isArray(item.image_urls) ? item.image_urls[0] : null;
                       const custom = hasOptions(item);
+                      const variants = publicVariants(item);
                       const plainKey = lineKey({ item_id: item.id });
                       const itemLines = cartItems.filter((l) => l.itemId === item.id);
                       const qty = custom
@@ -1110,6 +1114,58 @@ function PublicRestaurantMenuContent() {
                                 <p className="mt-1 text-xs text-slate-600 line-clamp-2">{item.description}</p>
                               ) : null}
 
+                              {variants.length ? (
+                                <div className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-100">
+                                  {variants.map((v) => {
+                                    const vKey = lineKey({ item_id: item.id, variant_id: v.id });
+                                    const vQty = custom
+                                      ? itemLines.filter((l) => l.variantId === v.id).reduce((n, l) => n + Number(l.qty || 0), 0)
+                                      : Number(cart[vKey]?.qty || 0);
+                                    return (
+                                      <div key={v.id} className="flex items-center gap-2 px-2 py-2">
+                                        <div className="flex-1 min-w-0">
+                                          <div className="text-sm font-medium text-slate-900">
+                                            {v.is_veg ? <Leaf className="mr-1 inline h-3.5 w-3.5 text-emerald-600" /> : null}
+                                            {v.name}
+                                          </div>
+                                          {v.description ? <div className="text-xs italic text-slate-500">{v.description}</div> : null}
+                                        </div>
+                                        <div className="text-sm font-bold text-slate-900 shrink-0">{money(v.price)}</div>
+                                        {!custom && vQty > 0 ? (
+                                          <div className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-slate-50 px-1 py-0.5 shrink-0">
+                                            <button
+                                              type="button"
+                                              aria-label="Remove one"
+                                              onClick={() => removeOneFromCart(vKey)}
+                                              className="h-7 w-7 rounded-md border border-slate-200 bg-white inline-flex items-center justify-center"
+                                            >
+                                              <Minus className="h-3.5 w-3.5 text-slate-700" />
+                                            </button>
+                                            <span className="min-w-[16px] text-center text-sm font-semibold">{vQty}</span>
+                                            <button
+                                              type="button"
+                                              aria-label="Add one"
+                                              onClick={() => addToCart(section, item, v)}
+                                              className="h-7 w-7 rounded-md border border-slate-200 bg-white inline-flex items-center justify-center"
+                                            >
+                                              <Plus className="h-3.5 w-3.5 text-slate-700" />
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => addToCart(section, item, v)}
+                                            className="h-8 shrink-0 rounded-lg bg-[#DA3224] px-3 text-xs font-semibold text-white hover:opacity-90 inline-flex items-center gap-1"
+                                          >
+                                            <Plus className="h-3.5 w-3.5" />
+                                            {vQty > 0 ? vQty : "Add"}
+                                          </button>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
                               <div className="mt-2 flex items-center justify-between">
                                 <div className="text-sm sm:text-base font-bold text-slate-900">{money(item.price)}</div>
 
@@ -1151,11 +1207,12 @@ function PublicRestaurantMenuContent() {
                                   </button>
                                 )}
                               </div>
+                              )}
                               {(custom ? itemLines : itemLines.filter((l) => l.note)).map((l) => (
                                 <div key={l.key} className="mt-2 flex items-start justify-between gap-2 rounded-lg bg-slate-50 px-2 py-1.5 text-xs text-slate-700">
                                   <div className="min-w-0">
                                     <div className="font-semibold">
-                                      {l.qty} × {money(l.price)}
+                                      {l.qty} × {l.variantName ? `${l.variantName} · ` : ""}{money(l.price)}
                                     </div>
                                     {l.mods?.length ? <div className="truncate">+ {l.mods.map((m) => m.name).join(", ")}</div> : null}
                                     {l.note ? <div className="truncate italic">“{l.note}”</div> : null}
@@ -1185,12 +1242,13 @@ function PublicRestaurantMenuContent() {
       </div>
 
       <CustomiseDialog
-        key={customising?.item?.id || "closed"}
+        key={customising ? `${customising.item.id}-${customising.variantId || ""}` : "closed"}
         item={customising?.item || null}
+        initialVariantId={customising?.variantId || ""}
         money={money}
         onClose={() => setCustomising(null)}
-        onAdd={(mods, note, qty) => {
-          if (customising) addLine(customising.section, customising.item, mods, note, qty);
+        onAdd={(mods, note, qty, variant) => {
+          if (customising) addLine(customising.section, customising.item, mods, note, qty, variant);
           setCustomising(null);
         }}
       />

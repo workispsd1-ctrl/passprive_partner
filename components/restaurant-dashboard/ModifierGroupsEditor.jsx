@@ -209,3 +209,111 @@ export default function ModifierGroupsEditor({ groups, onChange }) {
     </div>
   );
 }
+
+export function toEditableVariants(variants) {
+  return (Array.isArray(variants) ? variants : []).map((v) => ({
+    id: v.id || uid(),
+    name: v.name || "",
+    description: v.description || "",
+    price: v.price != null ? String(v.price) : "",
+    is_veg: v.is_veg === true,
+    is_available: v.is_available !== false,
+  }));
+}
+
+export function variantsError(variants) {
+  for (const v of variants) {
+    if (!v.name.trim()) return "Give every variant a name.";
+    if (v.price === "" || !Number.isFinite(Number(v.price)) || Number(v.price) < 0) return `Enter a price for ${v.name.trim()}.`;
+  }
+  return "";
+}
+
+export function cleanVariants(variants) {
+  return variants.map((v) => ({
+    id: v.id,
+    name: v.name.trim().slice(0, 120),
+    description: v.description.trim().slice(0, 200) || null,
+    price: Math.round(Number(v.price) * 100) / 100,
+    is_veg: v.is_veg,
+    is_available: v.is_available !== false,
+  }));
+}
+
+export function VariantsEditor({ variants, onChange }) {
+  const set = (i, patch) => onChange(variants.map((v, j) => (j === i ? { ...v, ...patch } : v)));
+  const move = (i, dir) => {
+    const to = i + dir;
+    if (to < 0 || to >= variants.length) return;
+    const next = [...variants];
+    [next[i], next[to]] = [next[to], next[i]];
+    onChange(next);
+  };
+  return (
+    <div className="space-y-2">
+      {variants.map((v, i) => (
+        <div key={v.id} className={`rounded-xl border border-gray-200 p-3 space-y-2 ${v.is_available === false ? "bg-gray-50" : ""}`}>
+          <div className="flex items-center gap-2">
+            <input
+              value={v.name}
+              onChange={(e) => set(i, { name: e.target.value })}
+              placeholder="e.g. Marlin Fumé à la Crème et Oignons"
+              className={`${input} ${v.is_available === false ? "text-gray-400 line-through" : ""}`}
+            />
+            <div className="relative w-32 shrink-0">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">MUR</span>
+              <input
+                value={v.price}
+                onChange={(e) => set(i, { price: priceInput(e.target.value) })}
+                inputMode="decimal"
+                placeholder="690"
+                className={`${input} pl-11`}
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              value={v.description}
+              onChange={(e) => set(i, { description: e.target.value })}
+              placeholder="Description (optional), e.g. Smoked Marlin with Cream and Onions"
+              className={input}
+            />
+            <button
+              type="button"
+              onClick={() => set(i, { is_veg: !v.is_veg })}
+              className={`h-9 shrink-0 rounded-xl border px-2 text-xs font-semibold ${v.is_veg ? "border-green-200 bg-green-50 text-green-700" : "border-gray-200 bg-white text-gray-500"}`}
+            >
+              Veg
+            </button>
+            <button type="button" onClick={() => move(i, -1)} disabled={i === 0} className={iconBtn} aria-label="Move up">
+              <ChevronUp className="h-4 w-4 text-gray-700" />
+            </button>
+            <button type="button" onClick={() => move(i, 1)} disabled={i === variants.length - 1} className={iconBtn} aria-label="Move down">
+              <ChevronDown className="h-4 w-4 text-gray-700" />
+            </button>
+            <button
+              type="button"
+              onClick={() => set(i, { is_available: v.is_available === false })}
+              className={iconBtn}
+              title={v.is_available === false ? "Sold out. Click to show" : "Mark sold out"}
+              aria-label={v.is_available === false ? "Show variant" : "Hide variant"}
+            >
+              {v.is_available === false ? <EyeOff className="h-4 w-4 text-gray-500" /> : <Eye className="h-4 w-4 text-gray-700" />}
+            </button>
+            <button type="button" onClick={() => onChange(variants.filter((_, j) => j !== i))} className={`${iconBtn} hover:bg-red-50`} aria-label="Delete variant">
+              <Trash2 className="h-4 w-4 text-red-600" />
+            </button>
+          </div>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() => onChange([...variants, { id: uid(), name: "", description: "", price: "", is_veg: false, is_available: true }])}
+        className="h-10 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 px-3 text-sm font-semibold inline-flex items-center gap-2"
+      >
+        <Plus className="h-4 w-4" />
+        Add variant
+      </button>
+    </div>
+  );
+}

@@ -31,9 +31,13 @@ import {
 } from "@/lib/restaurantData";
 import ApplyToBranchesButton from "@/components/restaurant-dashboard/ApplyToBranchesButton";
 import ModifierGroupsEditor, {
+  VariantsEditor,
   cleanModifierGroups,
+  cleanVariants,
   modifierGroupsError,
   toEditableGroups,
+  toEditableVariants,
+  variantsError,
 } from "@/components/restaurant-dashboard/ModifierGroupsEditor";
 
 const BUCKET_NAME = "restaurants";
@@ -221,6 +225,7 @@ export default function RestaurantMenuPage() {
   const [itemBest, setItemBest] = useState(false);
   const [itemAvail, setItemAvail] = useState(true);
   const [itemGroups, setItemGroups] = useState([]);
+  const [itemVariants, setItemVariants] = useState([]);
   const [itemSubcat, setItemSubcat] = useState("");
   const [itemError, setItemError] = useState("");
 
@@ -657,6 +662,7 @@ export default function RestaurantMenuPage() {
     setItemAvail(true);
     setItemImages([]);
     setItemGroups([]);
+    setItemVariants([]);
     setItemSubcat("");
     setItemError("");
     setUploading(false);
@@ -684,6 +690,7 @@ export default function RestaurantMenuPage() {
     setItemAvail(item.is_available !== false);
     setItemImages(Array.isArray(item.image_urls) ? item.image_urls : []);
     setItemGroups(toEditableGroups(item.modifier_groups));
+    setItemVariants(toEditableVariants(item.variants));
     setItemSubcat(item.subcategory_id || "");
     setItemModalOpen(true);
   };
@@ -697,7 +704,10 @@ export default function RestaurantMenuPage() {
     const idToUse = editItemIdRef.current || editingItemId || uid();
 
     if (!name) return setItemError("Enter an item name.");
-    if (!Number.isFinite(priceNum) || priceNum < 0) return setItemError("Enter a valid price.");
+    const variantError = variantsError(itemVariants);
+    if (variantError) return setItemError(variantError);
+    const variants = cleanVariants(itemVariants);
+    if (!variants.length && (!Number.isFinite(priceNum) || priceNum < 0)) return setItemError("Enter a valid price.");
     const groupsError = modifierGroupsError(itemGroups);
     if (groupsError) return setItemError(groupsError);
     const modifierGroups = cleanModifierGroups(itemGroups);
@@ -712,7 +722,8 @@ export default function RestaurantMenuPage() {
           id: idToUse,
           name,
           description: description || null,
-          price: priceNum,
+          price: variants.length ? Math.min(...variants.map((v) => v.price)) : priceNum,
+          variants,
           image_urls: itemImages || [],
           is_veg: itemVeg,
           is_bestseller: itemBest,
@@ -1211,7 +1222,18 @@ export default function RestaurantMenuPage() {
                               </div>
 
                               <div className="text-xs text-gray-500 mt-0.5">{it.description || "—"}</div>
-                              <div className="text-sm font-semibold text-gray-900 mt-1">{money(it.price)}</div>
+                              {(it.variants || []).length ? (
+                                <div className="mt-1 space-y-0.5">
+                                  {it.variants.map((v) => (
+                                    <div key={v.id} className={`flex items-baseline gap-2 text-sm ${v.is_available === false ? "text-gray-400 line-through" : "text-gray-800"}`}>
+                                      <span>• {v.name}</span>
+                                      <span className="font-semibold">{money(v.price)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-sm font-semibold text-gray-900 mt-1">{money(it.price)}</div>
+                              )}
                             </div>
                           </div>
 
@@ -1380,6 +1402,9 @@ export default function RestaurantMenuPage() {
 
           <div className="col-span-12 sm:col-span-6">
             <label className="text-sm font-semibold text-gray-700">Price</label>
+            {itemVariants.length ? (
+              <div className="mt-2 rounded-xl border border-dashed border-gray-200 px-3 py-2.5 text-sm text-gray-500">Set per variant below</div>
+            ) : (
             <input
               type="text"
               value={itemPrice}
@@ -1389,6 +1414,7 @@ export default function RestaurantMenuPage() {
               placeholder="199"
               className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-300"
             />
+            )}
           </div>
 
           {(selectedSection?.subcategories || []).length ? (
@@ -1490,6 +1516,14 @@ export default function RestaurantMenuPage() {
                 {itemAvail ? "Visible" : "Hidden"}
               </button>
             </div>
+          </div>
+
+          <div className="col-span-12 border-t border-gray-100 pt-4">
+            <div className="text-sm font-semibold text-gray-700">Variants</div>
+            <p className="mt-1 mb-3 text-xs text-gray-500">
+              Versions of this dish, each with its own price, e.g. Pasta with Tomato Sauce MUR 490, with Smoked Marlin MUR 690. Staff and guests pick one.
+            </p>
+            <VariantsEditor variants={itemVariants} onChange={setItemVariants} />
           </div>
 
           <div className="col-span-12 border-t border-gray-100 pt-4">
