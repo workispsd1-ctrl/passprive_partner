@@ -1,6 +1,6 @@
 import { addBillItems, seatTable, setBillItemQty } from "@/lib/server/billItems";
 import { settleTableBill } from "@/lib/server/settleBill";
-import { claimPrintJob, isQrPending, pendingPrintJobs, releasePrintJob } from "@/lib/server/printJobs";
+import { claimPrintJob, confirmPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, releasePrintJob, unleasePrintJob } from "@/lib/server/printJobs";
 import { heldPromos, PROMO_ERRORS, promoDue, promoLocked, quotePromo, recordPromoAttempt, releasePromo, reservePromo } from "@/lib/server/promoCode";
 import { isBillClosed } from "@/lib/server/tableBill";
 import { readJson, reply, requireTerminal, serverError } from "../../staff/_terminal";
@@ -186,6 +186,21 @@ export async function POST(request) {
     if (action === "claim_print") {
       const ok = await claimPrintJob(ctx.admin, ctx.restaurantId, ctx.terminalId, String(body.job_id || ""));
       return reply({ ok: true, claimed: ok });
+    }
+
+    if (action === "lease_print") {
+      const ok = await leasePrintJob(ctx.admin, ctx.restaurantId, ctx.terminalId, String(body.job_id || ""));
+      return reply({ ok: true, leased: ok });
+    }
+
+    if (action === "confirm_print") {
+      await confirmPrintJob(ctx.admin, ctx.restaurantId, ctx.terminalId, String(body.job_id || ""));
+      return reply({ ok: true });
+    }
+
+    if (action === "unlease_print") {
+      await unleasePrintJob(ctx.admin, ctx.restaurantId, ctx.terminalId, String(body.job_id || ""));
+      return reply({ ok: true });
     }
 
     if (action === "release_print") {
