@@ -116,6 +116,7 @@ export async function POST(request) {
     const priced = priceLines(
       items.map((it) => ({
         item_id: it?.item_id ?? it?.id,
+        variant_id: it?.variant_id,
         quantity: Number(it?.quantity ?? it?.qty),
         modifiers: it?.modifiers,
         note: it?.note,
