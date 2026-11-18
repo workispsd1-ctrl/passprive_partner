@@ -6,7 +6,7 @@ import { bookingStatusChangeError, isBillClosed, isBillPaid, quickPaymentRecord 
 import { isQrPending, queueReceiptJob } from "@/lib/server/printJobs";
 import { mergeLines } from "@/lib/server/menuPricing";
 import { payBillPart } from "@/lib/server/splitBill";
-import { cancelPayRequest, cashGuard, createPayRequest, orderPayRequests } from "@/lib/server/payRequests";
+import { cancelPayRequest, cashGuard, createPayBills, createPayRequest, orderPayRequests } from "@/lib/server/payRequests";
 
 const isClosed = isBillClosed;
 
@@ -200,6 +200,11 @@ export async function POST(request) {
 
     if (action === "request_pos_payment") {
       const { status, body: out } = await createPayRequest(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      return NextResponse.json(out, { status });
+    }
+
+    if (action === "split_to_pos") {
+      const { status, body: out } = await createPayBills(ctx.admin, ctx.restaurantId, ctx.userId, body);
       return NextResponse.json(out, { status });
     }
 
