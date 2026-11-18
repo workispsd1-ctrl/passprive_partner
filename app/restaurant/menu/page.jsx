@@ -149,14 +149,18 @@ function safeMenu(rawInput) {
   };
 }
 
-function itemBuckets(section) {
+function itemBuckets(section, subId) {
   const items = section?.items || [];
   const subcats = Array.isArray(section?.subcategories) ? section.subcategories : [];
-  if (!subcats.length) return [{ id: "all", name: null, items }];
+  if (subId) {
+    const c = subcats.find((x) => x.id === subId);
+    return c ? [{ id: c.id, name: null, items: items.filter((i) => i.subcategory_id === c.id) }] : [];
+  }
   const known = new Set(subcats.map((c) => c.id));
-  const buckets = subcats.map((c) => ({ id: c.id, name: c.name, items: items.filter((i) => i.subcategory_id === c.id) }));
-  buckets.push({ id: "other", name: "No subcategory", items: items.filter((i) => !known.has(i.subcategory_id)) });
-  return buckets.filter((b) => b.items.length);
+  return [
+    { id: "", name: null, items: items.filter((i) => !known.has(i.subcategory_id)) },
+    ...subcats.map((c) => ({ id: c.id, name: c.name, items: items.filter((i) => i.subcategory_id === c.id) })),
+  ];
 }
 
 function Dialog({ open, onClose, title, children, footer }) {
@@ -185,6 +189,8 @@ export default function RestaurantMenuPage() {
   const [restaurantId, setRestaurantId] = useState(null);
   const [menu, setMenu] = useState(EMPTY_MENU());
   const [selectedSectionId, setSelectedSectionId] = useState(null);
+  const [selectedSubId, setSelectedSubId] = useState("");
+  const [subDialog, setSubDialog] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -204,7 +210,6 @@ export default function RestaurantMenuPage() {
   const [sectionName, setSectionName] = useState("");
   const [sectionDesc, setSectionDesc] = useState("");
   const [sectionGroup, setSectionGroup] = useState("");
-  const [sectionSubcats, setSectionSubcats] = useState([]);
 
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState(null);
@@ -235,6 +240,7 @@ export default function RestaurantMenuPage() {
     if (!selectedSectionId) return null;
     return sections.find((s) => s.id === selectedSectionId) || null;
   }, [sections, selectedSectionId]);
+  const selectedSubName = (selectedSection?.subcategories || []).find((c) => c.id === selectedSubId)?.name || "";
 
   const qrSrc = useMemo(() => {
     if (!menuUrl) return "";
@@ -304,6 +310,7 @@ export default function RestaurantMenuPage() {
       originalMenuRef.current = parsed;
       setMenu(parsed);
       setSelectedSectionId(parsed.sections?.[0]?.id || null);
+      setSelectedSubId("");
 
       if (typeof window !== "undefined") {
         const catalogUrl = `${window.location.origin}/public-menu?id=${restaurant.restaurantId}`;
@@ -316,6 +323,7 @@ export default function RestaurantMenuPage() {
 
       setLoading(false);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -463,7 +471,6 @@ export default function RestaurantMenuPage() {
     setSectionName("");
     setSectionDesc("");
     setSectionGroup("");
-    setSectionSubcats([]);
     setSectionModalOpen(true);
   };
 
@@ -473,7 +480,6 @@ export default function RestaurantMenuPage() {
     setSectionName(s.name || "");
     setSectionDesc(s.description || "");
     setSectionGroup(s.group || "");
-    setSectionSubcats((Array.isArray(s.subcategories) ? s.subcategories : []).map((c) => ({ id: c.id || uid(), name: c.name || "" })));
     setSectionModalOpen(true);
   };
 
@@ -484,30 +490,18 @@ export default function RestaurantMenuPage() {
     const description = sectionDesc.trim();
     const group = sectionGroup.trim().slice(0, 40) || null;
     if (!name) return;
-    const subcategories = sectionSubcats
-      .map((c) => ({ id: c.id, name: c.name.trim().slice(0, 60) }))
-      .filter((c) => c.name);
-    const keep = new Set(subcategories.map((c) => c.id));
 
     const nextMenu = (() => {
       const next = { ...menu, sections: [...(menu.sections || [])] };
       if (editingSectionId) {
         next.sections = next.sections.map((s) =>
-          s.id === editingSectionId
-            ? {
-                ...s,
-                name,
-                description: description || null,
-                group,
-                subcategories,
-                items: (s.items || []).map((i) => (i.subcategory_id && !keep.has(i.subcategory_id) ? { ...i, subcategory_id: null } : i)),
-              }
-            : s
+          s.id === editingSectionId ? { ...s, name, description: description || null, group } : s
         );
       } else {
-        const newSection = { id: uid(), name, description: description || null, group, subcategories, items: [] };
+        const newSection = { id: uid(), name, description: description || null, group, subcategories: [], items: [] };
         next.sections = [newSection, ...next.sections];
         setSelectedSectionId(newSection.id);
+        setSelectedSubId("");
       }
       return { ...next, updated_at: new Date().toISOString() };
     })();
@@ -520,7 +514,59 @@ export default function RestaurantMenuPage() {
     setSectionName("");
     setSectionDesc("");
     setSectionGroup("");
-    setSectionSubcats([]);
+  };
+
+  const selectSection = (sectionId, subId = "") => {
+    setSelectedSectionId(sectionId);
+    setSelectedSubId(subId);
+  };
+
+  const saveSubcategory = async () => {
+    if (!isSubscribed || !subDialog) return;
+    const name = subDialog.name.trim().slice(0, 60);
+    if (!name) return;
+    const newId = subDialog.id || uid();
+    const nextMenu = {
+      ...menu,
+      updated_at: new Date().toISOString(),
+      sections: (menu.sections || []).map((s) => {
+        if (s.id !== subDialog.sectionId) return s;
+        const list = Array.isArray(s.subcategories) ? s.subcategories : [];
+        return {
+          ...s,
+          subcategories: subDialog.id ? list.map((c) => (c.id === subDialog.id ? { ...c, name } : c)) : [...list, { id: newId, name }],
+        };
+      }),
+    };
+    setMenu(nextMenu);
+    setSubDialog(null);
+    selectSection(subDialog.sectionId, newId);
+    await saveMenu(nextMenu);
+  };
+
+  const deleteSubcategory = async (section, sub) => {
+    if (!isSubscribed) return;
+    const count = (section.items || []).filter((i) => i.subcategory_id === sub.id).length;
+    const msg = count
+      ? `Delete "${sub.name}"? Its ${count} item${count === 1 ? "" : "s"} will stay in ${section.name}.`
+      : `Delete "${sub.name}"?`;
+    if (!window.confirm(msg)) return;
+    const nextMenu = {
+      ...menu,
+      updated_at: new Date().toISOString(),
+      sections: (menu.sections || []).map((s) =>
+        s.id !== section.id
+          ? s
+          : {
+              ...s,
+              subcategories: (s.subcategories || []).filter((c) => c.id !== sub.id),
+              items: (s.items || []).map((i) => (i.subcategory_id === sub.id ? { ...i, subcategory_id: null } : i)),
+            }
+      ),
+    };
+    setMenu(nextMenu);
+    if (selectedSubId === sub.id) setSelectedSubId("");
+    await saveMenu(nextMenu);
   };
 
   const deleteSection = async (sectionId) => {
@@ -530,7 +576,7 @@ export default function RestaurantMenuPage() {
     const nextMenu = { ...menu, sections: nextSections, updated_at: new Date().toISOString() };
 
     setMenu(nextMenu);
-    if (selectedSectionId === sectionId) setSelectedSectionId(nextSections[0]?.id || null);
+    if (selectedSectionId === sectionId) selectSection(nextSections[0]?.id || null);
 
     await saveMenu(nextMenu);
   };
@@ -616,10 +662,11 @@ export default function RestaurantMenuPage() {
     setUploading(false);
   };
 
-  const openNewItem = () => {
+  const openNewItem = (subId = selectedSubId) => {
     if (!selectedSectionId || !isSubscribed) return;
     resetItemModal();
     editItemIdRef.current = uid();
+    setItemSubcat(subId || "");
     setItemModalOpen(true);
   };
 
@@ -946,16 +993,18 @@ export default function RestaurantMenuPage() {
               ) : (
                 <div className="divide-y divide-gray-100">
                   {sections.map((s, idx) => {
-                    const active = s.id === selectedSectionId;
+                    const active = s.id === selectedSectionId && !selectedSubId;
+                    const subcats = Array.isArray(s.subcategories) ? s.subcategories : [];
                     return (
-                      <div key={s.id} className={`px-4 py-3 hover:bg-gray-50 ${active ? "bg-blue-50" : "bg-white"}`}>
+                      <div key={s.id}>
+                      <div className={`px-4 py-3 hover:bg-gray-50 ${active ? "bg-blue-50" : "bg-white"}`}>
                         <div className="flex items-start justify-between gap-3">
                           <div
                             role="button"
                             tabIndex={0}
-                            onClick={() => setSelectedSectionId(s.id)}
+                            onClick={() => selectSection(s.id)}
                             onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") setSelectedSectionId(s.id);
+                              if (e.key === "Enter" || e.key === " ") selectSection(s.id);
                             }}
                             className="flex-1 cursor-pointer select-none"
                           >
@@ -971,6 +1020,15 @@ export default function RestaurantMenuPage() {
                           </div>
 
                           <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setSubDialog({ sectionId: s.id, id: null, name: "" })}
+                              title="Add subcategory"
+                              className="h-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 px-2 flex items-center gap-1 text-xs font-semibold text-gray-700"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                              Sub
+                            </button>
                             <button
                               type="button"
                               onClick={() => moveSection(s.id, "up")}
@@ -1004,6 +1062,38 @@ export default function RestaurantMenuPage() {
                           </div>
                         </div>
                       </div>
+                      {subcats.map((c) => {
+                        const subActive = s.id === selectedSectionId && selectedSubId === c.id;
+                        const count = (s.items || []).filter((i) => i.subcategory_id === c.id).length;
+                        return (
+                          <div
+                            key={c.id}
+                            className={`flex items-center gap-2 border-t border-gray-50 py-2 pl-9 pr-4 hover:bg-gray-50 ${subActive ? "bg-blue-50" : "bg-white"}`}
+                          >
+                            <button type="button" onClick={() => selectSection(s.id, c.id)} className="flex-1 min-w-0 text-left">
+                              <div className="truncate text-sm font-medium text-gray-800">↳ {c.name}</div>
+                              <div className="text-xs text-gray-500">{count} items</div>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSubDialog({ sectionId: s.id, id: c.id, name: c.name })}
+                              aria-label="Rename subcategory"
+                              className="h-8 w-8 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center"
+                            >
+                              <Pencil className="h-3.5 w-3.5 text-gray-700" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteSubcategory(s, c)}
+                              aria-label="Delete subcategory"
+                              className="h-8 w-8 rounded-lg border border-gray-200 bg-white hover:bg-red-50 flex items-center justify-center"
+                            >
+                              <Trash2 className="h-3.5 w-3.5 text-red-600" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                      </div>
                     );
                   })}
                 </div>
@@ -1015,15 +1105,22 @@ export default function RestaurantMenuPage() {
             <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
                 <div>
-                  <div className="text-sm font-semibold text-gray-900">{selectedSection ? selectedSection.name : "Items"}</div>
+                  <div className="text-sm font-semibold text-gray-900">
+                    {selectedSection ? selectedSection.name : "Items"}
+                    {selectedSubName ? <span className="text-gray-500"> › {selectedSubName}</span> : null}
+                  </div>
                   <div className="text-xs text-gray-500">
-                    {selectedSection ? selectedSection.description || "Manage items in this section" : "Select a section"}
+                    {!selectedSection
+                      ? "Select a section"
+                      : selectedSubName
+                      ? `New items are added to ${selectedSubName}`
+                      : selectedSection.description || "Manage items in this section"}
                   </div>
                 </div>
 
                 <button
                   type="button"
-                  onClick={openNewItem}
+                  onClick={() => openNewItem()}
                   disabled={!selectedSectionId}
                   className="h-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 px-3 text-sm font-semibold flex items-center gap-2"
                 >
@@ -1034,14 +1131,35 @@ export default function RestaurantMenuPage() {
 
               {!selectedSection ? (
                 <div className="px-4 py-12 text-center text-sm text-gray-500">Select a section to manage items.</div>
-              ) : (selectedSection.items || []).length === 0 ? (
-                <div className="px-4 py-12 text-center text-sm text-gray-500">No items in this section yet.</div>
+              ) : itemBuckets(selectedSection, selectedSubId).every((b) => !b.items.length && !b.name) ? (
+                <div className="px-4 py-12 text-center text-sm text-gray-500">
+                  {selectedSubName ? `No items in ${selectedSubName} yet. Click Add item.` : "No items in this section yet."}
+                </div>
               ) : (
                 <div className="divide-y divide-gray-100">
-                  {itemBuckets(selectedSection).map((bucket) => (
-                    <React.Fragment key={bucket.id}>
+                  {itemBuckets(selectedSection, selectedSubId).map((bucket) => (
+                    <React.Fragment key={bucket.id || "direct"}>
                       {bucket.name ? (
-                        <div className="px-4 py-2 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">{bucket.name}</div>
+                        <div className="flex items-center justify-between gap-2 px-4 py-2 bg-gray-50">
+                          <button
+                            type="button"
+                            onClick={() => selectSection(selectedSection.id, bucket.id)}
+                            className="text-xs font-semibold uppercase tracking-wide text-gray-600 hover:text-gray-900"
+                          >
+                            {bucket.name} · {bucket.items.length}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openNewItem(bucket.id)}
+                            className="h-7 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 px-2 text-xs font-semibold text-gray-700 inline-flex items-center gap-1"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            Add item here
+                          </button>
+                        </div>
+                      ) : null}
+                      {bucket.name && !bucket.items.length ? (
+                        <div className="px-4 py-3 text-xs text-gray-400">No items yet.</div>
                       ) : null}
                   {bucket.items.map((it) => {
                     const imgs = Array.isArray(it.image_urls) ? it.image_urls : [];
@@ -1196,39 +1314,6 @@ export default function RestaurantMenuPage() {
           </div>
 
           <div>
-            <label className="text-sm font-semibold text-gray-700">Subcategories</label>
-            <p className="mt-1 text-xs text-gray-500">Optional. Splits this section into smaller groups, e.g. Drinks into Cocktails, Wines, Soft drinks.</p>
-            <div className="mt-2 space-y-2">
-              {sectionSubcats.map((c, ci) => (
-                <div key={c.id} className="flex items-center gap-2">
-                  <input
-                    value={c.name}
-                    onChange={(e) => setSectionSubcats((prev) => prev.map((x, i) => (i === ci ? { ...x, name: e.target.value } : x)))}
-                    placeholder="e.g. Cocktails"
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-gray-300"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setSectionSubcats((prev) => prev.filter((_, i) => i !== ci))}
-                    className="h-9 w-9 shrink-0 rounded-xl border border-gray-200 bg-white hover:bg-red-50 flex items-center justify-center"
-                    aria-label="Remove subcategory"
-                  >
-                    <Trash2 className="h-4 w-4 text-red-600" />
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => setSectionSubcats((prev) => [...prev, { id: uid(), name: "" }])}
-                className="h-9 rounded-xl border border-dashed border-gray-300 px-3 text-xs font-semibold text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Add subcategory
-              </button>
-            </div>
-          </div>
-
-          <div>
             <label className="text-sm font-semibold text-gray-700">Description</label>
             <textarea
               value={sectionDesc}
@@ -1314,7 +1399,7 @@ export default function RestaurantMenuPage() {
                 onChange={(e) => setItemSubcat(e.target.value)}
                 className="mt-2 h-[42px] w-full rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-gray-300"
               >
-                <option value="">None</option>
+                <option value="">None (directly in {selectedSection.name})</option>
                 {selectedSection.subcategories.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -1417,6 +1502,41 @@ export default function RestaurantMenuPage() {
 
           {itemError ? <div className="col-span-12 text-sm text-red-600">{itemError}</div> : null}
         </div>
+      </Dialog>
+      <Dialog
+        open={Boolean(subDialog)}
+        onClose={() => setSubDialog(null)}
+        title={subDialog?.id ? "Rename subcategory" : `Add subcategory to ${sections.find((x) => x.id === subDialog?.sectionId)?.name || "section"}`}
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setSubDialog(null)}
+              className="h-10 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 px-4 text-sm font-semibold"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={saveSubcategory}
+              disabled={!subDialog?.name.trim()}
+              className="h-10 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-4 text-sm font-semibold"
+            >
+              {subDialog?.id ? "Save" : "Create"}
+            </button>
+          </div>
+        }
+      >
+        <label className="text-sm font-semibold text-gray-700">Subcategory name</label>
+        <input
+          autoFocus
+          value={subDialog?.name || ""}
+          onChange={(e) => setSubDialog((d) => (d ? { ...d, name: e.target.value } : d))}
+          onKeyDown={(e) => e.key === "Enter" && saveSubcategory()}
+          placeholder="e.g. Pasta La Vista ! Nos Tagliatelles Italiennes"
+          className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-300"
+        />
+        <p className="mt-2 text-xs text-gray-500">After creating it, click Add item to put dishes inside it.</p>
       </Dialog>
     </div>
   );

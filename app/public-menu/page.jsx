@@ -20,6 +20,16 @@ import {
 
 const hasOptions = (item) => publicModifierGroups(item).some((g) => g.options.length);
 
+function bySubcategory(section) {
+  const items = section.items || [];
+  const subs = (Array.isArray(section.subcategories) ? section.subcategories : []).filter((c) => c?.id && c?.name);
+  const known = new Set(subs.map((c) => c.id));
+  return [
+    { id: "", name: null, items: items.filter((i) => !known.has(i.subcategory_id)) },
+    ...subs.map((c) => ({ id: c.id, name: c.name, items: items.filter((i) => i.subcategory_id === c.id) })),
+  ].filter((g) => g.items.length);
+}
+
 function rekeyCart(raw) {
   const out = {};
   for (const e of Object.values(raw || {})) {
@@ -1042,7 +1052,13 @@ function PublicRestaurantMenuContent() {
                   {(section.items || []).length === 0 ? (
                     <div className="text-sm text-slate-500">No available items.</div>
                   ) : (
-                    section.items.map((item) => {
+                    bySubcategory(section).flatMap((group) => [
+                      group.name ? (
+                        <div key={`sub-${group.id}`} className="pt-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+                          {group.name}
+                        </div>
+                      ) : null,
+                      ...group.items.map((item) => {
                       const img = Array.isArray(item.image_urls) ? item.image_urls[0] : null;
                       const custom = hasOptions(item);
                       const plainKey = lineKey({ item_id: item.id });
@@ -1158,7 +1174,8 @@ function PublicRestaurantMenuContent() {
                           </div>
                         </div>
                       );
-                    })
+                    }),
+                    ])
                   )}
                 </div>
               </div>
