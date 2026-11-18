@@ -12,6 +12,45 @@ function overlapMinutes(aStart, aEnd, bStart, bEnd) {
   return Math.max(aStart, bStart) < Math.min(aEnd, bEnd);
 }
 
+async function createBooking(ctx, body) {
+  const bad = (error) => NextResponse.json({ ok: false, error }, { status: 400 });
+  const name = String(body?.customer_name || "").trim().slice(0, 80);
+  const phone = String(body?.customer_phone || "").trim().slice(0, 20);
+  const date = String(body?.booking_date || "");
+  const time = String(body?.booking_time || "").slice(0, 5);
+  const party = Number(body?.party_size);
+  const note = String(body?.special_request || "").trim().slice(0, 500) || null;
+
+  if (!name) return bad("Guest name is required.");
+  if (phone.replace(/\D/g, "").length < 7) return bad("Enter a valid phone number.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return bad("Pick a date.");
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return bad("Enter a time like 19:30.");
+  if (!Number.isInteger(party) || party < 1 || party > 100) return bad("Party size must be 1 to 100.");
+
+  const nowMu = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString().slice(0, 16).replace("T", " ");
+  if (`${date} ${time}` < nowMu) return bad("That time has already passed.");
+
+  const { data, error } = await ctx.admin
+    .from("restaurant_bookings")
+    .insert({
+      restaurant_id: ctx.restaurantId,
+      customer_name: name,
+      customer_phone: phone,
+      booking_date: date,
+      booking_time: time,
+      party_size: party,
+      special_request: note,
+      status: "confirmed",
+      source: "partner",
+      handled_by: "merchant",
+      read: true,
+    })
+    .select("id")
+    .single();
+  if (error) return NextResponse.json({ ok: false, error: "Could not save the booking." }, { status: 400 });
+  return NextResponse.json({ ok: true, booking: data });
+}
+
 export async function GET(request) {
   try {
     const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
@@ -184,6 +223,7 @@ export async function POST(request) {
 
     const body = await request.json();
     const action = String(body?.action || "").trim().toLowerCase();
+    if (action === "create") return createBooking(ctx, body);
     if (action !== "auto_assign_tables") {
       return NextResponse.json({ ok: false, error: "Invalid action" }, { status: 400 });
     }

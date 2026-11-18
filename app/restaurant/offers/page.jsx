@@ -6,6 +6,7 @@ import {
   fetchOwnedRestaurantOffersData,
   replaceRestaurantOffers,
 } from "@/lib/restaurantData";
+import ApplyToBranchesButton from "@/components/restaurant-dashboard/ApplyToBranchesButton";
 
 /* ----------------------------
    OFFER TYPES
@@ -815,6 +816,10 @@ export default function OffersPage() {
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_8px_30px_-20px_rgba(15,23,42,0.25)]">
           <p className="text-xs text-slate-500">Partner Offer Center</p>
           <p className="text-3xl font-semibold text-slate-900 mt-1">{activeOffers.length} active campaigns</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <ApplyToBranchesButton what="offers" label="Offers" disabled={saving} />
+            <ApplyToBranchesButton what="deals" label="Deals" disabled={saving} />
+          </div>
         </div>
 
         {renderSection("General Offers", generalOffers, OFFER_KIND.GENERAL, "Standard campaigns available to every partner")}

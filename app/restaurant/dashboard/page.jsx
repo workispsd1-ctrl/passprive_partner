@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { resolveActiveRestaurant } from "@/lib/restaurant-partner/activeRestaurant";
+import BranchScopeToggle from "@/components/restaurant-dashboard/BranchScopeToggle";
 import { useI18n } from "@/lib/i18n";
 import { money, paymentTypeKey } from "@/components/restaurant-dashboard/PaymentAlertNotifier";
 
@@ -153,6 +154,8 @@ export default function RestaurantDashboardPage() {
   const [busyBooking, setBusyBooking] = useState("");
   const [reservationsView, setReservationsView] = useState("today");
   const [busyOrder, setBusyOrder] = useState("");
+  const [scope, setScope] = useState({ all: false, canSeeAll: false, names: {} });
+  const [scopeVersion, setScopeVersion] = useState(0);
 
   const bounds = useMemo(() => rangeBounds(range, customFrom, customTo), [range, customFrom, customTo]);
 
@@ -160,12 +163,13 @@ export default function RestaurantDashboardPage() {
     setRefreshing(true);
     setError(null);
     try {
-      const { active } = await resolveActiveRestaurant(supabaseBrowser);
+      const { active, list, canSeeAll, allBranches, scopeIds } = await resolveActiveRestaurant(supabaseBrowser);
       if (!active?.id) {
         setError({ key: "dash.noRestaurant" });
         return;
       }
       setRestaurant(active);
+      setScope({ all: allBranches, canSeeAll, count: scopeIds.length, names: Object.fromEntries(list.map((r) => [r.id, r.name])) });
       const rid = active.id;
       const today = ymdInTz(new Date());
       const weekAhead = addDays(today, 6);
@@ -177,16 +181,16 @@ export default function RestaurantDashboardPage() {
       const [ordersRes, tableRes, sessionsRes, bookingsRes, reviewsRes, hoursRes, recentPaymentsRes, todayPaymentsRes] = await Promise.all([
         supabaseBrowser
           .from("restaurant_orders")
-          .select("id,order_number,customer_name,total_amount,payment_status,order_status,pickup_code,created_at")
-          .eq("restaurant_id", rid)
+          .select("id,restaurant_id,order_number,customer_name,total_amount,payment_status,order_status,pickup_code,created_at")
+          .in("restaurant_id", scopeIds)
           .gte("created_at", fromIso)
           .lt("created_at", toIso)
           .order("created_at", { ascending: false })
           .limit(2000),
         supabaseBrowser
           .from("restaurant_table_bookings")
-          .select("id,customer_name,total_amount,payment_status,booking_status,table_no,created_at")
-          .eq("restaurant_id", rid)
+          .select("id,restaurant_id,customer_name,total_amount,payment_status,booking_status,table_no,created_at")
+          .in("restaurant_id", scopeIds)
           .gte("created_at", fromIso)
           .lt("created_at", toIso)
           .order("created_at", { ascending: false })
@@ -194,15 +198,15 @@ export default function RestaurantDashboardPage() {
         supabaseBrowser
           .from("payment_sessions")
           .select("id,amount_major,status,created_at,order_payload:gateway_payload->order_payload")
-          .eq("restaurant_id", rid)
+          .in("restaurant_id", scopeIds)
           .eq("payment_context", "BILL_PAYMENT")
           .gte("created_at", fromIso)
           .lt("created_at", toIso)
           .limit(2000),
         supabaseBrowser
           .from("restaurant_bookings")
-          .select("id,customer_name,booking_date,booking_time,party_size,status,proposed_at,special_request,created_at")
-          .eq("restaurant_id", rid)
+          .select("id,restaurant_id,customer_name,booking_date,booking_time,party_size,status,proposed_at,special_request,created_at")
+          .in("restaurant_id", scopeIds)
           .gte("booking_date", createdFrom)
           .lte("booking_date", bookingTo)
           .order("booking_time", { ascending: true })
@@ -210,15 +214,15 @@ export default function RestaurantDashboardPage() {
         supabaseBrowser
           .from("restaurant_reviews")
           .select("id,rating,review_text,username_snapshot,owner_reply_text,created_at")
-          .eq("restaurant_id", rid)
+          .in("restaurant_id", scopeIds)
           .order("created_at", { ascending: false })
           .limit(500),
         supabaseBrowser
           .from("restaurant_opening_hours")
           .select("day_of_week,open_time,close_time,is_closed")
           .eq("restaurant_id", rid),
-        supabaseBrowser.rpc("partner_recent_payments", { p_restaurant_id: rid, p_since: null, p_limit: 6 }),
-        supabaseBrowser.rpc("partner_recent_payments", { p_restaurant_id: rid, p_since: startOfDay(today).toISOString(), p_limit: 200 }),
+        supabaseBrowser.rpc("partner_recent_payments", { p_restaurant_id: allBranches ? null : rid, p_since: null, p_limit: 6 }),
+        supabaseBrowser.rpc("partner_recent_payments", { p_restaurant_id: allBranches ? null : rid, p_since: startOfDay(today).toISOString(), p_limit: 200 }),
       ]);
 
       const firstError = [ordersRes, tableRes, sessionsRes, bookingsRes, reviewsRes, hoursRes, recentPaymentsRes, todayPaymentsRes].find(
@@ -243,7 +247,9 @@ export default function RestaurantDashboardPage() {
     } finally {
       setRefreshing(false);
     }
-  }, [bounds]);
+  }, [bounds, scopeVersion]);
+
+  const branchOf = (row) => (scope.all && row?.restaurant_id ? ` · ${scope.names[row.restaurant_id] || ""}` : "");
 
   useEffect(() => {
     if (range === "custom" && (!customFrom || !customTo)) return undefined;
@@ -399,7 +405,7 @@ export default function RestaurantDashboardPage() {
     if (a.kind === "pickupNew") {
       return {
         title: t("dash.action.newPickup", { number: a.order.order_number || "" }).trim(),
-        meta: `${a.order.customer_name || t("common.guest")} · ${mur(a.order.total_amount)} · ${fmt.time(a.order.created_at)}`,
+        meta: `${a.order.customer_name || t("common.guest")}${branchOf(a.order)} · ${mur(a.order.total_amount)} · ${fmt.time(a.order.created_at)}`,
       };
     }
     if (a.kind === "table") {
@@ -411,7 +417,7 @@ export default function RestaurantDashboardPage() {
     if (a.kind === "pickupReady") {
       return {
         title: t("dash.action.pickupReady", { number: a.order.order_number || "" }).replace(/\s+/g, " ").trim(),
-        meta: `${a.order.customer_name || t("common.guest")}${a.order.pickup_code ? ` · ${t("common.code", { code: a.order.pickup_code })}` : ""}`,
+        meta: `${a.order.customer_name || t("common.guest")}${branchOf(a.order)}${a.order.pickup_code ? ` · ${t("common.code", { code: a.order.pickup_code })}` : ""}`,
       };
     }
     return { title: t("dash.action.reviews", { count: a.count }), meta: t("dash.action.reviewsHint") };
@@ -424,8 +430,11 @@ export default function RestaurantDashboardPage() {
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-xl font-bold text-gray-900">{restaurant?.name || t("nav.dashboard")}</h1>
-            {view.status ? (
+            <h1 className="truncate text-xl font-bold text-gray-900">
+              {scope.all ? t("scope.allTitle", { count: scope.count }) : restaurant?.name || t("nav.dashboard")}
+            </h1>
+            {scope.canSeeAll ? <BranchScopeToggle allBranches={scope.all} onChange={() => setScopeVersion((v) => v + 1)} /> : null}
+            {view.status && !scope.all ? (
               <span
                 className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                   view.status.open ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-600"
@@ -435,7 +444,7 @@ export default function RestaurantDashboardPage() {
                 {t(view.status.key, { time: view.status.time ? fmt.slot(view.status.time) : "" })}
               </span>
             ) : null}
-            {restaurant?.is_active === false ? (
+            {!scope.all && restaurant?.is_active === false ? (
               <span className="rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">{t("dash.hidden")}</span>
             ) : null}
           </div>
@@ -479,7 +488,7 @@ export default function RestaurantDashboardPage() {
                   <IconTile icon={CalendarClock} />
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-semibold text-gray-900">
-                      {t("dash.action.bookingRequest", { name: a.booking.customer_name || t("common.guest") })}
+                      {t("dash.action.bookingRequest", { name: a.booking.customer_name || t("common.guest") })}{branchOf(a.booking)}
                     </div>
                     <div className="truncate text-xs text-gray-500">
                       {a.booking.booking_date === data.today ? t("common.today") : fmt.day(a.booking.booking_date)} · {fmt.slot(a.booking.booking_time)} ·{" "}
@@ -691,7 +700,7 @@ export default function RestaurantDashboardPage() {
                       <div className="text-[11px] text-gray-500">{b.booking_date === data.today ? t("common.today") : fmt.day(b.booking_date)}</div>
                     ) : null}
                   </div>
-                  <div className="min-w-0 flex-1 truncate text-sm text-gray-900">{b.customer_name || t("common.guest")}</div>
+                  <div className="min-w-0 flex-1 truncate text-sm text-gray-900">{b.customer_name || t("common.guest")}{branchOf(b)}</div>
                   <span className="inline-flex items-center gap-1 text-xs text-gray-500">
                     <Users className="h-3.5 w-3.5" />
                     {b.party_size}
@@ -735,7 +744,7 @@ export default function RestaurantDashboardPage() {
                         <OrderPill status={o.order_status} />
                       </div>
                       <div className="truncate text-xs text-gray-500">
-                        {o.customer_name || t("common.guest")} · {fmt.time(o.created_at)} · {mur(o.total_amount)}
+                        {o.customer_name || t("common.guest")}{branchOf(o)} · {fmt.time(o.created_at)} · {mur(o.total_amount)}
                         {o.pickup_code ? ` · ${t("common.code", { code: o.pickup_code })}` : ""}
                       </div>
                     </div>
@@ -766,7 +775,7 @@ export default function RestaurantDashboardPage() {
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold text-gray-900">{t("common.table", { table: o.table_no || "—" })}</div>
                     <div className="truncate text-xs text-gray-500">
-                      {o.customer_name || t("common.guest")} · {fmt.time(o.created_at)}
+                      {o.customer_name || t("common.guest")}{branchOf(o)} · {fmt.time(o.created_at)}
                     </div>
                   </div>
                   <div className="text-sm font-semibold text-gray-900">{mur(o.total_amount)}</div>

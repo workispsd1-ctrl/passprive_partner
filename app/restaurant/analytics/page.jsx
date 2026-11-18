@@ -2,6 +2,8 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { resolveActiveRestaurant } from "@/lib/restaurant-partner/activeRestaurant";
+import BranchScopeToggle from "@/components/restaurant-dashboard/BranchScopeToggle";
 import {
   fetchOwnedRestaurantBase,
   fetchOwnedRestaurantOffersData,
@@ -343,6 +345,7 @@ export default function Page() {
 
   const [restaurantId, setRestaurantId] = useState(null);
   const [restaurantRow, setRestaurantRow] = useState(null);
+  const [scope, setScope] = useState({ all: false, canSeeAll: false, ids: [] });
 
   const [bookings, setBookings] = useState([]);
   const [tableBookings, setTableBookings] = useState([]);
@@ -374,14 +377,18 @@ export default function Page() {
     }
 
     let rData = null;
+    let scopeIds = [];
     try {
+      const resolved = await resolveActiveRestaurant(supabaseBrowser);
+      scopeIds = resolved.scopeIds;
+      setScope({ all: resolved.allBranches, canSeeAll: resolved.canSeeAll, ids: scopeIds });
       const [restaurantBase, restaurantReviews, offersData] = await Promise.all([
         fetchOwnedRestaurantBase(
           supabaseBrowser,
           user.id,
           "id, booking_enabled, created_at"
         ),
-        fetchOwnedRestaurantReviews(supabaseBrowser, user.id),
+        fetchOwnedRestaurantReviews(supabaseBrowser, user.id, scopeIds),
         fetchOwnedRestaurantOffersData(supabaseBrowser, user.id),
       ]);
 
@@ -431,19 +438,19 @@ export default function Page() {
       supabaseBrowser
         .from("restaurant_bookings")
         .select("id, customer_user_id, customer_name, customer_phone, customer_email, booking_date, booking_time, duration_minutes, party_size, status, source, cancelled_at, cancel_reason, created_at, updated_at, read")
-        .eq("restaurant_id", rid)
+        .in("restaurant_id", scopeIds.length ? scopeIds : [rid])
         .order("created_at", { ascending: false })
         .limit(2000),
       supabaseBrowser
         .from("restaurant_table_bookings")
         .select("id, customer_name, customer_phone, booking_status, payment_status, total_amount, created_at, table_no")
-        .eq("restaurant_id", rid)
+        .in("restaurant_id", scopeIds.length ? scopeIds : [rid])
         .order("created_at", { ascending: false })
         .limit(2000),
       supabaseBrowser
         .from("payment_sessions")
         .select("id, payment_context, amount_major, currency_code, status, created_at, tracking_id")
-        .eq("restaurant_id", rid)
+        .in("restaurant_id", scopeIds.length ? scopeIds : [rid])
         .order("created_at", { ascending: false })
         .limit(2000),
     ]);
@@ -778,13 +785,18 @@ export default function Page() {
         <div className="relative max-w-6xl mx-auto px-6 pt-8 pb-4">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
+              {scope.canSeeAll ? <BranchScopeToggle allBranches={scope.all} onChange={() => bootstrap()} /> : null}
               <div className="mt-3 flex flex-wrap gap-2">
-                <Chip tone="amber">
-                  Offers {a.offersActive}/{a.offersTotal}
-                </Chip>
-                <Chip tone="indigo">
-                  Dish discounts {a.dishActive}/{a.dishTotal}
-                </Chip>
+                {scope.all ? null : (
+                  <>
+                    <Chip tone="amber">
+                      Offers {a.offersActive}/{a.offersTotal}
+                    </Chip>
+                    <Chip tone="indigo">
+                      Dish discounts {a.dishActive}/{a.dishTotal}
+                    </Chip>
+                  </>
+                )}
               
                 
                 <Chip tone="emerald">

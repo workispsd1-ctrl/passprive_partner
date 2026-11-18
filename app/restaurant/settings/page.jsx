@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchRestaurantSettings, saveRestaurantSettings } from "@/lib/restaurantData";
+import ApplyToBranchesButton from "@/components/restaurant-dashboard/ApplyToBranchesButton";
 
 function isMissingRestaurantPaymentDetailsTable(error) {
   const msg = String(error?.message || "").toLowerCase();
@@ -858,6 +859,10 @@ export default function Page() {
                 <Label>Advance booking days</Label>
                 <Input value={advanceDays} onChange={setAdvanceDays} type="number" placeholder="30" />
               </div>
+            </div>
+
+            <div>
+              <ApplyToBranchesButton what="booking_rules" label="Booking rules" disabled={dirty} />
             </div>
 
             <Toggle checked={isActive} onChange={setIsActive} label="Restaurant visibility" desc="If off, restaurant won’t be discoverable by customers." />

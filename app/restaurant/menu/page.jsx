@@ -28,6 +28,7 @@ import {
   replaceRestaurantMediaUrls,
   saveRestaurantMenuData,
 } from "@/lib/restaurantData";
+import ApplyToBranchesButton from "@/components/restaurant-dashboard/ApplyToBranchesButton";
 
 const BUCKET_NAME = "restaurants";
 const BUCKET_ROOT_FOLDER = "menu";
@@ -731,6 +732,9 @@ export default function RestaurantMenuPage() {
 
   return (
     <div className="p-6 space-y-5">
+      <div className="flex justify-end">
+        <ApplyToBranchesButton what="menu" label="Menu" disabled={saving || uploadingFullMenu} />
+      </div>
       <div className="rounded-2xl border border-gray-200 bg-white p-4">
         <div className="text-sm font-semibold text-gray-900">Menu Card Images</div>
         <div className="text-xs text-gray-500 mt-1">Uploaded images are shown below.</div>

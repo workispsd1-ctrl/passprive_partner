@@ -8,6 +8,7 @@ import {
   upsertRestaurantOpeningHour,
 } from "@/lib/restaurantData";
 import { showToast } from "@/components/restaurant-dashboard/useToast";
+import ApplyToBranchesButton from "@/components/restaurant-dashboard/ApplyToBranchesButton";
 
 const DAYS = [
   { label: "Sunday", value: 0 },
@@ -207,11 +208,14 @@ export default function RestaurantTimingsPage() {
       ) : null}
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">Opening Hours</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Manage restaurant opening and closing hours for each day. Mark any day as closed if needed.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Opening Hours</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Manage restaurant opening and closing hours for each day. Mark any day as closed if needed.
+            </p>
+          </div>
+          <ApplyToBranchesButton what="hours" label="Opening hours" disabled={loading || savingDay !== null} />
         </div>
       </section>
 
