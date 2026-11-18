@@ -6,15 +6,14 @@ import { bookingStatusChangeError, isBillClosed, isBillPaid, quickPaymentRecord 
 import { isQrPending, queueReceiptJob } from "@/lib/server/printJobs";
 import { mergeLines } from "@/lib/server/menuPricing";
 import { payBillPart } from "@/lib/server/splitBill";
-import { cancelPayRequest, createPayRequest, latestPayRequest } from "@/lib/server/payRequests";
-import { VAT_RATE, vatSplit } from "@/lib/server/tillStats";
+import { cancelPayRequest, cashGuard, createPayRequest, orderPayRequests } from "@/lib/server/payRequests";
 
 const isClosed = isBillClosed;
 
 async function queuePartPrint(ctx, orderId, out) {
   const { data: row } = await ctx.admin
     .from("restaurant_table_bookings")
-    .select("id, table_no, guest_count, order_items, total_amount, tax_amount")
+    .select("id, table_no, guest_count, order_items, total_amount")
     .eq("id", orderId)
     .eq("restaurant_id", ctx.restaurantId)
     .maybeSingle();
@@ -23,11 +22,10 @@ async function queuePartPrint(ctx, orderId, out) {
   const bill = { order_id: row.id, table_no: row.table_no, guests: row.guest_count, bill_total: totalCents / 100 };
   const paidCents = (out.payments || []).reduce((n, p) => n + Math.round(Number(p.amount || 0) * 100), 0);
   if (out.closed) {
-    const vat = vatSplit(totalCents, Math.round(Number(row.tax_amount || 0) * 100)).tax;
     await queueReceiptJob(ctx.admin, ctx.restaurantId, {
       orderId: row.id,
       kind: "final_bill",
-      payload: { ...bill, items: row.order_items || [], payments: out.payments || [], vat_amount: vat / 100, vat_rate: VAT_RATE * 100 },
+      payload: { ...bill, items: row.order_items || [], payments: out.payments || [] },
     });
   } else {
     await queueReceiptJob(ctx.admin, ctx.restaurantId, {
@@ -193,6 +191,8 @@ export async function POST(request) {
       if (String(body?.method || "").toUpperCase() !== "CASH") {
         return NextResponse.json({ ok: false, error: "Card and MauCas are taken on the POS. Send the payment to the POS." }, { status: 400 });
       }
+      const held = await cashGuard(ctx.admin, ctx.restaurantId, body);
+      if (held) return NextResponse.json({ ok: false, error: held }, { status: 409 });
       const { status, body: out } = await payBillPart(ctx.admin, ctx.restaurantId, ctx.userId, { ...body, request_id: undefined });
       if (out.ok) await queuePartPrint(ctx, String(body.order_id || ""), out);
       return NextResponse.json(out, { status });
@@ -209,8 +209,8 @@ export async function POST(request) {
     }
 
     if (action === "pos_payment_status") {
-      const req = await latestPayRequest(ctx.admin, ctx.restaurantId, String(body?.order_id || ""));
-      return NextResponse.json({ ok: true, request: req });
+      const requests = await orderPayRequests(ctx.admin, ctx.restaurantId, String(body?.order_id || ""));
+      return NextResponse.json({ ok: true, requests, request: requests[requests.length - 1] || null });
     }
 
     if (action === "settle") {

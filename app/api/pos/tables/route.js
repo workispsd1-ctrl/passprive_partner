@@ -1,9 +1,8 @@
 import { addBillItems, seatTable, setBillItemQty } from "@/lib/server/billItems";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { payBillPart } from "@/lib/server/splitBill";
-import { VAT_RATE, vatSplit } from "@/lib/server/tillStats";
 import { claimPrintJob, confirmPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, releasePrintJob, TICKET_KINDS, unleasePrintJob } from "@/lib/server/printJobs";
-import { cancelPayRequest, pendingPayRequests } from "@/lib/server/payRequests";
+import { cancelPayRequest, cashGuard, pendingPayRequests } from "@/lib/server/payRequests";
 import { heldPromos, PROMO_ERRORS, promoDue, promoLocked, quotePromo, recordPromoAttempt, releasePromo, reservePromo } from "@/lib/server/promoCode";
 import { isBillClosed } from "@/lib/server/tableBill";
 import { readJson, reply, requireTerminal, serverError } from "../../staff/_terminal";
@@ -19,7 +18,7 @@ function isPaidOnline(o) {
   return o?.source === "public_menu" && ["PAID", "COMPLETED"].includes(String(o?.payment_status || "").toUpperCase());
 }
 const ORDER_COLUMNS =
-  "id, table_no, guest_count, customer_name, notes, booking_status, payment_status, subtotal_amount, total_amount, tax_amount, tip_amount, order_items, created_at, updated_at, source, qr_pending:order_details->qr_pending, payments:order_details->payments";
+  "id, table_no, guest_count, customer_name, notes, booking_status, payment_status, subtotal_amount, total_amount, tip_amount, order_items, created_at, updated_at, source, qr_pending:order_details->qr_pending, payments:order_details->payments";
 
 function thumbnail(urls) {
   const url = Array.isArray(urls) ? String(urls[0] || "") : "";
@@ -96,12 +95,7 @@ async function liveTables({ admin, restaurantId, printKinds }) {
     print_jobs: printJobs,
     pay_requests: payRequests,
     tables: tablesRes.data || [],
-    orders: orders.map((o) => {
-      const gross = Math.round(Number(o.total_amount || 0) * 100);
-      const vat = vatSplit(gross, Math.round(Number(o.tax_amount || 0) * 100)).tax;
-      const out = { ...o, vat_rate: VAT_RATE * 100, vat_amount: vat / 100, net_amount: (gross - vat) / 100 };
-      return promos.has(o.id) ? { ...out, promo: promos.get(o.id) } : out;
-    }),
+    orders: orders.map((o) => (promos.has(o.id) ? { ...o, promo: promos.get(o.id) } : o)),
   };
 }
 
@@ -265,6 +259,10 @@ export async function POST(request) {
     if (action === "pay_part") {
       if (!body.gateway && !(await isReadyToPay(ctx, String(body.order_id || "")))) {
         return reply({ ok: false, error: "Mark this table completed first." }, 409);
+      }
+      if (!body.request_id) {
+        const held = await cashGuard(ctx.admin, ctx.restaurantId, body);
+        if (held) return reply({ ok: false, error: "Part of this bill is waiting in To collect. Pay those shares first." }, 409);
       }
       const { status, body: out } = await payBillPart(ctx.admin, ctx.restaurantId, ctx.userId, body, ctx.terminalId);
       return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);
