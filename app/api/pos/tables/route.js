@@ -2,7 +2,8 @@ import { addBillItems, seatTable, setBillItemQty } from "@/lib/server/billItems"
 import { settleTableBill } from "@/lib/server/settleBill";
 import { payBillPart } from "@/lib/server/splitBill";
 import { VAT_RATE, vatSplit } from "@/lib/server/tillStats";
-import { claimPrintJob, confirmPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, releasePrintJob, unleasePrintJob } from "@/lib/server/printJobs";
+import { claimPrintJob, confirmPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, releasePrintJob, TICKET_KINDS, unleasePrintJob } from "@/lib/server/printJobs";
+import { cancelPayRequest, pendingPayRequests } from "@/lib/server/payRequests";
 import { heldPromos, PROMO_ERRORS, promoDue, promoLocked, quotePromo, recordPromoAttempt, releasePromo, reservePromo } from "@/lib/server/promoCode";
 import { isBillClosed } from "@/lib/server/tableBill";
 import { readJson, reply, requireTerminal, serverError } from "../../staff/_terminal";
@@ -62,8 +63,8 @@ function menuSections(menuJson) {
     .filter((section) => section.items.length > 0);
 }
 
-async function liveTables({ admin, restaurantId }) {
-  const [tablesRes, ordersRes, merchantRes, printJobs] = await Promise.all([
+async function liveTables({ admin, restaurantId, printKinds }) {
+  const [tablesRes, ordersRes, merchantRes, printJobs, payRequests] = await Promise.all([
     admin
       .from("restaurant_table_layouts")
       .select("table_no, label, capacity")
@@ -82,7 +83,8 @@ async function liveTables({ admin, restaurantId }) {
       .select("name, registered_name, brn, full_address, phone")
       .eq("id", restaurantId)
       .maybeSingle(),
-    pendingPrintJobs(admin, restaurantId).catch(() => []),
+    pendingPrintJobs(admin, restaurantId, printKinds).catch(() => []),
+    pendingPayRequests(admin, restaurantId).catch(() => []),
   ]);
   if (tablesRes.error) throw tablesRes.error;
   if (ordersRes.error) throw ordersRes.error;
@@ -92,6 +94,7 @@ async function liveTables({ admin, restaurantId }) {
   return {
     merchant: merchantRes.data || null,
     print_jobs: printJobs,
+    pay_requests: payRequests,
     tables: tablesRes.data || [],
     orders: orders.map((o) => {
       const gross = Math.round(Number(o.total_amount || 0) * 100);
@@ -152,6 +155,13 @@ export async function POST(request) {
     if (ctx.error) return ctx.error;
     const body = await readJson(request);
     const action = String(body.action || "list");
+    const accepted = Array.isArray(body.print_kinds) ? body.print_kinds.map(String) : [];
+    ctx.printKinds = [...new Set([...TICKET_KINDS, ...accepted.filter((k) => ["part_receipt", "final_bill"].includes(k))])];
+
+    if (action === "decline_payment") {
+      const { status, body: out } = await cancelPayRequest(ctx.admin, ctx.restaurantId, ctx.userId, body, "declined");
+      return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);
+    }
 
     if (action === "list") return reply({ ok: true, ...(await liveTables(ctx)) });
 

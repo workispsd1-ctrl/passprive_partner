@@ -3,11 +3,40 @@ import { setBillItemQty } from "@/lib/server/billItems";
 import { extractOrderItems, normalizeItems, settleTableBill } from "@/lib/server/settleBill";
 import { resolveCashierRestaurant } from "../_shared";
 import { bookingStatusChangeError, isBillClosed, isBillPaid, quickPaymentRecord } from "@/lib/server/tableBill";
-import { isQrPending } from "@/lib/server/printJobs";
+import { isQrPending, queueReceiptJob } from "@/lib/server/printJobs";
 import { mergeLines } from "@/lib/server/menuPricing";
 import { payBillPart } from "@/lib/server/splitBill";
+import { cancelPayRequest, createPayRequest, latestPayRequest } from "@/lib/server/payRequests";
+import { VAT_RATE, vatSplit } from "@/lib/server/tillStats";
 
 const isClosed = isBillClosed;
+
+async function queuePartPrint(ctx, orderId, out) {
+  const { data: row } = await ctx.admin
+    .from("restaurant_table_bookings")
+    .select("id, table_no, guest_count, order_items, total_amount, tax_amount")
+    .eq("id", orderId)
+    .eq("restaurant_id", ctx.restaurantId)
+    .maybeSingle();
+  if (!row) return;
+  const totalCents = Math.round(Number(row.total_amount || 0) * 100);
+  const bill = { order_id: row.id, table_no: row.table_no, guests: row.guest_count, bill_total: totalCents / 100 };
+  const paidCents = (out.payments || []).reduce((n, p) => n + Math.round(Number(p.amount || 0) * 100), 0);
+  if (out.closed) {
+    const vat = vatSplit(totalCents, Math.round(Number(row.tax_amount || 0) * 100)).tax;
+    await queueReceiptJob(ctx.admin, ctx.restaurantId, {
+      orderId: row.id,
+      kind: "final_bill",
+      payload: { ...bill, items: row.order_items || [], payments: out.payments || [], vat_amount: vat / 100, vat_rate: VAT_RATE * 100 },
+    });
+  } else {
+    await queueReceiptJob(ctx.admin, ctx.restaurantId, {
+      orderId: row.id,
+      kind: "part_receipt",
+      payload: { ...bill, part: out.part, paid_so_far: paidCents / 100 },
+    });
+  }
+}
 
 async function releaseFinished(ctx, tables, orders) {
   const active = new Set((orders || []).filter((o) => !isClosed(o)).map((o) => Number(o.table_no)));
@@ -161,8 +190,27 @@ export async function POST(request) {
     }
 
     if (action === "pay_part") {
-      const { status, body: out } = await payBillPart(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      if (String(body?.method || "").toUpperCase() !== "CASH") {
+        return NextResponse.json({ ok: false, error: "Card and MauCas are taken on the POS. Send the payment to the POS." }, { status: 400 });
+      }
+      const { status, body: out } = await payBillPart(ctx.admin, ctx.restaurantId, ctx.userId, { ...body, request_id: undefined });
+      if (out.ok) await queuePartPrint(ctx, String(body.order_id || ""), out);
       return NextResponse.json(out, { status });
+    }
+
+    if (action === "request_pos_payment") {
+      const { status, body: out } = await createPayRequest(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      return NextResponse.json(out, { status });
+    }
+
+    if (action === "cancel_pos_payment") {
+      const { status, body: out } = await cancelPayRequest(ctx.admin, ctx.restaurantId, ctx.userId, body, "cancelled");
+      return NextResponse.json(out, { status });
+    }
+
+    if (action === "pos_payment_status") {
+      const req = await latestPayRequest(ctx.admin, ctx.restaurantId, String(body?.order_id || ""));
+      return NextResponse.json({ ok: true, request: req });
     }
 
     if (action === "settle") {
