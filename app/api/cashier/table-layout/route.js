@@ -179,6 +179,9 @@ export async function POST(request) {
       if (rowErr) return NextResponse.json({ ok: false, error: rowErr.message }, { status: 400 });
       if (!row?.id) return NextResponse.json({ ok: false, error: "Order not found." }, { status: 404 });
       if (isClosed(row)) return NextResponse.json({ ok: false, error: "This bill is already closed." }, { status: 400 });
+      if (Array.isArray(row.order_details?.payments) && row.order_details.payments.length) {
+        return NextResponse.json({ ok: false, error: "Part of this bill is already paid, so the table can't be cancelled." }, { status: 409 });
+      }
 
       const prevDetails = row.order_details && typeof row.order_details === "object" ? row.order_details : {};
       const { data: voided, error: upErr } = await ctx.admin

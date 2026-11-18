@@ -1,5 +1,6 @@
 import { addBillItems, seatTable, setBillItemQty } from "@/lib/server/billItems";
 import { settleTableBill } from "@/lib/server/settleBill";
+import { payBillPart } from "@/lib/server/splitBill";
 import { claimPrintJob, confirmPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, releasePrintJob, unleasePrintJob } from "@/lib/server/printJobs";
 import { heldPromos, PROMO_ERRORS, promoDue, promoLocked, quotePromo, recordPromoAttempt, releasePromo, reservePromo } from "@/lib/server/promoCode";
 import { isBillClosed } from "@/lib/server/tableBill";
@@ -16,7 +17,7 @@ function isPaidOnline(o) {
   return o?.source === "public_menu" && ["PAID", "COMPLETED"].includes(String(o?.payment_status || "").toUpperCase());
 }
 const ORDER_COLUMNS =
-  "id, table_no, guest_count, customer_name, notes, booking_status, payment_status, subtotal_amount, total_amount, order_items, created_at, updated_at, source, qr_pending:order_details->qr_pending";
+  "id, table_no, guest_count, customer_name, notes, booking_status, payment_status, subtotal_amount, total_amount, tip_amount, order_items, created_at, updated_at, source, qr_pending:order_details->qr_pending, payments:order_details->payments";
 
 function thumbnail(urls) {
   const url = Array.isArray(urls) ? String(urls[0] || "") : "";
@@ -212,12 +213,15 @@ export async function POST(request) {
       const orderId = String(body.order_id || "");
       const { data: row, error } = await ctx.admin
         .from("restaurant_table_bookings")
-        .select("id, total_amount, booking_status, payment_status")
+        .select("id, total_amount, booking_status, payment_status, payments:order_details->payments")
         .eq("id", orderId)
         .eq("restaurant_id", ctx.restaurantId)
         .maybeSingle();
       if (error) throw error;
       if (!row || isBillClosed(row)) return reply({ ok: false, error: "This bill is already closed." }, 409);
+      if (Array.isArray(row.payments) && row.payments.length) {
+        return reply({ ok: false, error: "Part of this bill is already paid, so a promo code can't be added." }, 409);
+      }
       const billCents = Math.round(Number(row.total_amount || 0) * 100);
       if (await promoLocked(ctx.admin, ctx.restaurantId, ctx.terminalId)) {
         return reply({ ok: false, error: PROMO_ERRORS.locked }, 429);
@@ -241,6 +245,14 @@ export async function POST(request) {
     }
 
     if (action === "promo_due") return reply({ ok: true, ...(await promoDue(ctx.admin, ctx.restaurantId)) });
+
+    if (action === "pay_part") {
+      if (!body.gateway && !(await isReadyToPay(ctx, String(body.order_id || "")))) {
+        return reply({ ok: false, error: "Mark this table completed first." }, 409);
+      }
+      const { status, body: out } = await payBillPart(ctx.admin, ctx.restaurantId, ctx.userId, body, ctx.terminalId);
+      return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);
+    }
 
     if (action === "settle") {
       if (!body.gateway && !(await isReadyToPay(ctx, String(body.order_id || "")))) {
