@@ -3,8 +3,8 @@ import { NextResponse } from "next/server";
 import { serviceClient } from "@/lib/server/deviceSession";
 import { PAY_BILL_PLANS } from "@/lib/server/plan";
 import { queueOrderTicket } from "@/lib/server/printJobs";
+import { fromCents, menuIndex, mergeLines, priceLines } from "@/lib/server/menuPricing";
 
-const MAX_LINES = 100;
 const MAX_QTY = 50;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -37,55 +37,6 @@ function isOpen(row) {
   const booking = String(row?.booking_status || "").toUpperCase();
   const payment = String(row?.payment_status || "").toUpperCase();
   return !["CANCELLED", "PAID"].includes(booking) && !["PAID", "COMPLETED"].includes(payment);
-}
-
-function menuPrices(menuJson) {
-  let menu = menuJson;
-  if (typeof menu === "string") {
-    try {
-      menu = JSON.parse(menu);
-    } catch {
-      menu = null;
-    }
-  }
-  const prices = new Map();
-  for (const section of Array.isArray(menu?.sections) ? menu.sections : []) {
-    for (const item of Array.isArray(section?.items) ? section.items : []) {
-      const price = Number(item?.price);
-      if (!item?.id || item.is_available === false || !Number.isFinite(price) || price < 0) continue;
-      prices.set(String(item.id), { name: String(item.name || "Item").slice(0, 120), price: money(price) });
-    }
-  }
-  return prices;
-}
-
-function priceItems(rawItems, prices) {
-  if (!Array.isArray(rawItems) || rawItems.length === 0 || rawItems.length > MAX_LINES) return null;
-  const lines = new Map();
-  for (const raw of rawItems) {
-    const itemId = String(raw?.item_id || raw?.id || "");
-    const qty = Number(raw?.qty);
-    const menuItem = prices.get(itemId);
-    if (!menuItem || !Number.isInteger(qty) || qty < 1 || qty > MAX_QTY) return null;
-    const prev = lines.get(itemId);
-    lines.set(itemId, { item_id: itemId, name: menuItem.name, qty: (prev?.qty || 0) + qty, unit_price: menuItem.price });
-  }
-  return [...lines.values()].map((l) => ({ ...l, line_total: money(l.qty * l.unit_price) }));
-}
-
-function mergeItems(existing, incoming) {
-  const map = new Map();
-  for (const item of [...(Array.isArray(existing) ? existing : []), ...incoming]) {
-    const key = String(item?.item_id || item?.name || "");
-    if (!key) continue;
-    const prev = map.get(key);
-    const qty = Number(item?.qty || 0);
-    const line = Number(item?.line_total ?? qty * Number(item?.unit_price || 0));
-    map.set(key, prev
-      ? { ...prev, qty: prev.qty + qty, line_total: money(prev.line_total + line) }
-      : { item_id: item?.item_id || key, name: item?.name || "", qty, unit_price: money(item?.unit_price), line_total: money(line) });
-  }
-  return [...map.values()];
 }
 
 async function resolveTable(admin, request, body) {
@@ -152,10 +103,11 @@ async function findOpenOrder(admin, restaurantId, tableNo, { orderId, sessionId 
 
 async function upsertOrder(admin, ctx, body) {
   const payload = body.payload && typeof body.payload === "object" ? body.payload : {};
-  const items = priceItems(payload.order_items, menuPrices(ctx.restaurant.menu_json));
+  const priced = priceLines(payload.order_items, menuIndex(ctx.restaurant.menu_json), { maxQty: MAX_QTY });
+  const items = priced?.lines || null;
   if (!items) return fail("Some items in your cart are no longer available. Please refresh the menu.");
 
-  const subtotal = money(items.reduce((sum, it) => sum + it.line_total, 0));
+  const subtotal = fromCents(priced.subtotalCents);
   const tax = 0;
   const notes = String(payload.notes || "").trim().slice(0, 500) || null;
   const sessionId = UUID_RE.test(String(payload.session_id || "")) ? String(payload.session_id) : crypto.randomUUID();
@@ -215,7 +167,7 @@ async function upsertOrder(admin, ctx, body) {
     if (currentErr) return serverError(currentErr);
 
     const update = {
-      order_items: mergeItems(current.order_items, items),
+      order_items: mergeLines(current.order_items, items),
       order_details: { ...(current.order_details || {}), session_id: current.order_details?.session_id || sessionId },
       subtotal_amount: money(Number(current.subtotal_amount || 0) + subtotal),
       tax_amount: money(Number(current.tax_amount || 0) + tax),

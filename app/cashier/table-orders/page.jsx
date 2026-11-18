@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { QrCode, Clock3, ReceiptText, UserRound, X } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import LineExtras from "@/components/menu/LineExtras";
 
 const STATUS = ["PLACED", "CONFIRMED", "PREPARING", "SERVED", "CANCELLED"];
 
@@ -225,7 +226,7 @@ export default function CashierTableOrdersPage() {
                   ) : (
                     extractItems(selected).map((it, idx) => (
                       <div key={`${selected.id}-${idx}`} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-                        <div className="text-slate-800">{it?.name || "Item"} x {Number(it?.qty || 0)}</div>
+                        <div className="text-slate-800">{it?.name || "Item"} x {Number(it?.qty || 0)}<LineExtras line={it} /></div>
                         <div className="font-semibold text-slate-900">{money(Number(it?.line_total || Number(it?.qty || 0) * Number(it?.unit_price || 0)))}</div>
                       </div>
                     ))

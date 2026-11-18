@@ -5,6 +5,7 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { resolveActiveRestaurant } from "@/lib/restaurant-partner/activeRestaurant";
 import { Bell, Phone, Hash, ArrowLeft } from "lucide-react";
 import { isStaffPlacedOrder } from "@/lib/staffOrder";
+import { extrasText } from "@/components/menu/LineExtras";
 
 const STATUS = {
   PLACED: "PLACED",
@@ -434,7 +435,7 @@ export default function TableOrdersPage() {
             const line = Number(it?.line_total || qty * unit);
             return `<tr>
               <td class="col-index">${idx + 1}</td>
-              <td class="col-item">${esc(it?.name || "Item")}</td>
+              <td class="col-item">${esc(it?.name || "Item")}${extrasText(it) ? `<div style="font-size:11px;color:#64748b">${esc(extrasText(it))}</div>` : ""}</td>
               <td class="col-qty">${qty}</td>
               <td class="col-money">${mur(unit)}</td>
               <td class="col-money">${mur(line)}</td>
@@ -784,7 +785,7 @@ export default function TableOrdersPage() {
                   key={`${it?.item_id || it?.name || "item"}-${idx}`}
                   className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-medium text-slate-700"
                 >
-                  {String(it?.name || "Item")} x{qty} • MUR {money(lineTotal)}
+                  {String(it?.name || "Item")}{extrasText(it) ? ` (${extrasText(it)})` : ""} x{qty} • MUR {money(lineTotal)}
                 </span>
               );
             })}

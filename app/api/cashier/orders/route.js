@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { seatTable } from "@/lib/server/billItems";
 import { resolveCashierRestaurant } from "../_shared";
-import { fromCents, menuIndex, priceLines } from "@/lib/server/menuPricing";
+import { fromCents, menuIndex, mergeLines, priceLines } from "@/lib/server/menuPricing";
 import { isBillClosed } from "@/lib/server/tableBill";
 import { queueOrderTicket } from "@/lib/server/printJobs";
 
@@ -15,56 +15,6 @@ function randomCode(prefix = "") {
 
 function isTableOccupied(row) {
   return !isBillClosed(row);
-}
-
-function mergeOrderItems(existingItems, incomingItems) {
-  const base = Array.isArray(existingItems) ? existingItems : [];
-  const incoming = Array.isArray(incomingItems) ? incomingItems : [];
-  const map = new Map();
-
-  for (const item of base) {
-    const key = String(item?.item_id || item?.id || item?.name || "").trim();
-    if (!key) continue;
-    map.set(key, {
-      item_id: item?.item_id || key,
-      name: item?.name || "",
-      qty: Number(item?.qty || 0),
-      unit_price: Number(item?.unit_price || 0),
-      line_total: Number(item?.line_total || Number(item?.qty || 0) * Number(item?.unit_price || 0)),
-    });
-  }
-
-  for (const item of incoming) {
-    const key = String(item?.item_id || item?.id || item?.name || "").trim();
-    if (!key) continue;
-    const qty = Number(item?.qty || 0);
-    const unit = Number(item?.unit_price || 0);
-    const line = Number(item?.line_total || qty * unit);
-    const prev = map.get(key);
-    if (!prev) {
-      map.set(key, {
-        item_id: item?.item_id || key,
-        name: item?.name || "",
-        qty,
-        unit_price: unit,
-        line_total: line,
-      });
-      continue;
-    }
-    map.set(key, {
-      ...prev,
-      name: prev.name || item?.name || "",
-      qty: Number(prev.qty || 0) + qty,
-      line_total: Number(prev.line_total || 0) + line,
-    });
-  }
-
-  return Array.from(map.values()).map((x) => ({
-    ...x,
-    qty: Number(Number(x.qty || 0).toFixed(3)),
-    unit_price: toFixed2(x.unit_price || 0),
-    line_total: toFixed2(x.line_total || 0),
-  }));
 }
 
 export async function GET(request) {
@@ -168,6 +118,7 @@ export async function POST(request) {
         item_id: it?.item_id ?? it?.id,
         quantity: Number(it?.quantity ?? it?.qty),
         modifiers: it?.modifiers,
+        note: it?.note,
       })),
       menuIndex(menuRow?.menu_json)
     );
@@ -195,7 +146,7 @@ export async function POST(request) {
         const prevSubtotal = Number(openExisting.subtotal_amount || 0);
         const prevTax = Number(openExisting.tax_amount || 0);
         const prevTotal = Number(openExisting.total_amount || 0);
-        const mergedItems = mergeOrderItems(openExisting.order_items, normalizedItems);
+        const mergedItems = mergeLines(openExisting.order_items, normalizedItems);
         const nextSubtotal = toFixed2(prevSubtotal + subtotal);
         const nextTax = toFixed2(prevTax + tax);
         const nextTotal = toFixed2(prevTotal + total);

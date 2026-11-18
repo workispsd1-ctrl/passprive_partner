@@ -6,6 +6,7 @@ import { X, Ban } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { areaKindMeta, sortAreas } from "@/lib/restaurant-partner/tableAreas";
 import { toast } from "sonner";
+import { extrasText } from "@/components/menu/LineExtras";
 
 const BLOCK_KEY_PREFIX = "cashier_blocked_tables_";
 const JOIN_KEY_PREFIX = "cashier_joined_tables_";
@@ -244,7 +245,7 @@ export default function CashierTableLayoutPage() {
   };
 
   const cancelOrderItem = async (orderId, item) => {
-    const itemKey = String(item?.item_id || item?.id || item?.name || "").trim();
+    const itemKey = String(item?.line_key || item?.item_id || item?.id || item?.name || "").trim();
     if (!orderId || !itemKey) return;
 
     try {
@@ -688,7 +689,7 @@ export default function CashierTableLayoutPage() {
                         <div className="mt-3 flex flex-wrap gap-2">
                           {items.length ? items.map((it, idx) => (
                             <span key={`${o.id}-${idx}`} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-700">
-                              <span>{it?.name || "Item"} x {Number(it?.qty || 0)}</span>
+                              <span>{it?.name || "Item"} x {Number(it?.qty || 0)}{extrasText(it) ? ` · ${extrasText(it)}` : ""}</span>
                               <button
                                 type="button"
                                 onClick={() => cancelOrderItem(o.id, it)}

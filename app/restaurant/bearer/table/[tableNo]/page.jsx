@@ -18,6 +18,10 @@ import {
   Send
 } from "lucide-react";
 import { toast } from "sonner";
+import CustomiseDialog from "@/components/menu/CustomiseDialog";
+import { lineKey, publicModifierGroups } from "@/lib/server/menuPricing";
+
+const mur = (n) => `MUR ${Number(n || 0).toLocaleString("en-US")}`;
 
 function safeMenu(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
@@ -48,6 +52,7 @@ export default function BearerTableOrderPage() {
   const [menu, setMenu] = useState({ sections: [] });
   const [activeOrder, setActiveOrder] = useState(null);
   const [cart, setCart] = useState({});
+  const [customising, setCustomising] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -140,32 +145,37 @@ export default function BearerTableOrderPage() {
   const cartTotal = useMemo(() => cartItems.reduce((acc, item) => acc + (item.price * item.qty), 0), [cartItems]);
   const cartCount = useMemo(() => cartItems.reduce((sum, it) => sum + Number(it.qty || 0), 0), [cartItems]);
 
-  const addToCart = (item) => {
-    setCart(prev => {
-      const existing = prev[item.id];
-      return {
-        ...prev,
-        [item.id]: {
-          ...item,
-          qty: (existing?.qty || 0) + 1
-        }
-      };
-    });
+  const qtyOf = (id) => cartItems.reduce((n, l) => n + (l.id === id ? Number(l.qty || 0) : 0), 0);
+
+  const addLine = (item, mods, note, qty) => {
+    const key = lineKey({ item_id: String(item.id), modifiers: mods, note });
+    const unit = Number(item.price || 0) + mods.reduce((sum, m) => sum + Number(m.price || 0), 0);
+    setCart(prev => ({
+      ...prev,
+      [key]: { ...item, key, mods: mods.map(m => ({ id: m.id, name: m.name })), note, price: unit, qty: (prev[key]?.qty || 0) + qty },
+    }));
     toast.success(`Added ${item.name}`, { duration: 1000 });
   };
 
-  const removeFromCart = (itemId) => {
+  const addToCart = (item) => {
+    if (item.key) {
+      setCart(prev => (prev[item.key] ? { ...prev, [item.key]: { ...prev[item.key], qty: prev[item.key].qty + 1 } } : prev));
+      return;
+    }
+    if (publicModifierGroups(item).some(g => g.options.length)) return setCustomising(item);
+    addLine(item, [], "", 1);
+  };
+
+  const removeFromCart = (keyOrId) => {
     setCart(prev => {
-      const existing = prev[itemId];
+      const lines = Object.values(prev).filter(l => l.id === keyOrId);
+      const existing = prev[keyOrId] || lines[lines.length - 1];
       if (!existing) return prev;
       if (existing.qty <= 1) {
-        const { [itemId]: _, ...rest } = prev;
+        const { [existing.key]: _, ...rest } = prev;
         return rest;
       }
-      return {
-        ...prev,
-        [itemId]: { ...existing, qty: existing.qty - 1 }
-      };
+      return { ...prev, [existing.key]: { ...existing, qty: existing.qty - 1 } };
     });
   };
 
@@ -188,10 +198,9 @@ export default function BearerTableOrderPage() {
         customer_phone: null,
         order_items: cartItems.map(it => ({
           item_id: it.id,
-          name: it.name,
           qty: Number(it.qty),
-          unit_price: Number(it.price),
-          line_total: Number((it.price * it.qty).toFixed(2))
+          modifiers: (it.mods || []).map(m => m.id),
+          note: it.note || undefined,
         })),
         order_details: {
           placed_by: "bearer",
@@ -359,12 +368,12 @@ export default function BearerTableOrderPage() {
                     </div>
                     
                     <div className="mt-4 flex justify-end">
-                      {cart[item.id] ? (
+                      {qtyOf(item.id) > 0 ? (
                         <div className="flex items-center gap-4 bg-slate-900 rounded-2xl p-1.5 shadow-lg shadow-slate-200">
                           <button onClick={() => removeFromCart(item.id)} className="h-8 w-8 rounded-xl bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-colors">
                             <Minus className="h-4 w-4" />
                           </button>
-                          <span className="text-sm font-black w-4 text-center text-white">{cart[item.id].qty}</span>
+                          <span className="text-sm font-black w-4 text-center text-white">{qtyOf(item.id)}</span>
                           <button onClick={() => addToCart(item)} className="h-8 w-8 rounded-xl bg-white text-slate-900 flex items-center justify-center hover:bg-slate-50 transition-colors">
                             <Plus className="h-4 w-4" />
                           </button>
@@ -412,14 +421,16 @@ export default function BearerTableOrderPage() {
             
             <div className="flex-1 overflow-y-auto p-8 space-y-6">
               {cartItems.map(item => (
-                <div key={item.id} className="flex items-center justify-between gap-6 p-6 rounded-[2rem] bg-slate-50 border border-slate-100">
+                <div key={item.key} className="flex items-center justify-between gap-6 p-6 rounded-[2rem] bg-slate-50 border border-slate-100">
                   <div className="min-w-0">
                     <h4 className="font-black text-slate-900 truncate">{item.name}</h4>
+                    {item.mods?.length ? <p className="text-xs text-slate-500 truncate">+ {item.mods.map(m => m.name).join(", ")}</p> : null}
+                    {item.note ? <p className="text-xs italic text-amber-700 truncate">“{item.note}”</p> : null}
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">MUR {item.price} UNIT</p>
                   </div>
                   <div className="flex items-center gap-6 shrink-0">
                     <div className="flex items-center gap-4 bg-white p-1 rounded-2xl shadow-sm border border-slate-100">
-                      <button onClick={() => removeFromCart(item.id)} className="h-10 w-10 rounded-xl hover:bg-slate-50 flex items-center justify-center transition-colors">
+                      <button onClick={() => removeFromCart(item.key)} className="h-10 w-10 rounded-xl hover:bg-slate-50 flex items-center justify-center transition-colors">
                         <Minus className="h-4 w-4" />
                       </button>
                       <span className="text-base font-black w-6 text-center">{item.qty}</span>
@@ -489,6 +500,16 @@ export default function BearerTableOrderPage() {
           </button>
         </div>
       )}
+      <CustomiseDialog
+        key={customising?.id || "closed"}
+        item={customising}
+        money={mur}
+        onClose={() => setCustomising(null)}
+        onAdd={(mods, note, qty) => {
+          if (customising) addLine(customising, mods, note, qty);
+          setCustomising(null);
+        }}
+      />
     </div>
   );
 }

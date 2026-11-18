@@ -20,6 +20,7 @@ import {
   Copy,
   Download,
   ExternalLink,
+  SlidersHorizontal,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchRestaurantPlan, hasMenuCatalogue } from "@/lib/restaurant-partner/plan";
@@ -29,6 +30,11 @@ import {
   saveRestaurantMenuData,
 } from "@/lib/restaurantData";
 import ApplyToBranchesButton from "@/components/restaurant-dashboard/ApplyToBranchesButton";
+import ModifierGroupsEditor, {
+  cleanModifierGroups,
+  modifierGroupsError,
+  toEditableGroups,
+} from "@/components/restaurant-dashboard/ModifierGroupsEditor";
 
 const BUCKET_NAME = "restaurants";
 const BUCKET_ROOT_FOLDER = "menu";
@@ -143,6 +149,16 @@ function safeMenu(rawInput) {
   };
 }
 
+function itemBuckets(section) {
+  const items = section?.items || [];
+  const subcats = Array.isArray(section?.subcategories) ? section.subcategories : [];
+  if (!subcats.length) return [{ id: "all", name: null, items }];
+  const known = new Set(subcats.map((c) => c.id));
+  const buckets = subcats.map((c) => ({ id: c.id, name: c.name, items: items.filter((i) => i.subcategory_id === c.id) }));
+  buckets.push({ id: "other", name: "No subcategory", items: items.filter((i) => !known.has(i.subcategory_id)) });
+  return buckets.filter((b) => b.items.length);
+}
+
 function Dialog({ open, onClose, title, children, footer }) {
   if (!open) return null;
   return (
@@ -188,6 +204,7 @@ export default function RestaurantMenuPage() {
   const [sectionName, setSectionName] = useState("");
   const [sectionDesc, setSectionDesc] = useState("");
   const [sectionGroup, setSectionGroup] = useState("");
+  const [sectionSubcats, setSectionSubcats] = useState([]);
 
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState(null);
@@ -198,6 +215,9 @@ export default function RestaurantMenuPage() {
   const [itemVeg, setItemVeg] = useState(false);
   const [itemBest, setItemBest] = useState(false);
   const [itemAvail, setItemAvail] = useState(true);
+  const [itemGroups, setItemGroups] = useState([]);
+  const [itemSubcat, setItemSubcat] = useState("");
+  const [itemError, setItemError] = useState("");
 
   const [itemImages, setItemImages] = useState([]);
   const [uploading, setUploading] = useState(false);
@@ -296,7 +316,6 @@ export default function RestaurantMenuPage() {
 
       setLoading(false);
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -444,6 +463,7 @@ export default function RestaurantMenuPage() {
     setSectionName("");
     setSectionDesc("");
     setSectionGroup("");
+    setSectionSubcats([]);
     setSectionModalOpen(true);
   };
 
@@ -453,6 +473,7 @@ export default function RestaurantMenuPage() {
     setSectionName(s.name || "");
     setSectionDesc(s.description || "");
     setSectionGroup(s.group || "");
+    setSectionSubcats((Array.isArray(s.subcategories) ? s.subcategories : []).map((c) => ({ id: c.id || uid(), name: c.name || "" })));
     setSectionModalOpen(true);
   };
 
@@ -463,15 +484,28 @@ export default function RestaurantMenuPage() {
     const description = sectionDesc.trim();
     const group = sectionGroup.trim().slice(0, 40) || null;
     if (!name) return;
+    const subcategories = sectionSubcats
+      .map((c) => ({ id: c.id, name: c.name.trim().slice(0, 60) }))
+      .filter((c) => c.name);
+    const keep = new Set(subcategories.map((c) => c.id));
 
     const nextMenu = (() => {
       const next = { ...menu, sections: [...(menu.sections || [])] };
       if (editingSectionId) {
         next.sections = next.sections.map((s) =>
-          s.id === editingSectionId ? { ...s, name, description: description || null, group } : s
+          s.id === editingSectionId
+            ? {
+                ...s,
+                name,
+                description: description || null,
+                group,
+                subcategories,
+                items: (s.items || []).map((i) => (i.subcategory_id && !keep.has(i.subcategory_id) ? { ...i, subcategory_id: null } : i)),
+              }
+            : s
         );
       } else {
-        const newSection = { id: uid(), name, description: description || null, group, items: [] };
+        const newSection = { id: uid(), name, description: description || null, group, subcategories, items: [] };
         next.sections = [newSection, ...next.sections];
         setSelectedSectionId(newSection.id);
       }
@@ -486,6 +520,7 @@ export default function RestaurantMenuPage() {
     setSectionName("");
     setSectionDesc("");
     setSectionGroup("");
+    setSectionSubcats([]);
   };
 
   const deleteSection = async (sectionId) => {
@@ -575,6 +610,9 @@ export default function RestaurantMenuPage() {
     setItemBest(false);
     setItemAvail(true);
     setItemImages([]);
+    setItemGroups([]);
+    setItemSubcat("");
+    setItemError("");
     setUploading(false);
   };
 
@@ -598,6 +636,8 @@ export default function RestaurantMenuPage() {
     setItemBest(!!item.is_bestseller);
     setItemAvail(item.is_available !== false);
     setItemImages(Array.isArray(item.image_urls) ? item.image_urls : []);
+    setItemGroups(toEditableGroups(item.modifier_groups));
+    setItemSubcat(item.subcategory_id || "");
     setItemModalOpen(true);
   };
 
@@ -609,8 +649,12 @@ export default function RestaurantMenuPage() {
     const priceNum = Number(itemPrice);
     const idToUse = editItemIdRef.current || editingItemId || uid();
 
-    if (!name) return;
-    if (!Number.isFinite(priceNum) || priceNum < 0) return;
+    if (!name) return setItemError("Enter an item name.");
+    if (!Number.isFinite(priceNum) || priceNum < 0) return setItemError("Enter a valid price.");
+    const groupsError = modifierGroupsError(itemGroups);
+    if (groupsError) return setItemError(groupsError);
+    const modifierGroups = cleanModifierGroups(itemGroups);
+    const subcats = (selectedSection?.subcategories || []).map((c) => c.id);
 
     const nextMenu = (() => {
       const nextSections = (menu.sections || []).map((s) => {
@@ -626,6 +670,8 @@ export default function RestaurantMenuPage() {
           is_veg: itemVeg,
           is_bestseller: itemBest,
           is_available: itemAvail,
+          subcategory_id: subcats.includes(itemSubcat) ? itemSubcat : null,
+          modifier_groups: modifierGroups,
         };
 
         const idx = items.findIndex((i) => i.id === idToUse);
@@ -689,7 +735,6 @@ export default function RestaurantMenuPage() {
     a.click();
   };
 
-  // Each table's QR carries that table's secret key; without it the menu is view-only.
   const getTableMenuUrl = (tableNo) => {
     if (!restaurantId || typeof window === "undefined") return "";
     const table = tableLayouts.find((t) => String(t.table_no) === String(tableNo));
@@ -702,7 +747,6 @@ export default function RestaurantMenuPage() {
     return getTableMenuUrl(selectedQrTable);
   }, [selectedQrTable, restaurantId, tableLayouts]);
 
-  // Drawn in the browser: table links contain a secret key, so they never go to a QR web service.
   const [selectedTableQrSrc, setSelectedTableQrSrc] = useState("");
   useEffect(() => {
     let cancelled = false;
@@ -994,7 +1038,12 @@ export default function RestaurantMenuPage() {
                 <div className="px-4 py-12 text-center text-sm text-gray-500">No items in this section yet.</div>
               ) : (
                 <div className="divide-y divide-gray-100">
-                  {selectedSection.items.map((it) => {
+                  {itemBuckets(selectedSection).map((bucket) => (
+                    <React.Fragment key={bucket.id}>
+                      {bucket.name ? (
+                        <div className="px-4 py-2 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">{bucket.name}</div>
+                      ) : null}
+                  {bucket.items.map((it) => {
                     const imgs = Array.isArray(it.image_urls) ? it.image_urls : [];
                     const first = imgs[0] || null;
 
@@ -1035,6 +1084,12 @@ export default function RestaurantMenuPage() {
                                     Hidden
                                   </span>
                                 ) : null}
+                                {(it.modifier_groups || []).length ? (
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                                    {it.modifier_groups.length} customisation{it.modifier_groups.length === 1 ? "" : "s"}
+                                  </span>
+                                ) : null}
                               </div>
 
                               <div className="text-xs text-gray-500 mt-0.5">{it.description || "—"}</div>
@@ -1071,6 +1126,8 @@ export default function RestaurantMenuPage() {
                       </div>
                     );
                   })}
+                    </React.Fragment>
+                  ))}
                 </div>
               )}
             </div>
@@ -1136,6 +1193,39 @@ export default function RestaurantMenuPage() {
               ))}
             </datalist>
             <p className="mt-1 text-xs text-gray-500">Staff see each menu as its own tab when taking orders.</p>
+          </div>
+
+          <div>
+            <label className="text-sm font-semibold text-gray-700">Subcategories</label>
+            <p className="mt-1 text-xs text-gray-500">Optional. Splits this section into smaller groups, e.g. Drinks into Cocktails, Wines, Soft drinks.</p>
+            <div className="mt-2 space-y-2">
+              {sectionSubcats.map((c, ci) => (
+                <div key={c.id} className="flex items-center gap-2">
+                  <input
+                    value={c.name}
+                    onChange={(e) => setSectionSubcats((prev) => prev.map((x, i) => (i === ci ? { ...x, name: e.target.value } : x)))}
+                    placeholder="e.g. Cocktails"
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-gray-300"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setSectionSubcats((prev) => prev.filter((_, i) => i !== ci))}
+                    className="h-9 w-9 shrink-0 rounded-xl border border-gray-200 bg-white hover:bg-red-50 flex items-center justify-center"
+                    aria-label="Remove subcategory"
+                  >
+                    <Trash2 className="h-4 w-4 text-red-600" />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setSectionSubcats((prev) => [...prev, { id: uid(), name: "" }])}
+                className="h-9 rounded-xl border border-dashed border-gray-300 px-3 text-xs font-semibold text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add subcategory
+              </button>
+            </div>
           </div>
 
           <div>
@@ -1215,6 +1305,24 @@ export default function RestaurantMenuPage() {
               className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-300"
             />
           </div>
+
+          {(selectedSection?.subcategories || []).length ? (
+            <div className="col-span-12 sm:col-span-6">
+              <label className="text-sm font-semibold text-gray-700">Subcategory</label>
+              <select
+                value={itemSubcat}
+                onChange={(e) => setItemSubcat(e.target.value)}
+                className="mt-2 h-[42px] w-full rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-gray-300"
+              >
+                <option value="">None</option>
+                {selectedSection.subcategories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
 
           <div className="col-span-12 sm:col-span-6">
             <label className="text-sm font-semibold text-gray-700">Images</label>
@@ -1298,6 +1406,16 @@ export default function RestaurantMenuPage() {
               </button>
             </div>
           </div>
+
+          <div className="col-span-12 border-t border-gray-100 pt-4">
+            <div className="text-sm font-semibold text-gray-700">Customisations</div>
+            <p className="mt-1 mb-3 text-xs text-gray-500">
+              Choices staff and guests pick when ordering, e.g. Size (required, pick 1) or Extras (optional, up to 3). Prices add to the item price.
+            </p>
+            <ModifierGroupsEditor groups={itemGroups} onChange={setItemGroups} />
+          </div>
+
+          {itemError ? <div className="col-span-12 text-sm text-red-600">{itemError}</div> : null}
         </div>
       </Dialog>
     </div>

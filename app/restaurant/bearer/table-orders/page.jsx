@@ -5,6 +5,8 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { Plus, Minus, ShoppingCart, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import CustomiseDialog from "@/components/menu/CustomiseDialog";
+import { lineKey, publicModifierGroups } from "@/lib/server/menuPricing";
 
 function money(n) {
   const num = Number(n);
@@ -34,6 +36,7 @@ export default function BearerTableOrdersPage() {
 
   const [notes, setNotes] = useState("");
   const [cart, setCart] = useState({});
+  const [customising, setCustomising] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -73,36 +76,41 @@ export default function BearerTableOrdersPage() {
   );
   const total = useMemo(() => Number(subtotal.toFixed(2)), [subtotal]);
 
+  const addLine = (item, section, mods, note, qty) => {
+    const key = lineKey({ item_id: String(item.id), modifiers: mods, note });
+    const unit = Number(item.price || 0) + mods.reduce((sum, m) => sum + Number(m.price || 0), 0);
+    setCart((prev) => ({
+      ...prev,
+      [key]: {
+        key,
+        item_id: String(item.id),
+        name: item.name,
+        unit_price: Number(unit.toFixed(2)),
+        mods: mods.map((m) => ({ id: m.id, name: m.name })),
+        note,
+        qty: Number(prev[key]?.qty || 0) + qty,
+        section_name: section?.name || "",
+      },
+    }));
+  };
+
   const addItem = (item, section) => {
-    setCart((prev) => {
-      const key = String(item.id);
-      const current = prev[key];
-      const qty = Number(current?.qty || 0) + 1;
-      return {
-        ...prev,
-        [key]: {
-          item_id: key,
-          name: item.name,
-          unit_price: Number(item.price || 0),
-          qty,
-          section_name: section?.name || "",
-        },
-      };
-    });
+    if (publicModifierGroups(item).some((g) => g.options.length)) return setCustomising({ item, section });
+    addLine(item, section, [], "", 1);
   };
 
   const removeItem = (itemId) => {
     setCart((prev) => {
-      const key = String(itemId);
-      const current = prev[key];
+      const lines = Object.values(prev).filter((l) => l.item_id === String(itemId));
+      const current = lines[lines.length - 1];
       if (!current) return prev;
       const nextQty = Number(current.qty || 0) - 1;
       if (nextQty <= 0) {
         const clone = { ...prev };
-        delete clone[key];
+        delete clone[current.key];
         return clone;
       }
-      return { ...prev, [key]: { ...current, qty: nextQty } };
+      return { ...prev, [current.key]: { ...current, qty: nextQty } };
     });
   };
 
@@ -148,10 +156,9 @@ export default function BearerTableOrdersPage() {
           notes: notes.trim() || null,
           order_items: cartItems.map((it) => ({
             item_id: it.item_id,
-            name: it.name,
             qty: Number(it.qty || 0),
-            unit_price: Number(it.unit_price || 0),
-            line_total: Number((it.unit_price * it.qty).toFixed(2)),
+            modifiers: (it.mods || []).map((m) => m.id),
+            note: it.note || undefined,
           })),
           subtotal_amount: subtotalFixed,
           tax_amount: 0,
@@ -247,7 +254,7 @@ export default function BearerTableOrdersPage() {
               <div className="mb-3 text-sm font-semibold text-slate-900">{section.name}</div>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {section.items.map((item) => {
-                  const qty = Number(cart[item.id]?.qty || 0);
+                  const qty = cartItems.reduce((n, l) => n + (l.item_id === String(item.id) ? Number(l.qty || 0) : 0), 0);
                   const img = Array.isArray(item.image_urls) ? item.image_urls[0] : "";
                   return (
                     <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -337,8 +344,12 @@ export default function BearerTableOrdersPage() {
                 <div className="text-xs text-slate-500">No items selected.</div>
               ) : (
                 cartItems.map((it) => (
-                  <div key={it.item_id} className="flex items-center justify-between gap-2 text-xs text-slate-700">
-                    <span className="truncate">{it.name} x {it.qty}</span>
+                  <div key={it.key || it.item_id} className="flex items-start justify-between gap-2 text-xs text-slate-700">
+                    <span className="min-w-0">
+                      <span className="block truncate">{it.name} x {it.qty}</span>
+                      {it.mods?.length ? <span className="block truncate text-slate-500">+ {it.mods.map((m) => m.name).join(", ")}</span> : null}
+                      {it.note ? <span className="block truncate italic text-amber-700">“{it.note}”</span> : null}
+                    </span>
                     <span>{money(Number(it.qty || 0) * Number(it.unit_price || 0))}</span>
                   </div>
                 ))
@@ -364,6 +375,16 @@ export default function BearerTableOrdersPage() {
           </button>
         </div>
       </aside>
+      <CustomiseDialog
+        key={customising?.item?.id || "closed"}
+        item={customising?.item || null}
+        money={money}
+        onClose={() => setCustomising(null)}
+        onAdd={(mods, note, qty) => {
+          if (customising) addLine(customising.item, customising.section, mods, note, qty);
+          setCustomising(null);
+        }}
+      />
     </div>
   );
 }

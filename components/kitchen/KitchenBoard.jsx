@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { toast } from "sonner";
 import { Clock, Flame, CheckCircle2, RotateCcw } from "lucide-react";
+import LineExtras from "@/components/menu/LineExtras";
 
 const AGE_AMBER_MIN = 6;
 const AGE_RED_MIN = 12;
@@ -35,7 +36,7 @@ function itemsOf(order, key = "order_items") {
     (Array.isArray(order?.order_details?.items) && order.order_details.items) ||
     (Array.isArray(order?.items) && order.items) ||
     [];
-  return raw.map((it) => ({ name: String(it?.name || it?.item_name || "Item"), qty: Number(it?.qty ?? it?.quantity ?? 1) }));
+  return raw.map((it) => ({ name: String(it?.name || it?.item_name || "Item"), qty: Number(it?.qty ?? it?.quantity ?? 1), modifiers: it?.modifiers || null, note: it?.note || null }));
 }
 function isStaffPlaced(o) {
   const src = String(o?.source || "").toLowerCase();
@@ -223,9 +224,9 @@ export default function KitchenBoard() {
             <div className="px-3 py-2 text-xs text-slate-500">No item details</div>
           ) : (
             items.map((it, idx) => (
-              <div key={idx} className={`flex items-center gap-3 px-3 py-2 ${idx > 0 ? "border-t border-slate-100" : ""}`}>
+              <div key={idx} className={`flex items-start gap-3 px-3 py-2 ${idx > 0 ? "border-t border-slate-100" : ""}`}>
                 <span className="min-w-8 text-base font-bold text-[#FF4800]">{it.qty}×</span>
-                <span className="flex-1 text-sm font-semibold text-slate-800">{it.name}</span>
+                <span className="flex-1 text-sm font-semibold text-slate-800">{it.name}<LineExtras line={it} className="mt-0.5 text-sm" /></span>
               </div>
             ))
           )}

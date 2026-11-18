@@ -4,22 +4,9 @@ import { extractOrderItems, normalizeItems, settleTableBill } from "@/lib/server
 import { resolveCashierRestaurant } from "../_shared";
 import { bookingStatusChangeError, isBillClosed, isBillPaid, quickPaymentRecord } from "@/lib/server/tableBill";
 import { isQrPending } from "@/lib/server/printJobs";
+import { mergeLines } from "@/lib/server/menuPricing";
 
 const isClosed = isBillClosed;
-
-function mergeLines(base, extra) {
-  const out = base.map((it) => ({ ...it }));
-  for (const it of extra) {
-    const hit = out.find((o) => o.item_id === it.item_id && o.unit_price === it.unit_price);
-    if (hit) {
-      hit.qty = Number((hit.qty + it.qty).toFixed(3));
-      hit.line_total = Number((hit.qty * hit.unit_price).toFixed(2));
-    } else {
-      out.push({ ...it });
-    }
-  }
-  return out;
-}
 
 async function releaseFinished(ctx, tables, orders) {
   const active = new Set((orders || []).filter((o) => !isClosed(o)).map((o) => Number(o.table_no)));

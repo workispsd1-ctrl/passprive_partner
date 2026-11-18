@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { ChevronDown, Clock, CheckCircle2, AlertCircle } from "lucide-react";
+import LineExtras from "@/components/menu/LineExtras";
 
 const TABLE_BOOKING_STATUS_MAP = {
   PLACED: "received",
@@ -286,6 +287,8 @@ export default function KitchenDashboard() {
             ? first.items.map((item) => ({
                 name: item?.name || item?.item_name || "Item",
                 quantity: Number(item?.quantity ?? item?.qty ?? 1),
+                modifiers: item?.modifiers || null,
+                note: item?.note || null,
               }))
             : [],
         });
@@ -531,7 +534,7 @@ export default function KitchenDashboard() {
               <div className="space-y-2">
                 {order.items && Array.isArray(order.items) && order.items.map((item, idx) => (
                   <div key={idx} className="flex items-center justify-between text-sm bg-slate-50 p-3 rounded-2xl">
-                    <span className="font-semibold text-gray-900">{item.name || item.item_name}</span>
+                    <span className="font-semibold text-gray-900">{item.name || item.item_name}<LineExtras line={item} className="mt-0.5" /></span>
                     <div className="flex items-center gap-2">
                       <span className="text-gray-600 text-xs">Qty: {item.quantity || 1}</span>
                       <span className="bg-violet-100 text-violet-800 px-2.5 py-1 rounded-lg text-xs font-bold uppercase">
