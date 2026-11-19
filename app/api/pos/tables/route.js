@@ -2,7 +2,7 @@ import { addBillItems, seatTable, setBillItemQty } from "@/lib/server/billItems"
 import { settleTableBill } from "@/lib/server/settleBill";
 import { payBillPart } from "@/lib/server/splitBill";
 import { claimPrintJob, confirmPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, releasePrintJob, TICKET_KINDS, unleasePrintJob } from "@/lib/server/printJobs";
-import { cancelPayRequest, cashGuard, pendingPayRequests } from "@/lib/server/payRequests";
+import { cancelPayRequest, pendingPayRequests } from "@/lib/server/payRequests";
 import { heldPromos, PROMO_ERRORS, promoDue, promoLocked, quotePromo, recordPromoAttempt, releasePromo, reservePromo } from "@/lib/server/promoCode";
 import { isBillClosed } from "@/lib/server/tableBill";
 import { readJson, reply, requireTerminal, serverError } from "../../staff/_terminal";
@@ -257,12 +257,8 @@ export async function POST(request) {
     if (action === "promo_due") return reply({ ok: true, ...(await promoDue(ctx.admin, ctx.restaurantId)) });
 
     if (action === "pay_part") {
-      if (!body.gateway && !(await isReadyToPay(ctx, String(body.order_id || "")))) {
+      if (!body.gateway && !body.request_id && !(await isReadyToPay(ctx, String(body.order_id || "")))) {
         return reply({ ok: false, error: "Mark this table completed first." }, 409);
-      }
-      if (!body.request_id) {
-        const held = await cashGuard(ctx.admin, ctx.restaurantId, body);
-        if (held) return reply({ ok: false, error: "Part of this bill is waiting in To collect. Pay those shares first." }, 409);
       }
       const { status, body: out } = await payBillPart(ctx.admin, ctx.restaurantId, ctx.userId, body, ctx.terminalId);
       return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);

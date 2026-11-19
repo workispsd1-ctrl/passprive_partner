@@ -6,7 +6,7 @@ import { bookingStatusChangeError, isBillClosed, isBillPaid, quickPaymentRecord 
 import { isQrPending, queueReceiptJob } from "@/lib/server/printJobs";
 import { mergeLines } from "@/lib/server/menuPricing";
 import { payBillPart } from "@/lib/server/splitBill";
-import { cancelPayRequest, cashGuard, createPayBills, createPayRequest, orderPayRequests } from "@/lib/server/payRequests";
+import { cancelPayRequest, createPayBills, createPayRequest, orderPayRequests } from "@/lib/server/payRequests";
 
 const isClosed = isBillClosed;
 
@@ -191,9 +191,7 @@ export async function POST(request) {
       if (String(body?.method || "").toUpperCase() !== "CASH") {
         return NextResponse.json({ ok: false, error: "Card and MauCas are taken on the POS. Send the payment to the POS." }, { status: 400 });
       }
-      const held = await cashGuard(ctx.admin, ctx.restaurantId, body);
-      if (held) return NextResponse.json({ ok: false, error: held }, { status: 409 });
-      const { status, body: out } = await payBillPart(ctx.admin, ctx.restaurantId, ctx.userId, { ...body, request_id: undefined });
+      const { status, body: out } = await payBillPart(ctx.admin, ctx.restaurantId, ctx.userId, { ...body, method: "CASH" });
       if (out.ok) await queuePartPrint(ctx, String(body.order_id || ""), out);
       return NextResponse.json(out, { status });
     }
@@ -240,6 +238,16 @@ export async function POST(request) {
       if (isClosed(row)) return NextResponse.json({ ok: false, error: "This bill is already closed." }, { status: 400 });
       if (Array.isArray(row.order_details?.payments) && row.order_details.payments.length) {
         return NextResponse.json({ ok: false, error: "Part of this bill is already paid, so the table can't be cancelled." }, { status: 409 });
+      }
+      const { data: held } = await ctx.admin
+        .from("pos_payment_requests")
+        .select("id")
+        .eq("restaurant_id", ctx.restaurantId)
+        .eq("order_id", orderId)
+        .eq("status", "pending")
+        .limit(1);
+      if (held?.length) {
+        return NextResponse.json({ ok: false, error: "This bill is split. Cancel the split bills first." }, { status: 409 });
       }
 
       const prevDetails = row.order_details && typeof row.order_details === "object" ? row.order_details : {};
