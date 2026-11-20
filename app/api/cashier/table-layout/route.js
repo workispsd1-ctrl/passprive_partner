@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { setBillItemQty } from "@/lib/server/billItems";
-import { extractOrderItems, normalizeItems, settleTableBill } from "@/lib/server/settleBill";
+import { settleTableBill } from "@/lib/server/settleBill";
 import { resolveCashierRestaurant } from "../_shared";
 import { bookingStatusChangeError, isBillClosed, isBillPaid, quickPaymentRecord } from "@/lib/server/tableBill";
 import { isQrPending, queueReceiptJob } from "@/lib/server/printJobs";
-import { mergeLines } from "@/lib/server/menuPricing";
 import { payBillPart } from "@/lib/server/splitBill";
+import { changeTable } from "@/lib/server/changeTable";
 import { cancelPayRequest, createPayBills, createPayRequest, orderPayRequests } from "@/lib/server/payRequests";
 
 const isClosed = isBillClosed;
@@ -377,151 +377,27 @@ export async function POST(request) {
       return NextResponse.json({ ok: true });
     }
 
-    if (action === "merge_tables") {
-      const fromTable = Number(body?.from_table || 0);
-      const toTable = Number(body?.to_table || 0);
-      if (!Number.isInteger(fromTable) || !Number.isInteger(toTable) || fromTable <= 0 || toTable <= 0 || fromTable === toTable) {
-        return NextResponse.json({ ok: false, error: "Invalid table numbers" }, { status: 400 });
-      }
+    if (action === "change_table") {
+      const { status, body: out } = await changeTable(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      return NextResponse.json(out, { status });
+    }
 
+    if (action === "merge_tables" || action === "move_customers") {
+      const fromTable = Number(body?.from_table || 0);
       const { data: rows, error: rowsErr } = await ctx.admin
         .from("restaurant_table_bookings")
-        .select("id, table_no, order_items, order_details, booking_status, payment_status, created_at")
+        .select("id, booking_status, payment_status, created_at")
         .eq("restaurant_id", ctx.restaurantId)
-        .in("table_no", [fromTable, toTable]);
+        .eq("table_no", fromTable)
+        .order("created_at", { ascending: true });
       if (rowsErr) return NextResponse.json({ ok: false, error: rowsErr.message }, { status: 400 });
-
-      const open = (rows || []).filter((r) => !isClosed(r));
-      const sources = open.filter((r) => Number(r.table_no) === fromTable);
-      if (!sources.length) return NextResponse.json({ ok: false, error: `No open bill on T${fromTable}.` }, { status: 400 });
-      const targets = open
-        .filter((r) => Number(r.table_no) === toTable)
-        .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
-
-      const at = new Date().toISOString();
-      if (!targets.length) {
-        const { data: moved, error: moveErr } = await ctx.admin
-          .from("restaurant_table_bookings")
-          .update({ table_no: toTable, updated_at: at })
-          .eq("restaurant_id", ctx.restaurantId)
-          .in("id", sources.map((r) => r.id))
-          .select("id");
-        if (moveErr) return NextResponse.json({ ok: false, error: moveErr.message }, { status: 400 });
-        await clearAttachment(ctx, fromTable);
-        return NextResponse.json({ ok: true, merged_count: moved?.length || 0, order_id: moved?.[0]?.id || null });
-      }
-
-      const target = targets[0];
-      const absorbed = [...sources, ...targets.slice(1)];
-      const closed = [];
-      for (const row of absorbed) {
-        const prev = row.order_details && typeof row.order_details === "object" ? row.order_details : {};
-        const { data: done } = await ctx.admin
-          .from("restaurant_table_bookings")
-          .update({
-            booking_status: "CANCELLED",
-            order_details: { ...prev, merged_into: { order_id: target.id, table_no: toTable, by: ctx.userId, at } },
-            updated_at: at,
-          })
-          .eq("id", row.id)
-          .eq("restaurant_id", ctx.restaurantId)
-          .not("booking_status", "in", "(CANCELLED,COMPLETED,PAID)")
-          .not("payment_status", "in", "(PAID,COMPLETED)")
-          .select("id");
-        if (done?.length) closed.push(row);
-      }
-      if (!closed.length) return NextResponse.json({ ok: false, error: "Those bills changed. Try again." }, { status: 409 });
-
-      const restore = () =>
-        Promise.all(
-          closed.map((row) =>
-            ctx.admin
-              .from("restaurant_table_bookings")
-              .update({ booking_status: row.booking_status, order_details: row.order_details, updated_at: new Date().toISOString() })
-              .eq("id", row.id)
-              .eq("restaurant_id", ctx.restaurantId)
-          )
-        );
-
-      const nextItems = closed.reduce(
-        (acc, row) => mergeLines(acc, normalizeItems(extractOrderItems(row))),
-        normalizeItems(extractOrderItems(target))
-      );
-      const prevDetails = target.order_details && typeof target.order_details === "object" ? target.order_details : {};
-      const mergedFrom = Array.isArray(prevDetails.merged_from) ? prevDetails.merged_from : [];
-      const { data: updated, error: upErr } = await ctx.admin
-        .from("restaurant_table_bookings")
-        .update({
-          order_items: nextItems,
-          order_details: {
-            ...prevDetails,
-            items: nextItems,
-            order_items: nextItems,
-            merged_from: [...mergedFrom, ...closed.map((r) => ({ order_id: r.id, table_no: Number(r.table_no), by: ctx.userId, at }))].slice(-50),
-          },
-          ...totalsFor(nextItems),
-          updated_at: at,
-        })
-        .eq("id", target.id)
-        .eq("restaurant_id", ctx.restaurantId)
-        .not("booking_status", "in", "(CANCELLED,COMPLETED,PAID)")
-        .not("payment_status", "in", "(PAID,COMPLETED)")
-        .select("id, total_amount");
-      if (upErr || !updated?.length) {
-        await restore();
-        return NextResponse.json({ ok: false, error: upErr?.message || "That bill changed. Try again." }, { status: upErr ? 400 : 409 });
-      }
-
-      await clearAttachment(ctx, fromTable);
-      return NextResponse.json({ ok: true, merged_count: closed.length, order_id: target.id, total_amount: updated[0].total_amount });
+      const source = (rows || []).find((r) => !isClosed(r));
+      if (!source) return NextResponse.json({ ok: false, error: `No open bill on T${fromTable}.` }, { status: 400 });
+      const { status, body: out } = await changeTable(ctx.admin, ctx.restaurantId, ctx.userId, { order_id: source.id, to_table: body?.to_table });
+      return NextResponse.json(out.ok ? { ...out, moved_count: 1, merged_count: out.mode === "merged" ? 1 : 0 } : out, { status });
     }
 
-    if (action !== "move_customers") {
-      return NextResponse.json({ ok: false, error: "Invalid action" }, { status: 400 });
-    }
-
-    const fromTable = Number(body?.from_table || 0);
-    const toTable = Number(body?.to_table || 0);
-    if (!Number.isInteger(fromTable) || !Number.isInteger(toTable) || fromTable <= 0 || toTable <= 0 || fromTable === toTable) {
-      return NextResponse.json({ ok: false, error: "Invalid table numbers" }, { status: 400 });
-    }
-
-    const { data: activeRows, error: activeErr } = await ctx.admin
-      .from("restaurant_table_bookings")
-      .select("id, booking_status, payment_status")
-      .eq("restaurant_id", ctx.restaurantId)
-      .eq("table_no", fromTable);
-
-    if (activeErr) return NextResponse.json({ ok: false, error: activeErr.message }, { status: 400 });
-
-    const movableIds = (activeRows || [])
-      .filter((row) => {
-        const status = String(row?.booking_status || "").toUpperCase();
-        const payment = String(row?.payment_status || "").toUpperCase();
-        if (["CANCELLED", "PAID", "COMPLETED", "SERVED"].includes(status)) return false;
-        if (["PAID", "COMPLETED"].includes(payment)) return false;
-        return true;
-      })
-      .map((row) => row.id);
-
-    if (!movableIds.length) {
-      return NextResponse.json({ ok: false, error: `No active customers on T${fromTable}.` }, { status: 400 });
-    }
-
-    const { data: updatedRows, error: moveErr } = await ctx.admin
-      .from("restaurant_table_bookings")
-      .update({ table_no: toTable, updated_at: new Date().toISOString() })
-      .eq("restaurant_id", ctx.restaurantId)
-      .in("id", movableIds)
-      .select("id");
-
-    if (moveErr) return NextResponse.json({ ok: false, error: moveErr.message }, { status: 400 });
-    const movedCount = Array.isArray(updatedRows) ? updatedRows.length : 0;
-    if (movedCount === 0) {
-      return NextResponse.json({ ok: false, error: "Move failed: no orders were updated." }, { status: 400 });
-    }
-
-    return NextResponse.json({ ok: true, moved_count: movedCount, from_table: fromTable, to_table: toTable });
+    return NextResponse.json({ ok: false, error: "Invalid action" }, { status: 400 });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error?.message || "Unknown error" }, { status: 500 });
   }
