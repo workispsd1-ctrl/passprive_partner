@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { areaTableNos, tillArea } from "@/lib/server/tillArea";
 import { readJson, requireTerminal, serverError } from "../_terminal";
 import { isStaffPlacedOrder } from "@/lib/staffOrder";
 import { mauritiusDayRange } from "@/lib/server/billHistory";
@@ -163,7 +164,7 @@ export async function POST(request) {
         .order("created_at", { ascending: false })
         .limit(6),
 
-      loadSales(admin, restaurantId, fromISO, toISO),
+      tillArea(admin, ctx).then((area) => (area ? areaTableNos(admin, restaurantId, area.id) : null)).then((nos) => loadSales(admin, restaurantId, fromISO, toISO, nos)),
       promoDue(admin, restaurantId),
     ]);
 

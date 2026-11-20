@@ -8,6 +8,7 @@ import {
   tableBills,
 } from "@/lib/server/billHistory";
 import { readJson, reply, requireTerminal, serverError } from "../_terminal";
+import { inScope, scopeForTill } from "@/lib/server/tillArea";
 
 const NO_ACCESS = /waiter|bearer|kitchen/;
 const MAURITIUS_OFFSET_MS = 4 * 60 * 60 * 1000;
@@ -24,6 +25,7 @@ export async function POST(request) {
     const range = mauritiusDayRange(date);
     if (!range) return reply({ ok: false, error: "invalid_date" }, 400);
     const { start, end } = range;
+    const scope = await scopeForTill(admin, ctx, body.area_id);
 
     const [tableRes, pickupRes, bookingRes, payBillRes, merchantRes] = await Promise.all([
       admin
@@ -73,10 +75,10 @@ export async function POST(request) {
 
     const bills = billsInRange(
       [
-        ...(tableRes.data || []).flatMap(tableBills),
-        ...(pickupRes.data || []).map(pickupBill),
-        ...(bookingRes.data || []).map(bookingBill),
-        ...(payBillRes.data || []).map(payBillBill),
+        ...(tableRes.data || []).filter((r) => inScope(scope, r.table_no)).flatMap(tableBills),
+        ...(scope.tableNos ? [] : (pickupRes.data || []).map(pickupBill)),
+        ...(scope.tableNos ? [] : (bookingRes.data || []).map(bookingBill)),
+        ...(scope.tableNos ? [] : (payBillRes.data || []).map(payBillBill)),
       ],
       start,
       end
@@ -90,7 +92,13 @@ export async function POST(request) {
     }
     for (const bill of bills) delete bill.staff_id;
 
-    return reply({ ok: true, bills, day: summarize(bills), merchant: merchantRes.data || null });
+    return reply({
+      ok: true,
+      bills,
+      day: summarize(bills),
+      merchant: merchantRes.data || null,
+      area_filter: { area: scope.area, locked: scope.locked, areas: scope.areas },
+    });
   } catch (error) {
     return serverError(error);
   }

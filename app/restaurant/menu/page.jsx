@@ -30,6 +30,7 @@ import {
   saveRestaurantMenuData,
 } from "@/lib/restaurantData";
 import ApplyToBranchesButton from "@/components/restaurant-dashboard/ApplyToBranchesButton";
+import { MENU_KINDS, menuAreas, sectionPlace } from "@/lib/menuAreas";
 import ModifierGroupsEditor, {
   VariantsEditor,
   cleanModifierGroups,
@@ -189,8 +190,68 @@ function Dialog({ open, onClose, title, children, footer }) {
   );
 }
 
-function menuKind(group) {
-  return /bar|drink|beverage|boisson/i.test(String(group || "")) ? "Bar" : "Kitchen";
+function AreaModal({ initial, canDelete, onClose, onSave, onDelete }) {
+  const [name, setName] = useState(initial?.name || "");
+  const [menus, setMenus] = useState(initial?.menus || ["Kitchen", "Bar"]);
+  const toggle = (k) => setMenus((m) => (m.includes(k) ? m.filter((x) => x !== k) : MENU_KINDS.filter((x) => m.includes(x) || x === k)));
+  const ready = name.trim() && menus.length;
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="text-base font-semibold text-gray-900">{initial?.id ? "Edit area" : "Add area"}</div>
+        <label className="mt-4 block text-sm font-semibold text-gray-700">Area name</label>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={40}
+          placeholder="e.g. Interior, PUB, Pool"
+          className="mt-2 h-11 w-full rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-gray-300"
+        />
+        <div className="mt-4 text-sm font-semibold text-gray-700">Menus in this area</div>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          {MENU_KINDS.map((k) => {
+            const on = menus.includes(k);
+            return (
+              <button
+                key={k}
+                type="button"
+                onClick={() => toggle(k)}
+                className={`h-11 rounded-xl border text-sm font-semibold ${on ? "border-[#FF4800] bg-[#FF4800] text-white" : "border-gray-200 bg-white text-gray-700"}`}
+              >
+                {on ? "✓ " : ""}
+                {k} menu
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-5 flex items-center gap-2">
+          {initial?.id ? (
+            <button
+              type="button"
+              disabled={!canDelete}
+              title={canDelete ? "" : "Move or delete this area's sections first"}
+              onClick={onDelete}
+              className="h-10 rounded-xl border border-rose-200 px-3 text-sm font-semibold text-rose-600 disabled:opacity-40"
+            >
+              Delete area
+            </button>
+          ) : null}
+          <div className="flex-1" />
+          <button type="button" onClick={onClose} className="h-10 rounded-xl border border-gray-200 px-4 text-sm font-semibold">
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!ready}
+            onClick={() => onSave({ id: initial?.id || uid(), name: name.trim(), menus })}
+            className="h-10 rounded-xl bg-[#FF4800] px-4 text-sm font-semibold text-white disabled:opacity-40"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function CommentPresetsEditor({ value, onChange }) {
@@ -263,6 +324,7 @@ export default function RestaurantMenuPage() {
   const [sectionDesc, setSectionDesc] = useState("");
   const [sectionGroup, setSectionGroup] = useState("");
   const [sectionComments, setSectionComments] = useState([]);
+  const [sectionArea, setSectionArea] = useState("");
 
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState(null);
@@ -288,13 +350,46 @@ export default function RestaurantMenuPage() {
   const originalMenuRef = useRef(EMPTY_MENU());
 
   const sections = menu.sections || [];
+  const areas = useMemo(() => menuAreas(menu), [menu]);
+  const [menuAreaId, setMenuAreaId] = useState("");
   const [menuTab, setMenuTab] = useState("Kitchen");
-  const tabSections = useMemo(() => sections.filter((s) => menuKind(s.group) === menuTab), [sections, menuTab]);
-  const switchMenuTab = (tab) => {
-    setMenuTab(tab);
-    const first = sections.find((s) => menuKind(s.group) === tab);
+  const [areaModal, setAreaModal] = useState(null);
+  const currentArea = areas.find((a) => a.id === menuAreaId) || areas[0];
+  const currentKind = currentArea.menus.includes(menuTab) ? menuTab : currentArea.menus[0];
+  const inTab = (s, areaId, kind) => {
+    const p = sectionPlace(areas, s);
+    return p.areaId === areaId && p.kind === kind;
+  };
+  const tabSections = useMemo(
+    () => sections.filter((s) => inTab(s, currentArea.id, currentKind)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sections, areas, currentArea.id, currentKind]
+  );
+  const switchMenuTab = (areaId, kind) => {
+    const area = areas.find((a) => a.id === areaId) || areas[0];
+    const k = area.menus.includes(kind) ? kind : area.menus[0];
+    setMenuAreaId(area.id);
+    setMenuTab(k);
+    const first = sections.find((s) => inTab(s, area.id, k));
     setSelectedSectionId(first?.id || null);
     setSelectedSubId("");
+  };
+  const saveArea = async (area) => {
+    const list = areas.some((a) => a.id === area.id) ? areas.map((a) => (a.id === area.id ? area : a)) : [...areas, area];
+    const nextMenu = { ...menu, menu_areas: list, updated_at: new Date().toISOString() };
+    setMenu(nextMenu);
+    setAreaModal(null);
+    await saveMenu(nextMenu);
+    switchMenuTab(area.id, area.menus.includes(currentKind) ? currentKind : area.menus[0]);
+  };
+  const deleteArea = async (area) => {
+    const list = areas.filter((a) => a.id !== area.id);
+    if (!list.length) return;
+    const nextMenu = { ...menu, menu_areas: list, updated_at: new Date().toISOString() };
+    setMenu(nextMenu);
+    setAreaModal(null);
+    await saveMenu(nextMenu);
+    switchMenuTab(list[0].id, list[0].menus[0]);
   };
   const menuCardImages = useMemo(() => getMenuImageUrls(menu), [menu]);
 
@@ -371,7 +466,14 @@ export default function RestaurantMenuPage() {
       const parsed = safeMenu(restaurant.menu);
       originalMenuRef.current = parsed;
       setMenu(parsed);
-      setSelectedSectionId((parsed.sections || []).find((x) => menuKind(x.group) === "Kitchen")?.id || null);
+      {
+        const startAreas = menuAreas(parsed);
+        const start = sectionPlace(startAreas, { menu_area_id: startAreas[0].id, group: startAreas[0].menus[0] });
+        setSelectedSectionId((parsed.sections || []).find((x) => {
+          const p = sectionPlace(startAreas, x);
+          return p.areaId === start.areaId && p.kind === start.kind;
+        })?.id || null);
+      }
       setSelectedSubId("");
 
       if (typeof window !== "undefined") {
@@ -532,7 +634,8 @@ export default function RestaurantMenuPage() {
     setEditingSectionId(null);
     setSectionName("");
     setSectionDesc("");
-    setSectionGroup(menuTab);
+    setSectionGroup(currentKind);
+    setSectionArea(currentArea.id);
     setSectionComments([]);
     setSectionModalOpen(true);
   };
@@ -542,7 +645,8 @@ export default function RestaurantMenuPage() {
     setEditingSectionId(s.id);
     setSectionName(s.name || "");
     setSectionDesc(s.description || "");
-    setSectionGroup(s.group || "");
+    setSectionGroup(sectionPlace(areas, s).kind);
+    setSectionArea(sectionPlace(areas, s).areaId);
     setSectionComments(Array.isArray(s.comment_presets) ? s.comment_presets : []);
     setSectionModalOpen(true);
   };
@@ -552,17 +656,19 @@ export default function RestaurantMenuPage() {
 
     const name = sectionName.trim();
     const description = sectionDesc.trim();
-    const group = menuKind(sectionGroup);
+    const placeArea = areas.find((a) => a.id === sectionArea) || currentArea;
+    const group = placeArea.menus.includes(sectionGroup) ? sectionGroup : placeArea.menus[0];
+    const menu_area_id = placeArea.id;
     if (!name) return;
 
     const nextMenu = (() => {
       const next = { ...menu, sections: [...(menu.sections || [])] };
       if (editingSectionId) {
         next.sections = next.sections.map((s) =>
-          s.id === editingSectionId ? { ...s, name, description: description || null, group, comment_presets: sectionComments } : s
+          s.id === editingSectionId ? { ...s, name, description: description || null, group, menu_area_id, comment_presets: sectionComments } : s
         );
       } else {
-        const newSection = { id: uid(), name, description: description || null, group, comment_presets: sectionComments, subcategories: [], items: [] };
+        const newSection = { id: uid(), name, description: description || null, group, menu_area_id, comment_presets: sectionComments, subcategories: [], items: [] };
         next.sections = [newSection, ...next.sections];
         setSelectedSectionId(newSection.id);
         setSelectedSubId("");
@@ -572,6 +678,7 @@ export default function RestaurantMenuPage() {
 
     setMenu(nextMenu);
     await saveMenu(nextMenu);
+    setMenuAreaId(menu_area_id);
     setMenuTab(group);
     if (editingSectionId) setSelectedSectionId(editingSectionId);
 
@@ -654,10 +761,10 @@ export default function RestaurantMenuPage() {
     const idx = copy.findIndex((s) => s.id === sectionId);
     if (idx < 0) return;
 
-    const kind = menuKind(copy[idx].group);
+    const here = sectionPlace(areas, copy[idx]);
     let target = idx;
     do target += dir === "up" ? -1 : 1;
-    while (target >= 0 && target < copy.length && menuKind(copy[target].group) !== kind);
+    while (target >= 0 && target < copy.length && !inTab(copy[target], here.areaId, here.kind));
     if (target < 0 || target >= copy.length) return;
 
     [copy[idx], copy[target]] = [copy[target], copy[idx]];
@@ -1064,24 +1171,56 @@ export default function RestaurantMenuPage() {
         <div className="grid grid-cols-12 gap-4">
           <div className="col-span-12 lg:col-span-4">
             <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-              <div className="grid grid-cols-2 gap-1 border-b border-gray-100 p-2">
-                {["Kitchen", "Bar"].map((tab) => {
-                  const count = sections.filter((x) => menuKind(x.group) === tab).length;
-                  const on = menuTab === tab;
-                  return (
-                    <button
-                      key={tab}
-                      type="button"
-                      onClick={() => switchMenuTab(tab)}
-                      className={`h-10 rounded-xl text-sm font-semibold ${on ? "bg-[#FF4800] text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"}`}
-                    >
-                      {tab} menu · {count}
-                    </button>
-                  );
-                })}
+              <div className="border-b border-gray-100 p-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {areas.map((a) => {
+                    const on = a.id === currentArea.id;
+                    return (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => switchMenuTab(a.id, currentKind)}
+                        className={`h-9 rounded-xl px-3 text-sm font-semibold ${on ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"}`}
+                      >
+                        {a.name}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setAreaModal(currentArea)}
+                    aria-label="Edit area"
+                    className="h-9 w-9 rounded-xl border border-gray-200 grid place-items-center hover:bg-gray-50"
+                  >
+                    <Pencil className="h-4 w-4 text-gray-600" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAreaModal({})}
+                    className="h-9 rounded-xl border border-dashed border-gray-300 px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                  >
+                    + Add area
+                  </button>
+                </div>
+                <div className={`mt-2 grid gap-1 ${currentArea.menus.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+                  {currentArea.menus.map((kind) => {
+                    const count = sections.filter((x) => inTab(x, currentArea.id, kind)).length;
+                    const on = currentKind === kind;
+                    return (
+                      <button
+                        key={kind}
+                        type="button"
+                        onClick={() => switchMenuTab(currentArea.id, kind)}
+                        className={`h-10 rounded-xl text-sm font-semibold ${on ? "bg-[#FF4800] text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"}`}
+                      >
+                        {kind} menu · {count}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                <div className="text-sm font-semibold text-gray-900">{menuTab} sections</div>
+                <div className="text-sm font-semibold text-gray-900">{currentArea.name} · {currentKind} sections</div>
                 <button
                   type="button"
                   onClick={openNewSection}
@@ -1094,7 +1233,7 @@ export default function RestaurantMenuPage() {
 
               {tabSections.length === 0 ? (
                 <div className="px-4 py-10 text-center text-sm text-gray-500">
-                  {menuTab === "Bar" ? "No bar sections yet. Tap Add to create your first bar section, e.g. Cocktails." : "Create your first section."}
+                  {currentKind === "Bar" ? `No bar sections in ${currentArea.name} yet. Tap Add to create one, e.g. Cocktails.` : `No kitchen sections in ${currentArea.name} yet. Tap Add to create one.`}
                 </div>
               ) : (
                 <div className="divide-y divide-gray-100">
@@ -1116,7 +1255,6 @@ export default function RestaurantMenuPage() {
                           >
                             <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
                               {s.name}
-                              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${menuKind(s.group) === "Bar" ? "bg-violet-100 text-violet-700" : "bg-gray-100 text-gray-600"}`}>{menuKind(s.group)}</span>
                             </div>
                             <div className="text-xs text-gray-500">
                               {(s.items || []).length} items {s.description ? `• ${s.description}` : ""}
@@ -1377,6 +1515,16 @@ export default function RestaurantMenuPage() {
         </div>
       )}
 
+      {areaModal ? (
+        <AreaModal
+          initial={areaModal}
+          canDelete={Boolean(areaModal.id) && areas.length > 1 && !sections.some((x) => sectionPlace(areas, x).areaId === areaModal.id)}
+          onClose={() => setAreaModal(null)}
+          onSave={saveArea}
+          onDelete={() => deleteArea(areaModal)}
+        />
+      ) : null}
+
       <Dialog
         open={sectionModalOpen}
         onClose={() => setSectionModalOpen(false)}
@@ -1412,10 +1560,21 @@ export default function RestaurantMenuPage() {
           </div>
 
           <div>
-            <label className="text-sm font-semibold text-gray-700">Menu</label>
+            <label className="text-sm font-semibold text-gray-700">Area and menu</label>
+            <select
+              value={sectionArea || currentArea.id}
+              onChange={(e) => setSectionArea(e.target.value)}
+              className="mt-2 h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-gray-300"
+            >
+              {areas.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
             <div className="mt-2 grid grid-cols-2 gap-2">
-              {["Kitchen", "Bar"].map((g) => {
-                const on = menuKind(sectionGroup) === g;
+              {(areas.find((a) => a.id === (sectionArea || currentArea.id)) || currentArea).menus.map((g) => {
+                const on = sectionGroup === g;
                 return (
                   <button
                     key={g}
@@ -1428,7 +1587,7 @@ export default function RestaurantMenuPage() {
                 );
               })}
             </div>
-            <p className="mt-1 text-xs text-gray-500">Staff see the Kitchen and Bar menus as separate tabs when taking orders.</p>
+            <p className="mt-1 text-xs text-gray-500">Staff see each area&apos;s Kitchen and Bar menus as separate tabs when taking orders.</p>
           </div>
 
           <div>

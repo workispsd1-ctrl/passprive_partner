@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { areaTableNos, tillArea } from "@/lib/server/tillArea";
 import { bookingBill, payBillBill, pickupBill, tableBills } from "@/lib/server/billHistory";
 import { requireTerminal, serverError } from "../_terminal";
 
@@ -58,11 +59,13 @@ export async function POST(request) {
       if (res.error) return serverError(res.error);
     }
 
+    const area = await tillArea(admin, ctx);
+    const nos = area ? await areaTableNos(admin, restaurantId, area.id) : null;
     const payments = [
-      ...(tableRes.data || []).flatMap(tableBills),
-      ...(pickupRes.data || []).map(pickupBill),
-      ...(bookingRes.data || []).map(bookingBill),
-      ...(billRes.data || []).map(payBillBill),
+      ...(tableRes.data || []).filter((r) => !nos || nos.has(Number(r.table_no))).flatMap(tableBills),
+      ...(nos ? [] : (pickupRes.data || []).map(pickupBill)),
+      ...(nos ? [] : (bookingRes.data || []).map(bookingBill)),
+      ...(nos ? [] : (billRes.data || []).map(payBillBill)),
     ]
       .sort((a, b) => String(b.at).localeCompare(String(a.at)))
       .slice(0, LIMIT);

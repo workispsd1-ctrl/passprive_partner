@@ -7,6 +7,7 @@ import { heldPromos, PROMO_ERRORS, promoDue, promoLocked, quotePromo, recordProm
 import { isBillClosed } from "@/lib/server/tableBill";
 import { readJson, reply, requireTerminal, serverError } from "../../staff/_terminal";
 import { publicModifierGroups, publicSubcategories, publicVariants } from "@/lib/server/menuPricing";
+import { menuAreas, menuTabs, sectionTab } from "@/lib/menuAreas";
 
 const STORAGE_OBJECT_PATH = "/storage/v1/object/public/";
 const STORAGE_RENDER_PATH = "/storage/v1/render/image/public/";
@@ -28,6 +29,15 @@ function thumbnail(urls) {
     : url;
 }
 
+function parseMenuJson(menuJson) {
+  if (typeof menuJson !== "string") return menuJson;
+  try {
+    return JSON.parse(menuJson);
+  } catch {
+    return null;
+  }
+}
+
 function menuSections(menuJson) {
   let menu = menuJson;
   if (typeof menu === "string") {
@@ -40,11 +50,13 @@ function menuSections(menuJson) {
   const presets = (list) =>
     (Array.isArray(list) ? list : []).map((v) => String(v || "").trim().slice(0, 60)).filter(Boolean);
   const everyItem = presets(menu?.comment_presets);
+  const areas = menuAreas(menu);
+  const labels = new Map(menuTabs(areas).map((t) => [t.key, t.label]));
   return (Array.isArray(menu?.sections) ? menu.sections : [])
     .map((section) => ({
       id: String(section?.id || section?.name || ""),
       name: String(section?.name || ""),
-      group: /bar|drink|beverage|boisson/i.test(String(section?.group || "")) ? "Bar" : "Kitchen",
+      group: labels.get(sectionTab(areas, section)) || "Kitchen",
       comment_presets: [...new Set([...presets(section?.comment_presets), ...everyItem])].slice(0, 30),
       subcategories: publicSubcategories(section),
       items: (Array.isArray(section?.items) ? section.items : [])
@@ -185,7 +197,7 @@ export async function POST(request) {
         .eq("id", ctx.restaurantId)
         .maybeSingle();
       if (error) throw error;
-      return reply({ ok: true, sections: menuSections(data?.menu_json) });
+      return reply({ ok: true, sections: menuSections(data?.menu_json), menus: menuTabs(menuAreas(parseMenuJson(data?.menu_json))).map((t) => t.label) });
     }
 
     if (action === "seat") {

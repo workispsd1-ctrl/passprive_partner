@@ -9,6 +9,7 @@ import {
   voidSummary,
 } from "@/lib/server/tillStats";
 import { readJson, reply, requireTerminal, serverError } from "../_terminal";
+import { scopeForTill } from "@/lib/server/tillArea";
 
 const NO_ACCESS = /waiter|bearer|kitchen/;
 const MAX_DAYS = 366;
@@ -28,11 +29,12 @@ export async function POST(request) {
     if ((new Date(to.end) - new Date(from.start)) / DAY_MS > MAX_DAYS) {
       return reply({ ok: false, error: "range_too_long" }, 400);
     }
+    const scope = await scopeForTill(admin, ctx, body.area_id);
     const { start } = from;
     const { end } = to;
 
     const [{ tables, sales }, bookingRes, collectRes] = await Promise.all([
-      loadSales(admin, restaurantId, start, end),
+      loadSales(admin, restaurantId, start, end, scope.tableNos),
       admin
         .from("restaurant_bookings")
         .select("status,party_size,source,payment_amount,cover_charge_amount")
@@ -55,6 +57,7 @@ export async function POST(request) {
     const stats = tillStats(sales, tables.map((r) => voidSummary(r, start, end)));
     return reply({
       ok: true,
+      area_filter: { area: scope.area, locked: scope.locked, areas: scope.areas },
       stats: {
         ...stats,
         bookings: bookingStats(bookingRes.data || []),
