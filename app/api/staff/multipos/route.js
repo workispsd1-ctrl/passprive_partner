@@ -7,7 +7,7 @@ const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 8;
 const CODE_SECONDS = 60;
 const INVITE_LABEL = "MultiPOS invite";
-const DEVICE_COLUMNS = "id,label,status,device_model,paired_at,last_login_at";
+const DEVICE_COLUMNS = "id,label,status,device_model,paired_at,last_login_at,area_id";
 
 function newCode() {
   return Array.from({ length: CODE_LENGTH }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join("");
@@ -53,10 +53,17 @@ async function deviceList({ admin, restaurantId, terminalId }) {
     .in("status", ["awaiting", "active"])
     .order("paired_at", { ascending: true });
   if (error) throw error;
+  const { data: areas, error: areaErr } = await admin
+    .from("restaurant_table_areas")
+    .select("id, name, sort_order")
+    .eq("restaurant_id", restaurantId)
+    .order("sort_order", { ascending: true });
+  if (areaErr) throw areaErr;
   const rows = (data || []).map((d) => ({ ...d, is_this_device: d.id === terminalId }));
   return {
     incoming: rows.filter((d) => d.status === "awaiting"),
     devices: rows.filter((d) => d.status === "active"),
+    areas: (areas || []).map((a) => ({ id: a.id, name: a.name })),
   };
 }
 
@@ -106,6 +113,28 @@ export async function POST(request) {
         p_terminal_id: id,
         p_restaurant_id: ctx.restaurantId,
       });
+      if (error) throw error;
+      if (!data) return reply({ ok: false, error: "invalid_device" }, 404);
+    } else if (action === "set_area") {
+      const areaId = body.area_id ? String(body.area_id) : null;
+      if (!validId || (areaId && !/^[0-9a-f-]{36}$/i.test(areaId))) return reply({ ok: false, error: "invalid_device" }, 400);
+      if (areaId) {
+        const { data: area, error: areaErr } = await ctx.admin
+          .from("restaurant_table_areas")
+          .select("id")
+          .eq("id", areaId)
+          .eq("restaurant_id", ctx.restaurantId)
+          .maybeSingle();
+        if (areaErr) throw areaErr;
+        if (!area) return reply({ ok: false, error: "invalid_area" }, 404);
+      }
+      const { data, error } = await ctx.admin
+        .from("pos_terminals")
+        .update({ area_id: areaId })
+        .eq("id", id)
+        .eq("restaurant_id", ctx.restaurantId)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
       if (!data) return reply({ ok: false, error: "invalid_device" }, 404);
     } else if (action !== "list") {

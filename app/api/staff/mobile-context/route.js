@@ -19,7 +19,7 @@ export async function POST(request) {
   try {
     const ctx = await requireTerminal(request, ["payments"]);
     if (ctx.error) return ctx.error;
-    const { admin, restaurantId } = ctx;
+    const { admin, restaurantId, terminalId } = ctx;
     const body = await request.json().catch(() => ({}));
     const knownMenu = String(body?.menu_v || "");
 
@@ -36,7 +36,7 @@ export async function POST(request) {
         .maybeSingle(),
       admin
         .from("restaurant_table_layouts")
-        .select("id, table_no, label, capacity, attached_to")
+        .select("id, table_no, label, capacity, attached_to, area_id")
         .eq("restaurant_id", restaurantId)
         .order("table_no", { ascending: true }),
       admin
@@ -56,6 +56,25 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: "Restaurant not found." }, { status: 404 });
     }
 
+    const { data: terminalRow } = await admin
+      .from("pos_terminals")
+      .select("area_id, restaurant_table_areas:area_id(id, name)")
+      .eq("id", terminalId)
+      .maybeSingle();
+    const areaRow = Array.isArray(terminalRow?.restaurant_table_areas)
+      ? terminalRow.restaurant_table_areas[0]
+      : terminalRow?.restaurant_table_areas;
+    const area = terminalRow?.area_id && areaRow?.id ? { id: areaRow.id, name: areaRow.name || "" } : null;
+    const allTables = tableRows || [];
+    const inArea = (t) => {
+      if (!area) return true;
+      const host = t.attached_to ? allTables.find((x) => x.id === t.attached_to) : null;
+      return (host || t).area_id === area.id;
+    };
+    const areaTables = allTables.filter(inArea);
+    const areaNos = new Set(areaTables.map((t) => Number(t.table_no)));
+    const openOrders = (orderRows || []).filter((o) => !isQrPending(o) && (!area || areaNos.has(Number(o.table_no))));
+
     const menu = parseMenu(restaurantRow.menu_json);
     const menuV = createHash("sha1").update(JSON.stringify(menu)).digest("hex").slice(0, 16);
 
@@ -68,8 +87,9 @@ export async function POST(request) {
         cover_image: restaurantRow.cover_image || "",
       },
       ...(knownMenu === menuV ? {} : { menu }),
-      tables: tableRows || [],
-      open_orders: (orderRows || []).filter((o) => !isQrPending(o)),
+      area,
+      tables: areaTables,
+      open_orders: openOrders,
     });
   } catch (error) {
     return serverError(error);

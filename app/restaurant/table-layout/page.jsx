@@ -347,22 +347,48 @@ function AreaFormModal({ initial, onClose, onSubmit, saving }) {
   );
 }
 
-// Mounted only while open, so every "Add table" starts from the next free number.
-function AddTableModal({ areas, defaultAreaId, nextTableNo, usedNumbers, onClose, onSubmit, saving }) {
+function areaPrefix(areas, areaId) {
+  const area = areas.find((a) => a.id === areaId);
+  if (!area || areas[0]?.id === areaId) return "T";
+  return `${area.name} `;
+}
+
+function nextInArea(tables, areas, areaId) {
+  const taken = new Set(tables.filter((t) => t.area_id === areaId).map((t) => String(t.label || "").trim().toLowerCase()));
+  const prefix = areaPrefix(areas, areaId);
+  let n = 1;
+  while (taken.has(`${prefix}${n}`.toLowerCase())) n += 1;
+  return n;
+}
+
+function AddTableModal({ areas, tables, defaultAreaId, nextTableNo, onClose, onSubmit, saving }) {
   const [areaId, setAreaId] = useState(defaultAreaId || areas[0]?.id || "");
-  const [tableNo, setTableNo] = useState(String(nextTableNo));
-  const [label, setLabel] = useState(`T${nextTableNo}`);
+  const [tableNo, setTableNo] = useState(String(nextInArea(tables, areas, defaultAreaId || areas[0]?.id || "")));
+  const [label, setLabel] = useState(`${areaPrefix(areas, defaultAreaId || areas[0]?.id || "")}${tableNo}`);
   const [labelTouched, setLabelTouched] = useState(false);
   const [shape, setShape] = useState("square");
   const [capacity, setCapacity] = useState(4);
 
   const num = Number(tableNo);
+  const cleanLabel = label.trim();
+  const clash = tables.some(
+    (t) => t.area_id === areaId && String(t.label || "").trim().toLowerCase() === cleanLabel.toLowerCase()
+  );
   const numberError =
-    !Number.isInteger(num) || num < 1 || num > 9999
-      ? "Enter a number from 1 to 9999."
-      : usedNumbers.has(num)
-      ? `T${num} already exists.`
+    !Number.isInteger(num) || num < 1 || num > 999
+      ? "Enter a number from 1 to 999."
+      : !cleanLabel
+      ? "Give the table a name."
+      : clash
+      ? `${cleanLabel} already exists in this area.`
       : "";
+
+  const pickArea = (id) => {
+    setAreaId(id);
+    const n = nextInArea(tables, areas, id);
+    setTableNo(String(n));
+    if (!labelTouched) setLabel(`${areaPrefix(areas, id)}${n}`);
+  };
 
   const submit = (e) => {
     e?.preventDefault();
@@ -370,8 +396,8 @@ function AddTableModal({ areas, defaultAreaId, nextTableNo, usedNumbers, onClose
     if (numberError) return toast.error(numberError);
     onSubmit({
       area_id: areaId,
-      table_no: num,
-      label: (label.trim() || `T${num}`).slice(0, 40),
+      table_no: nextTableNo,
+      label: cleanLabel.slice(0, 40),
       shape,
       capacity,
     });
@@ -393,7 +419,7 @@ function AddTableModal({ areas, defaultAreaId, nextTableNo, usedNumbers, onClose
     >
       <form onSubmit={submit} className="space-y-4">
         <Field label="Area">
-          <select value={areaId} onChange={(e) => setAreaId(e.target.value)} className={inputCls}>
+          <select value={areaId} onChange={(e) => pickArea(e.target.value)} className={inputCls}>
             {areas.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name} · {kindMeta(a.kind).label}
@@ -403,22 +429,22 @@ function AddTableModal({ areas, defaultAreaId, nextTableNo, usedNumbers, onClose
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Table number" hint="Used on the table's QR code. Can't be changed later.">
+          <Field label="Table number" hint="Each area starts at 1.">
             <input
               type="number"
               inputMode="numeric"
               min={1}
-              max={9999}
+              max={999}
               value={tableNo}
               onChange={(e) => {
                 setTableNo(e.target.value);
-                if (!labelTouched) setLabel(e.target.value ? `T${e.target.value}` : "");
+                if (!labelTouched) setLabel(e.target.value ? `${areaPrefix(areas, areaId)}${e.target.value}` : "");
               }}
               className={`${inputCls} ${numberError ? "border-rose-300 focus:border-rose-400 focus:ring-rose-200" : ""}`}
             />
             {numberError ? <span className="block text-[11px] font-medium text-rose-600">{numberError}</span> : null}
           </Field>
-          <Field label="Label" hint="What staff see, e.g. “Window 2”.">
+          <Field label="Name" hint="What staff and guests see, e.g. “Terrace 2”.">
             <input
               value={label}
               maxLength={40}
@@ -443,7 +469,7 @@ function AddTableModal({ areas, defaultAreaId, nextTableNo, usedNumbers, onClose
           <TableShape
             shape={shape}
             capacity={capacity}
-            label={label.trim() || `T${tableNo || "?"}`}
+            label={cleanLabel || `T${tableNo || "?"}`}
             sublabel={`${capacity} seats`}
             scale={0.85}
             className="shadow-sm ring-2 ring-[#FF4800]"
@@ -1162,8 +1188,8 @@ export default function RestaurantTableLayoutPage() {
         <AddTableModal
         areas={sortedAreas}
         defaultAreaId={activeAreaId !== UNASSIGNED ? activeAreaId : sortedAreas[0]?.id}
+        tables={tables}
         nextTableNo={nextTableNo}
-        usedNumbers={usedNumbers}
         saving={busy === "table"}
         onClose={() => setAddTableOpen(false)}
         onSubmit={addTable}
