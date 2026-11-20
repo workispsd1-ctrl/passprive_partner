@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { hostTable } from "@/lib/server/changeTable";
 import { NextResponse } from "next/server";
 import { serviceClient } from "@/lib/server/deviceSession";
 import { PAY_BILL_PLANS } from "@/lib/server/plan";
@@ -75,12 +76,12 @@ async function resolveTable(admin, request, body) {
       isStaff = Boolean(staffRow);
     }
     if (!isStaff) return { error: fail("You don't have access to this restaurant.", 403) };
-    return { restaurant, tableNo, staffUserId: userId };
+    return { restaurant, tableNo: await hostTable(admin, restaurantId, tableNo), staffUserId: userId };
   }
 
   const key = String(body.key || "");
   if (!sameSecret(key, table.qr_key)) return { error: fail("Scan the QR code on your table to order.", 403) };
-  return { restaurant, tableNo, staffUserId: null };
+  return { restaurant, tableNo: await hostTable(admin, restaurantId, tableNo), staffUserId: null };
 }
 
 async function findOpenOrder(admin, restaurantId, tableNo, { orderId, sessionId } = {}) {

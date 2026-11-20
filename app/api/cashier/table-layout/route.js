@@ -350,21 +350,29 @@ export async function POST(request) {
 
       const { data: rows, error: rowsErr } = await ctx.admin
         .from("restaurant_table_bookings")
-        .select("booking_status, payment_status")
+        .select("id, table_no, booking_status, payment_status, created_at")
         .eq("restaurant_id", ctx.restaurantId)
-        .in("table_no", [fromTable, toTable]);
+        .in("table_no", [fromTable, toTable])
+        .order("created_at", { ascending: true });
       if (rowsErr) return NextResponse.json({ ok: false, error: rowsErr.message }, { status: 400 });
+      const sourceBill = (rows || []).find((r) => !isClosed(r) && Number(r.table_no) === fromTable);
+      let combined = null;
+      if (sourceBill) {
+        const { status, body: out } = await changeTable(ctx.admin, ctx.restaurantId, ctx.userId, { order_id: sourceBill.id, to_table: toTable });
+        if (!out.ok) return NextResponse.json(out, { status });
+        combined = out;
+      }
 
       const { data: done, error: upErr } = await ctx.admin
         .from("restaurant_table_layouts")
-        .update({ attached_to: target.id, attached_auto_release: (rows || []).some((r) => !isClosed(r)) })
+        .update({ attached_to: target.id, attached_auto_release: Boolean(combined) || (rows || []).some((r) => !isClosed(r)) })
         .eq("id", source.id)
         .eq("restaurant_id", ctx.restaurantId)
         .is("attached_to", null)
         .select("id");
       if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 400 });
       if (!done?.length) return NextResponse.json({ ok: false, error: `T${fromTable} is already attached. Detach it first.` }, { status: 409 });
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true, bill: combined ? combined.mode : null, total_amount: combined?.total_amount ?? null });
     }
 
     if (action === "detach_table") {

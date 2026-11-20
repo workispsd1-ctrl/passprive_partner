@@ -36,7 +36,7 @@ export async function POST(request) {
         .maybeSingle(),
       admin
         .from("restaurant_table_layouts")
-        .select("id, table_no, label, capacity")
+        .select("id, table_no, label, capacity, attached_to")
         .eq("restaurant_id", restaurantId)
         .order("table_no", { ascending: true }),
       admin

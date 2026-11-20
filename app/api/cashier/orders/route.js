@@ -4,6 +4,7 @@ import { resolveCashierRestaurant } from "../_shared";
 import { fromCents, menuIndex, mergeLines, priceLines } from "@/lib/server/menuPricing";
 import { isBillClosed } from "@/lib/server/tableBill";
 import { queueOrderTicket } from "@/lib/server/printJobs";
+import { hostTable } from "@/lib/server/changeTable";
 
 function toFixed2(v) {
   return Number(Number(v || 0).toFixed(2));
@@ -96,7 +97,7 @@ export async function POST(request) {
     const notes = String(body?.notes || "").trim();
     const customerName = String(body?.customer_name || "Walk-in").trim() || "Walk-in";
     const customerPhone = String(body?.customer_phone || "").trim();
-    const tableNo = Number(body?.table_no || 0);
+    const tableNo = await hostTable(ctx.admin, ctx.restaurantId, Number(body?.table_no || 0));
 
     if (!["TABLE", "PICKUP"].includes(orderType)) {
       return NextResponse.json({ ok: false, error: "Invalid order_type." }, { status: 400 });

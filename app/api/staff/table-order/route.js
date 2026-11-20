@@ -1,5 +1,6 @@
 import { fromCents, menuIndex, priceLines } from "@/lib/server/menuPricing";
 import { bookingStatusChangeError } from "@/lib/server/tableBill";
+import { hostTable } from "@/lib/server/changeTable";
 import { readJson, reply, requireTerminal, serverError } from "../_terminal";
 
 const STATUSES = ["CONFIRMED", "PREPARING", "SERVED", "COMPLETED", "CANCELLED"];
@@ -15,8 +16,9 @@ export async function POST(request) {
     const { admin, restaurantId, terminalId, userId } = ctx;
 
     const body = await readJson(request);
-    const tableNo = Number(body.table_no);
-    if (!Number.isInteger(tableNo) || tableNo < 1) return reply({ ok: false, error: "invalid_table" }, 400);
+    const asked = Number(body.table_no);
+    if (!Number.isInteger(asked) || asked < 1) return reply({ ok: false, error: "invalid_table" }, 400);
+    const tableNo = await hostTable(admin, restaurantId, asked);
 
     const { data: restaurant, error: menuErr } = await admin
       .from("restaurants")
