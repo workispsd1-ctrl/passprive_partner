@@ -223,7 +223,7 @@ export default function RestaurantStaffPage() {
     const res = await fetch("/api/restaurant/staff", {
       method: "PATCH",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ restaurant_id: await getActiveRestaurantId(), user_id: editingMember.user_id, full_name: editName, phone: editPhone, ...(editingMember.role === "restaurant_cashier" ? { area_id: editArea || null } : {}) }),
+      body: JSON.stringify({ restaurant_id: await getActiveRestaurantId(), user_id: editingMember.user_id, full_name: editName, phone: editPhone, ...(["restaurant_cashier", "restaurant_waiter"].includes(editingMember.role) ? { area_id: editArea || null } : {}) }),
     });
     const json = await res.json();
     if (!res.ok || !json?.ok) {
@@ -263,10 +263,14 @@ export default function RestaurantStaffPage() {
     { value: "restaurant_cashier", label: "Main cashier · all areas" },
     ...areas.map((a) => ({ value: `restaurant_cashier@${a.id}`, label: `Cashier · ${a.name}` })),
     { value: "restaurant_kitchen", label: "Kitchen" },
-    { value: "restaurant_waiter", label: "Waiter" },
+    { value: "restaurant_waiter", label: "Waiter · all areas" },
+    ...areas.map((a) => ({ value: `restaurant_waiter@${a.id}`, label: `Waiter · ${a.name}` })),
   ];
   const roleLabel = (value, areaId) => {
-    if (value === "restaurant_bearer") return "Waiter";
+    if (value === "restaurant_bearer" || value === "restaurant_waiter") {
+      const area = areas.find((a) => a.id === areaId);
+      return area ? `Waiter · ${area.name}` : "Waiter";
+    }
     if (value === "restaurant_cashier") {
       const area = areas.find((a) => a.id === areaId);
       return area ? `Cashier · ${area.name}` : "Main cashier";
@@ -453,12 +457,16 @@ export default function RestaurantStaffPage() {
             <div className="text-sm font-semibold text-gray-900">Edit Staff Member</div>
             <div className="mt-3 grid gap-3">
               <Field label="Full name" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Staff name" />
-              {editingMember.role === "restaurant_cashier" ? (
+              {["restaurant_cashier", "restaurant_waiter"].includes(editingMember.role) ? (
                 <SelectField
-                  label="Till"
+                  label="Area"
                   value={editArea}
                   onChange={(e) => setEditArea(e.target.value)}
-                  options={[{ value: "", label: "Main cashier · all areas" }, ...areas.map((a) => ({ value: a.id, label: `Cashier · ${a.name}` }))]}
+                  options={
+                    editingMember.role === "restaurant_waiter"
+                      ? [{ value: "", label: "Waiter · all areas" }, ...areas.map((a) => ({ value: a.id, label: `Waiter · ${a.name}` }))]
+                      : [{ value: "", label: "Main cashier · all areas" }, ...areas.map((a) => ({ value: a.id, label: `Cashier · ${a.name}` }))]
+                  }
                 />
               ) : null}
               <Field label="Phone" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="Phone number" />

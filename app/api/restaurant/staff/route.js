@@ -235,7 +235,7 @@ export async function POST(request) {
     const phone = String(body?.phone || "").trim() || null;
     const role = normalizeStaffRole(body?.role);
     const pin = body?.pin ? validatePin(body.pin) : null;
-    const areaId = role === "restaurant_cashier" ? await validArea(admin, owner.restaurantId, String(body?.area_id || "")) : null;
+    const areaId = ["restaurant_cashier", "restaurant_waiter"].includes(role) ? await validArea(admin, owner.restaurantId, String(body?.area_id || "")) : null;
     if (areaId === undefined) return NextResponse.json({ ok: false, error: "That area no longer exists." }, { status: 400 });
 
     if (role === "restaurant_admin" && !owner.isMaster) {
@@ -340,7 +340,7 @@ export async function PATCH(request) {
 
     if (body.area_id !== undefined) {
       const { data: roleRow } = await admin.from("restaurant_staff").select("role").eq("id", staffRow.id).maybeSingle();
-      if (roleRow?.role === "restaurant_cashier") {
+      if (["restaurant_cashier", "restaurant_waiter"].includes(roleRow?.role)) {
         const areaId = await validArea(admin, owner.restaurantId, String(body.area_id || ""));
         if (areaId === undefined) return NextResponse.json({ ok: false, error: "That area no longer exists." }, { status: 400 });
         const { error: areaErr } = await admin.from("restaurant_staff").update({ area_id: areaId }).eq("id", staffRow.id);

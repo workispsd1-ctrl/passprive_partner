@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
+import { movesFor } from "@/lib/server/guestMoves";
 import { requireTerminal, serverError } from "../_terminal";
 import { isQrPending } from "@/lib/server/printJobs";
 
@@ -94,6 +95,7 @@ export async function POST(request) {
       },
       ...(knownMenu === menuV ? {} : { menu }),
       area,
+      guest_moves: await movesFor(admin, restaurantId, area?.id || null, userId).catch(() => ({ to_seat: [], notices: [] })),
       tables: areaTables,
       open_orders: openOrders,
     });

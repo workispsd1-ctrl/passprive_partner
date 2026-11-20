@@ -297,10 +297,11 @@ function AreaFormModal({ initial, onClose, onSubmit, saving }) {
   const [name, setName] = useState(initial?.name || "Interior");
   const [kind, setKind] = useState(initial?.kind || "interior");
   const [nameTouched, setNameTouched] = useState(Boolean(initial?.name));
+  const [floor, setFloor] = useState(initial?.floor_label || "");
+  const [movesForFood, setMovesForFood] = useState(Boolean(initial?.guests_move_for_food));
 
   const onKindChange = (next) => {
     setKind(next);
-    // Suggest the type's name until the user types their own.
     if (!nameTouched) setName(kindMeta(next).label);
   };
 
@@ -308,7 +309,7 @@ function AreaFormModal({ initial, onClose, onSubmit, saving }) {
     e?.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return toast.error("Give this area a name.");
-    onSubmit({ name: trimmed.slice(0, 40), kind });
+    onSubmit({ name: trimmed.slice(0, 40), kind, floor_label: floor.trim().slice(0, 30) || null, guests_move_for_food: movesForFood });
   };
 
   return (
@@ -342,6 +343,19 @@ function AreaFormModal({ initial, onClose, onSubmit, saving }) {
             placeholder={kindMeta(kind).label}
           />
         </Field>
+        <Field label="Floor" hint="Shown on kitchen tickets and to waiters, e.g. “Ground floor” or “1st floor”.">
+          <input value={floor} maxLength={30} onChange={(e) => setFloor(e.target.value)} placeholder="e.g. 1st floor" className={inputCls} />
+        </Field>
+        <label className="flex items-start gap-3 rounded-xl border border-gray-200 p-3">
+          <input type="checkbox" checked={movesForFood} onChange={(e) => setMovesForFood(e.target.checked)} className="mt-1" />
+          <span>
+            <span className="block text-sm font-semibold text-gray-900">Guests go down to the restaurant when their food is ready</span>
+            <span className="block text-xs text-gray-500">
+              For a bar upstairs: food ordered here shows up for the downstairs waiters, who pick a table when it is ready. The waiter
+              here gets a pop-up telling them where to take the guest.
+            </span>
+          </span>
+        </label>
       </form>
     </Modal>
   );
@@ -758,7 +772,7 @@ export default function RestaurantTableLayoutPage() {
       const [areasRes, tablesRes] = await Promise.all([
         supabaseBrowser
           .from("restaurant_table_areas")
-          .select("id, name, kind, sort_order, created_at, floor_objects, table_scale")
+          .select("id, name, kind, sort_order, created_at, floor_objects, table_scale, floor_label, guests_move_for_food")
           .eq("restaurant_id", rid)
           .order("sort_order", { ascending: true }),
         supabaseBrowser
@@ -970,25 +984,25 @@ export default function RestaurantTableLayoutPage() {
   };
 
   // ---------- Areas ----------
-  const saveArea = async ({ name, kind }) => {
+  const saveArea = async ({ name, kind, floor_label, guests_move_for_food }) => {
     if (!restaurantId) return;
     setBusy("area");
     try {
       if (areaModal?.id) {
         const { error } = await supabaseBrowser
           .from("restaurant_table_areas")
-          .update({ name, kind })
+          .update({ name, kind, floor_label, guests_move_for_food })
           .eq("id", areaModal.id)
           .eq("restaurant_id", restaurantId);
         if (error) throw error;
-        setAreas((prev) => prev.map((a) => (a.id === areaModal.id ? { ...a, name, kind } : a)));
+        setAreas((prev) => prev.map((a) => (a.id === areaModal.id ? { ...a, name, kind, floor_label, guests_move_for_food } : a)));
         toast.success("Area updated.");
       } else {
         const sort_order = areas.reduce((m, a) => Math.max(m, a.sort_order), -1) + 1;
         const { data, error } = await supabaseBrowser
           .from("restaurant_table_areas")
-          .insert({ restaurant_id: restaurantId, name, kind, sort_order })
-          .select("id, name, kind, sort_order, created_at")
+          .insert({ restaurant_id: restaurantId, name, kind, sort_order, floor_label, guests_move_for_food })
+          .select("id, name, kind, sort_order, created_at, floor_label, guests_move_for_food")
           .single();
         if (error) throw error;
         setAreas((prev) => [...prev, data]);
