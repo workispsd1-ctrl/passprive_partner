@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { X, Ban } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { areaKindMeta, sortAreas } from "@/lib/restaurant-partner/tableAreas";
@@ -58,6 +58,7 @@ function extractCustomer(order) {
 
 export default function CashierTableLayoutPage() {
   const router = useRouter();
+  const waiterView = String(usePathname() || "").startsWith("/restaurant/waiter");
   const [restaurantId, setRestaurantId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tables, setTables] = useState([]);
@@ -656,12 +657,14 @@ export default function CashierTableLayoutPage() {
                   <Ban className="h-4 w-4" />
                   {blocked[String(detailTableNo)] ? "Unblock Table" : "Block Table"}
                 </button>
-                <button
-                  onClick={() => router.push("/cashier/table-orders")}
-                  className="h-9 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold inline-flex items-center gap-2"
-                >
-                  View Recent Orders
-                </button>
+                {waiterView ? null : (
+                  <button
+                    onClick={() => router.push("/cashier/table-orders")}
+                    className="h-9 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold inline-flex items-center gap-2"
+                  >
+                    View Recent Orders
+                  </button>
+                )}
               </div>
               {detailActiveOrders.length === 0 ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">No active orders on this table.</div>
@@ -726,14 +729,16 @@ export default function CashierTableLayoutPage() {
                           >
                             Mark Completed
                           </button>
-                          <button
-                            type="button"
-                            disabled={paidDone || busyOnOrder}
-                            onClick={() => updateOrderState(o.id, { payment_status: "PAID" }, "paid")}
-                            className="rounded-lg border border-emerald-700 bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
-                          >
-                            Mark Paid
-                          </button>
+                          {waiterView ? null : (
+                            <button
+                              type="button"
+                              disabled={paidDone || busyOnOrder}
+                              onClick={() => updateOrderState(o.id, { payment_status: "PAID" }, "paid")}
+                              className="rounded-lg border border-emerald-700 bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
+                            >
+                              Mark Paid
+                            </button>
+                          )}
                         </div>
                       </div>
                     );

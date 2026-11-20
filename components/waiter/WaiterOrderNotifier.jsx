@@ -47,7 +47,7 @@ async function authedFetch(path, opts = {}) {
 
 const ACTIVE = ["PLACED", "CONFIRMED", "PREPARING", "SERVED"];
 
-export default function BearerOrderNotifier() {
+export default function WaiterOrderNotifier() {
   const [queue, setQueue] = useState([]); // [{id, tableNo, items, total, kind:'claim'|'new'|'ready'}]
   const seenRef = useRef(new Set());
   const prevStatusRef = useRef(new Map());
@@ -146,7 +146,7 @@ export default function BearerOrderNotifier() {
       if (json?.ok) {
         toast.success(`You took Table ${n}.`);
         ownerRef.current.set(n, meRef.current || "me");
-        window.dispatchEvent(new CustomEvent("bearer:refresh"));
+        window.dispatchEvent(new CustomEvent("waiter:refresh"));
       } else {
         toast.error(json?.error || "Failed to take table.");
       }

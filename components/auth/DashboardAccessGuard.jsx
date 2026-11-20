@@ -13,7 +13,7 @@ function resolveTargetForRole(role) {
   if (role === "restaurantpartner" || role === "restaurant_admin") return "/restaurant/dashboard";
   if (role === "cashier" || role === "restaurant_cashier") return "/cashier/dashboard";
   if (role === "restaurant_kitchen") return "/restaurant/kitchen/dashboard";
-  if (role === "restaurant_bearer") return "/restaurant/bearer/dashboard";
+  if (role === "restaurant_waiter" || role === "restaurant_bearer") return "/restaurant/waiter/dashboard";
   if (role === "corporateadmin") return "/corporate/dashboard";
   return "/sign-in";
 }
@@ -26,7 +26,7 @@ function isAllowed(scope, role, pathname) {
   if (scope === "restaurant") {
     if (role === "restaurantpartner" || role === "restaurant_admin") return true;
     if (role === "restaurant_kitchen") return String(pathname || "").startsWith("/restaurant/kitchen");
-    if (role === "restaurant_bearer") return String(pathname || "").startsWith("/restaurant/bearer");
+    if (role === "restaurant_waiter" || role === "restaurant_bearer") return String(pathname || "").startsWith("/restaurant/waiter");
     return false;
   }
 

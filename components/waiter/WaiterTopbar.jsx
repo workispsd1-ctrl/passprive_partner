@@ -11,26 +11,38 @@ import {
   Wifi,
   WifiOff,
   AlertTriangle,
+  Table2,
+  Package2,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 const tabs = [
-  { href: "/restaurant/bearer/floor", label: "My Floor", icon: LayoutGrid },
-  { href: "/restaurant/bearer/table-orders", label: "New Order", icon: QrCode },
+  { href: "/restaurant/waiter/floor", label: "Dashboard", icon: LayoutGrid },
+  { href: "/restaurant/waiter/table-orders", label: "New Order", icon: QrCode },
+  { href: "/restaurant/waiter/table-layout", label: "Table Layout", icon: Table2 },
+  { href: "/restaurant/waiter/orders", label: "Make Order", icon: Package2 },
 ];
 
 const tabStyles = {
-  "/restaurant/bearer/floor": {
+  "/restaurant/waiter/floor": {
     active: "border-[#FF4800] bg-[linear-gradient(91.59deg,#FF4800_2.56%,#FFA680_97.05%)] text-white",
     idle:   "border-[#FF4800]/30 bg-[#FF4800]/10 text-[#FF4800] hover:bg-[#FF4800]/15",
   },
-  "/restaurant/bearer/table-orders": {
+  "/restaurant/waiter/table-orders": {
     active: "border-emerald-700 bg-emerald-600 text-white",
     idle:   "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
   },
+  "/restaurant/waiter/table-layout": {
+    active: "border-slate-800 bg-slate-800 text-white",
+    idle:   "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100",
+  },
+  "/restaurant/waiter/orders": {
+    active: "border-slate-800 bg-slate-800 text-white",
+    idle:   "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100",
+  },
 };
 
-export default function BearerTopbar() {
+export default function WaiterTopbar() {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -40,7 +52,7 @@ export default function BearerTopbar() {
   const [isDeviceAuthorized, setIsDeviceAuthorized] = useState(true);
   const [profile, setProfile] = useState({
     restaurant_name: "Restaurant",
-    operator_name:   "Bearer",
+    operator_name:   "Waiter",
     restaurant_logo: "",
   });
 
@@ -68,7 +80,7 @@ export default function BearerTopbar() {
         const token = sessionData?.session?.access_token;
         if (!token) { router.push("/sign-in"); return; }
 
-        const res = await fetch("/api/bearer/profile", {
+        const res = await fetch("/api/waiter/profile", {
           headers: { Authorization: `Bearer ${token}` },
         });
         const payload = await res.json();
@@ -104,7 +116,7 @@ export default function BearerTopbar() {
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      window.dispatchEvent(new CustomEvent("bearer:refresh"));
+      window.dispatchEvent(new CustomEvent("waiter:refresh"));
       router.refresh();
     } finally {
       window.setTimeout(() => setRefreshing(false), 500);
@@ -144,7 +156,7 @@ export default function BearerTopbar() {
               </h1>
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-xs text-slate-500 truncate">
-                   {profile.operator_name} (Bearer)
+                   {profile.operator_name} (Waiter)
                 </p>
                 <div className="flex items-center gap-1.5">
                   <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium border ${

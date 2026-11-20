@@ -16,7 +16,6 @@ function adminClient() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, key, { auth: { persistSession: false } });
 }
 
-/** Resolves which restaurant belongs to this authenticated user. No role restriction. */
 async function resolveRestaurant(token) {
   const supabase = serverClient();
   const admin = adminClient();
@@ -27,17 +26,16 @@ async function resolveRestaurant(token) {
 
   const userId = userRes.user.id;
 
-  // 1. Try staff assignment
   const { data: staffRowRows } = await admin
     .from("restaurant_staff")
-    .select("restaurant_id")
+    .select("restaurant_id, role")
     .eq("user_id", userId)
     .limit(2);
   const staffRow = staffRowRows?.length === 1 ? staffRowRows[0] : null;
 
   let restaurantId = staffRow?.restaurant_id || null;
+  let staffRole = String(staffRow?.role || "").toLowerCase();
 
-  // 2. Fallback: restaurant owner
   if (!restaurantId) {
     const { data: ownerRow } = await admin
       .from("restaurants")
@@ -46,6 +44,7 @@ async function resolveRestaurant(token) {
       .limit(1)
       .maybeSingle();
     restaurantId = ownerRow?.id || null;
+    if (restaurantId) staffRole = "owner";
   }
 
   if (!restaurantId) {
@@ -64,6 +63,7 @@ async function resolveRestaurant(token) {
 
   return {
     userId,
+    staffRole,
     restaurantId: restaurant.id,
     restaurantName: restaurant.name || "Restaurant",
     restaurantLogo: restaurant.cover_image || "",
@@ -146,6 +146,11 @@ export async function PATCH(request) {
 
     const blocked = bookingStatusChangeError(existing, nextStatus);
     if (blocked) return NextResponse.json({ ok: false, error: blocked }, { status: 409 });
+
+    const closesBill = nextStatus === "PAID" || nextStatus === "CANCELLED";
+    if (closesBill && !["owner", "restaurant_admin", "restaurant_cashier", "cashier"].includes(ctx.staffRole)) {
+      return NextResponse.json({ ok: false, error: "Only the cashier can take payment or cancel a bill." }, { status: 403 });
+    }
 
     const patch = { booking_status: nextStatus, updated_at: new Date().toISOString() };
     if (nextStatus === "PAID" && !isBillPaid(existing)) {

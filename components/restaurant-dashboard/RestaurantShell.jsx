@@ -42,7 +42,7 @@ export default function RestaurantShell({ children }) {
   );
   const sidebarPrefLoadedRef = useRef(false);
   const isRoleStandalone =
-    pathname?.startsWith("/restaurant/kitchen") || pathname?.startsWith("/restaurant/bearer");
+    pathname?.startsWith("/restaurant/kitchen") || pathname?.startsWith("/restaurant/waiter");
 
   useEffect(() => {
     const stored = window.localStorage.getItem("restaurant_sidebar_collapsed");

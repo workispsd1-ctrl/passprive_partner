@@ -1,15 +1,15 @@
 "use client";
 
-import BearerTopbar from "./BearerTopbar";
-import BearerOrderNotifier from "./BearerOrderNotifier";
+import WaiterTopbar from "./WaiterTopbar";
+import WaiterOrderNotifier from "./WaiterOrderNotifier";
 
-export default function BearerShell({ children }) {
+export default function WaiterShell({ children }) {
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
-      <BearerTopbar />
+      <WaiterTopbar />
       <section className="flex-1 p-4 sm:p-6">{children}</section>
       {/* Floor-wide alerts: soft new-order ping + Take-Table modal, loud Ready-to-Serve */}
-      <BearerOrderNotifier />
+      <WaiterOrderNotifier />
     </main>
   );
 }

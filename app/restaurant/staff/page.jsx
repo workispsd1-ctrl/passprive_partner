@@ -11,7 +11,7 @@ const ROLE_OPTIONS = [
   { value: "restaurant_admin", label: "Admin" },
   { value: "restaurant_cashier", label: "Cashier" },
   { value: "restaurant_kitchen", label: "Kitchen" },
-  { value: "restaurant_bearer", label: "Bearer" },
+  { value: "restaurant_waiter", label: "Waiter" },
 ];
 
 function Field({ label, ...props }) {
@@ -253,7 +253,7 @@ export default function RestaurantStaffPage() {
     await loadMembers();
   };
 
-  const roleLabel = (value) => ROLE_OPTIONS.find((r) => r.value === value)?.label || value;
+  const roleLabel = (value) => (value === "restaurant_bearer" ? "Waiter" : ROLE_OPTIONS.find((r) => r.value === value)?.label || value);
 
   return (
     <div className="space-y-6">

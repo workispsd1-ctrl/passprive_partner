@@ -23,7 +23,7 @@ function blinkAccent(tableNo) {
   return TABLE_BLINK_COLORS[(n - 1) % TABLE_BLINK_COLORS.length];
 }
 
-export default function BearerTableGrid({ restaurantId, initialLayouts = [] }) {
+export default function WaiterTableGrid({ restaurantId, initialLayouts = [] }) {
   const [loading, setLoading] = useState(true);
   const [layouts, setLayouts] = useState(initialLayouts);
   const [orders, setOrders] = useState([]);
@@ -59,7 +59,7 @@ export default function BearerTableGrid({ restaurantId, initialLayouts = [] }) {
 
     try {
         const { data: { session } } = await supabaseBrowser.auth.getSession();
-        const res = await fetch(`/api/bearer/profile`, {
+        const res = await fetch(`/api/waiter/profile`, {
             headers: { Authorization: `Bearer ${session?.access_token}` }
         });
         const payload = await res.json();
@@ -83,7 +83,7 @@ export default function BearerTableGrid({ restaurantId, initialLayouts = [] }) {
 
   function subscribeRealtime() {
     const channel = supabaseBrowser
-      .channel(`bearer-tables-visual-${restaurantId}`)
+      .channel(`waiter-tables-visual-${restaurantId}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "restaurant_table_bookings", filter: `restaurant_id=eq.${restaurantId}` },
@@ -227,7 +227,7 @@ function TableCard({ table, isGrid = false }) {
   if (isGrid) {
     return (
       <Link
-        href={`/restaurant/bearer/table/${table.table_no}`}
+        href={`/restaurant/waiter/table/${table.table_no}`}
         className={`group relative flex flex-col overflow-hidden rounded-2xl border-2 ${borderClass} p-3 shadow-sm transition-all duration-300 hover:shadow-md hover:border-slate-300 active:scale-95`}
         style={table.isBlinking ? { borderColor: table.blinkColor.ring, boxShadow: `0 0 16px ${table.blinkColor.glow}, 0 1px 3px rgba(0, 0, 0, 0.1)` } : {}}
       >
@@ -256,7 +256,7 @@ function TableCard({ table, isGrid = false }) {
   // Floor plan mode
   return (
     <Link
-      href={`/restaurant/bearer/table/${table.table_no}`}
+      href={`/restaurant/waiter/table/${table.table_no}`}
       className={`group relative flex flex-col overflow-hidden rounded-2xl border-2 ${borderClass} p-4 shadow-sm transition-all duration-300 hover:shadow-md min-w-[160px]`}
       style={table.isBlinking ? { borderColor: table.blinkColor.ring, boxShadow: `0 0 20px ${table.blinkColor.glow}` } : {}}
     >

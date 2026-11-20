@@ -3,11 +3,11 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-export default function BearerDashboardPage() {
+export default function WaiterDashboardPage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace("/restaurant/bearer/table-orders");
+    router.replace("/restaurant/waiter/floor");
   }, [router]);
 
   return null;

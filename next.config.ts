@@ -11,10 +11,14 @@ const DISABLED_MERCHANT_PAGES = [
 
 const nextConfig: NextConfig = {
   async redirects() {
-    return DISABLED_MERCHANT_PAGES.flatMap(({ source, destination }) => [
-      { source, destination, permanent: false },
-      { source: `${source}/:path*`, destination, permanent: false },
-    ]);
+    return [
+      { source: "/restaurant/bearer", destination: "/restaurant/waiter", permanent: true },
+      { source: "/restaurant/bearer/:path*", destination: "/restaurant/waiter/:path*", permanent: true },
+      ...DISABLED_MERCHANT_PAGES.flatMap(({ source, destination }) => [
+        { source, destination, permanent: false },
+        { source: `${source}/:path*`, destination, permanent: false },
+      ]),
+    ];
   },
 };
 

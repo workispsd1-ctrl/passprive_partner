@@ -7,14 +7,18 @@ import {
   LayoutGrid,
   ListIndentDecrease,
   TextAlignJustify,
+  Table2,
+  Package2,
 } from "lucide-react";
 
 const NAV_ITEMS = [
-  { label: "My Floor", href: "/restaurant/bearer/floor", icon: LayoutGrid },
-  { label: "New Order", href: "/restaurant/bearer/table-orders", icon: QrCode },
+  { label: "Dashboard", href: "/restaurant/waiter/floor", icon: LayoutGrid },
+  { label: "New Order", href: "/restaurant/waiter/table-orders", icon: QrCode },
+  { label: "Table Layout", href: "/restaurant/waiter/table-layout", icon: Table2 },
+  { label: "Make Order", href: "/restaurant/waiter/orders", icon: Package2 },
 ];
 
-export default function BearerSidebar({ collapsed = false, onToggle }) {
+export default function WaiterSidebar({ collapsed = false, onToggle }) {
   const pathname = usePathname();
 
   return (

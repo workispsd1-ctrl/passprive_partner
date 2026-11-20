@@ -16,6 +16,7 @@ const ALLOWED_ROLES = new Set([
   "cashier",
   "restaurant_cashier",
   "restaurant_kitchen",
+  "restaurant_waiter",
   "restaurant_bearer",
 ]);
 

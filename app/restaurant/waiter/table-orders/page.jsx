@@ -24,7 +24,7 @@ function safeSections(menuObj) {
     .filter((s) => s.items.length > 0);
 }
 
-export default function BearerTableOrdersPage() {
+export default function WaiterTableOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState("");
@@ -46,7 +46,7 @@ export default function BearerTableOrdersPage() {
       const token = sess?.session?.access_token;
       if (!token) throw new Error("Please sign in again.");
 
-      const res = await fetch("/api/bearer/profile", { 
+      const res = await fetch("/api/waiter/profile", { 
         headers: { Authorization: `Bearer ${token}` } 
       });
       const json = await res.json();
@@ -133,8 +133,7 @@ export default function BearerTableOrdersPage() {
       const token = sess?.session?.access_token;
       if (!token) throw new Error("Please sign in again.");
 
-      // Get restaurant_id from bearer profile
-      const profileRes = await fetch("/api/bearer/profile", {
+      const profileRes = await fetch("/api/waiter/profile", {
         headers: { Authorization: `Bearer ${token}` },
       });
       const profileJson = await profileRes.json();
@@ -170,7 +169,7 @@ export default function BearerTableOrdersPage() {
           booking_status: "PLACED",
           source: "bearer_platform",
           order_details: {
-            placed_by: "bearer",
+            placed_by: "waiter",
             is_staff_initiated: true,
           },
         },

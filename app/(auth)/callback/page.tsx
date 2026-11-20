@@ -16,6 +16,7 @@ const ALLOWED_ROLES = new Set([
   "cashier",
   "restaurant_cashier",
   "restaurant_kitchen",
+  "restaurant_waiter",
   "restaurant_bearer",
 ]);
 
@@ -96,8 +97,8 @@ const AuthCallbackPage = () => {
           return;
         }
 
-        if (role === "restaurant_bearer") {
-          if (!cancelled) router.replace("/restaurant/bearer/dashboard");
+        if (role === "restaurant_waiter" || role === "restaurant_bearer") {
+          if (!cancelled) router.replace("/restaurant/waiter/dashboard");
           return;
         }
 

@@ -179,6 +179,12 @@ export async function POST(request) {
     const body = await request.json();
     const action = String(body?.action || "").trim().toLowerCase();
 
+    const money = ["pay_part", "request_pos_payment", "split_to_pos", "cancel_pos_payment", "settle", "void_order"].includes(action) ||
+      (action === "update_order_state" && ["PAID", "COMPLETED"].includes(String(body?.payment_status || "").toUpperCase()));
+    if (ctx.isWaiter && money) {
+      return NextResponse.json({ ok: false, error: "Payments and cancelling tables are done by the cashier." }, { status: 403 });
+    }
+
     if (action === "cancel_item" || action === "set_item_qty") {
       const { status, body: out } = await setBillItemQty(ctx.admin, ctx.restaurantId, ctx.userId, {
         ...body,

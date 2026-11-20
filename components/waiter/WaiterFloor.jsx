@@ -63,20 +63,21 @@ async function authedFetch(path, opts = {}) {
 }
 
 const TABS = [
+  { key: "ACTIVE", label: "Active tables", color: "orange" },
   { key: "READY", label: "Ready to Run", color: "emerald" },
   { key: "NEW", label: "New", color: "amber" },
   { key: "PROGRESS", label: "In Progress", color: "violet" },
   { key: "FLOOR", label: "Floor", color: "slate" },
 ];
 
-export default function BearerFloor() {
+export default function WaiterFloor() {
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState([]);
   const [tables, setTables] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [me, setMe] = useState("");
-  const [tab, setTab] = useState("READY");
-  const [scope, setScope] = useState("mine"); // mine | all
+  const [tab, setTab] = useState("ACTIVE");
+  const [scope, setScope] = useState("all");
   const [busyId, setBusyId] = useState("");
   const [, setTick] = useState(0);
 
@@ -115,11 +116,11 @@ export default function BearerFloor() {
     const poll = setInterval(() => load(true), 5000);
     const timer = setInterval(() => setTick((n) => n + 1), 15000);
     const onRefresh = () => load(true);
-    window.addEventListener("bearer:refresh", onRefresh);
+    window.addEventListener("waiter:refresh", onRefresh);
     return () => {
       clearInterval(poll);
       clearInterval(timer);
-      window.removeEventListener("bearer:refresh", onRefresh);
+      window.removeEventListener("waiter:refresh", onRefresh);
     };
   }, [load]);
 
@@ -207,6 +208,14 @@ export default function BearerFloor() {
     [orders, scope, ownerByTable, me]
   );
 
+  const activeList = useMemo(
+    () =>
+      orders
+        .filter((o) => inScope(o.table_no))
+        .sort((a, b) => Number(a.table_no || 0) - Number(b.table_no || 0)),
+    [orders, scope, ownerByTable, me]
+  );
+
   const floorTables = useMemo(() => {
     const statusByTable = new Map();
     for (const o of orders) {
@@ -227,6 +236,7 @@ export default function BearerFloor() {
   }, [tables, orders]);
 
   const counts = {
+    ACTIVE: activeList.length,
     READY: ready.length,
     NEW: fresh.length,
     PROGRESS: progress.length,
@@ -297,14 +307,22 @@ export default function BearerFloor() {
               <span>Served by {owner?.waiter_name || "another waiter"}</span>
               <span className="font-semibold text-slate-800">{money(o.total_amount)}</span>
             </div>
-          ) : isReady ? (
-            <button type="button" disabled={busy} onClick={() => markServed(o)} className="h-11 w-full rounded-xl bg-emerald-600 text-sm font-semibold text-white disabled:opacity-60">
-              {busy ? "Updating…" : "Mark Served"}
-            </button>
+          ) : String(o.booking_status || "").toUpperCase() === "COMPLETED" ? (
+            <div className="flex h-11 items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-sm text-emerald-700">
+              <span>Completed · with the cashier</span>
+              <span className="font-semibold">{money(o.total_amount)}</span>
+            </div>
           ) : (
-            <div className="flex h-11 items-center justify-between rounded-xl border border-slate-200 px-3 text-sm text-slate-500">
-              <span className="inline-flex items-center gap-1.5"><ChefHat className="h-4 w-4" /> In the kitchen</span>
-              <span className="font-semibold text-slate-800">{money(o.total_amount)}</span>
+            <div className="space-y-2">
+              {!isReady ? (
+                <div className="flex items-center justify-between px-1 text-xs text-slate-500">
+                  <span className="inline-flex items-center gap-1.5"><ChefHat className="h-3.5 w-3.5" /> In the kitchen</span>
+                  <span className="font-semibold text-slate-800">{money(o.total_amount)}</span>
+                </div>
+              ) : null}
+              <button type="button" disabled={busy} onClick={() => markServed(o)} className="h-11 w-full rounded-xl bg-emerald-600 text-sm font-semibold text-white disabled:opacity-60">
+                {busy ? "Updating…" : "Mark completed"}
+              </button>
             </div>
           )}
         </div>
@@ -312,12 +330,12 @@ export default function BearerFloor() {
     );
   };
 
-  const laneList = tab === "READY" ? ready : tab === "NEW" ? fresh : tab === "PROGRESS" ? progress : [];
+  const laneList = tab === "ACTIVE" ? activeList : tab === "READY" ? ready : tab === "NEW" ? fresh : tab === "PROGRESS" ? progress : [];
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">My Floor</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
         <div className="flex rounded-xl border border-slate-200 bg-white p-1">
           {["mine", "all"].map((s) => (
             <button key={s} type="button" onClick={() => setScope(s)} className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${scope === s ? "bg-[#FF4800] text-white" : "text-slate-600"}`}>
@@ -369,11 +387,11 @@ export default function BearerFloor() {
         )
       ) : laneList.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">
-          {tab === "READY" ? "Nothing to run right now." : tab === "NEW" ? "No new orders." : "No orders in the kitchen."}
+          {tab === "ACTIVE" ? "No active tables right now." : tab === "READY" ? "Nothing to run right now." : tab === "NEW" ? "No new orders." : "No orders in the kitchen."}
         </div>
       ) : (
         <div className="space-y-3">
-          {laneList.map((o) => <Ticket key={o.id} o={o} isReady={tab === "READY"} />)}
+          {laneList.map((o) => <Ticket key={o.id} o={o} isReady={String(o.booking_status || "").toUpperCase() === "SERVED"} />)}
         </div>
       )}
     </div>

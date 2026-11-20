@@ -42,7 +42,7 @@ function makeUuid() {
   });
 }
 
-export default function BearerTableOrderPage() {
+export default function WaiterTableOrderPage() {
   const params = useParams();
   const router = useRouter();
   const tableNo = params.tableNo;
@@ -78,7 +78,7 @@ export default function BearerTableOrderPage() {
           return;
       }
 
-      const res = await fetch("/api/bearer/profile", {
+      const res = await fetch("/api/waiter/profile", {
           headers: { Authorization: `Bearer ${token}` }
       });
       const payload = await res.json();
@@ -213,8 +213,8 @@ export default function BearerTableOrderPage() {
           note: it.note || undefined,
         })),
         order_details: {
-          placed_by: "bearer",
-          staff_name: "Bearer Staff",
+          placed_by: "waiter",
+          staff_name: "Waiter",
           version: 1,
           is_staff_initiated: true,
           session_id: sessionId
@@ -297,7 +297,7 @@ export default function BearerTableOrderPage() {
           </button>
           <div>
             <h1 className="text-2xl font-black text-slate-900 leading-none">Table {tableNo}</h1>
-            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Bearer Ordering Flow</p>
+            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Waiter Ordering</p>
           </div>
         </div>
         

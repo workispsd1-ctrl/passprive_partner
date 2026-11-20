@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { NOT_IN_PLAN, restaurantHasPlan } from "@/lib/server/plan";
 
-const STAFF_ROLE_OPTIONS = new Set(["restaurant_admin", "restaurant_cashier", "restaurant_kitchen", "restaurant_bearer"]);
+const STAFF_ROLE_OPTIONS = new Set(["restaurant_admin", "restaurant_cashier", "restaurant_kitchen", "restaurant_waiter"]);
 
 function serverClient() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
@@ -18,7 +18,8 @@ function adminClient() {
 }
 
 function normalizeStaffRole(value) {
-  const role = String(value || "").trim().toLowerCase();
+  const raw = String(value || "").trim().toLowerCase();
+  const role = raw === "restaurant_bearer" ? "restaurant_waiter" : raw;
   if (STAFF_ROLE_OPTIONS.has(role)) return role;
   return "restaurant_cashier";
 }
@@ -26,7 +27,7 @@ function normalizeStaffRole(value) {
 function roleDisplay(role) {
   if (role === "restaurant_admin") return "Restaurant_Admin";
   if (role === "restaurant_kitchen") return "Restaurant_Kitchen";
-  if (role === "restaurant_bearer") return "Restaurant_Bearer";
+  if (role === "restaurant_waiter") return "Restaurant_Waiter";
   return "Restaurant_Cashier";
 }
 
