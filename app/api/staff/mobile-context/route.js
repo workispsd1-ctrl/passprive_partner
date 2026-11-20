@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireTerminal, serverError } from "../_terminal";
 import { isQrPending } from "@/lib/server/printJobs";
@@ -19,6 +20,8 @@ export async function POST(request) {
     const ctx = await requireTerminal(request, ["payments"]);
     if (ctx.error) return ctx.error;
     const { admin, restaurantId } = ctx;
+    const body = await request.json().catch(() => ({}));
+    const knownMenu = String(body?.menu_v || "");
 
     const [
       { data: restaurantRow, error: restaurantErr },
@@ -53,14 +56,18 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: "Restaurant not found." }, { status: 404 });
     }
 
+    const menu = parseMenu(restaurantRow.menu_json);
+    const menuV = createHash("sha1").update(JSON.stringify(menu)).digest("hex").slice(0, 16);
+
     return NextResponse.json({
       ok: true,
+      menu_v: menuV,
       restaurant: {
         id: restaurantRow.id,
         name: restaurantRow.name || "Restaurant",
         cover_image: restaurantRow.cover_image || "",
       },
-      menu: parseMenu(restaurantRow.menu_json),
+      ...(knownMenu === menuV ? {} : { menu }),
       tables: tableRows || [],
       open_orders: (orderRows || []).filter((o) => !isQrPending(o)),
     });
