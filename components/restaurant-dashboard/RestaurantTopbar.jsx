@@ -34,6 +34,7 @@ const TITLE_MAP = {
   "/restaurant/table-orders": "nav.qrOrders",
   "/restaurant/table-positioning": "nav.tableLayout",
   "/restaurant/table-layout": "nav.tableLayout",
+  "/restaurant/printers": "nav.printers",
 };
 
 function getTitleKeyFromPath(pathname) {

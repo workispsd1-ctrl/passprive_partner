@@ -78,7 +78,7 @@ function menuSections(menuJson) {
     .filter((section) => section.items.length > 0);
 }
 
-async function liveTables({ admin, restaurantId, printKinds }) {
+async function liveTables({ admin, restaurantId, printKinds, lan = false }) {
   const [tablesRes, ordersRes, merchantRes, printJobs, payRequests] = await Promise.all([
     admin
       .from("restaurant_table_layouts")
@@ -98,7 +98,7 @@ async function liveTables({ admin, restaurantId, printKinds }) {
       .select("name, registered_name, brn, full_address, phone")
       .eq("id", restaurantId)
       .maybeSingle(),
-    pendingPrintJobs(admin, restaurantId, printKinds).catch(() => []),
+    pendingPrintJobs(admin, restaurantId, printKinds, lan).catch(() => []),
     pendingPayRequests(admin, restaurantId).catch(() => []),
   ]);
   if (tablesRes.error) throw tablesRes.error;
@@ -166,7 +166,16 @@ export async function POST(request) {
     const body = await readJson(request);
     const action = String(body.action || "list");
     const accepted = Array.isArray(body.print_kinds) ? body.print_kinds.map(String) : [];
-    ctx.printKinds = [...new Set([...TICKET_KINDS, ...accepted.filter((k) => ["part_receipt", "final_bill"].includes(k))])];
+    ctx.printKinds = [...new Set([...TICKET_KINDS, ...accepted.filter((k) => ["part_receipt", "final_bill", "test"].includes(k))])];
+    ctx.lan = body.lan_print === true;
+    if (ctx.lan) {
+      const minuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
+      await ctx.admin
+        .from("pos_terminals")
+        .update({ lan_print_at: new Date().toISOString() })
+        .eq("id", ctx.terminalId)
+        .or(`lan_print_at.is.null,lan_print_at.lt.${minuteAgo}`);
+    }
 
     if (action === "decline_payment") {
       const { status, body: out } = await cancelPayRequest(ctx.admin, ctx.restaurantId, ctx.userId, body, "declined");

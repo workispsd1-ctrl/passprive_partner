@@ -21,6 +21,7 @@ import {
   X,
   Building2,
   Lock,
+  Printer,
 } from "lucide-react";
 import { fetchRestaurantPlan, isNavHidden, isRouteLocked } from "@/lib/restaurant-partner/plan";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
@@ -41,6 +42,7 @@ const nav = [
   { label: "nav.pos", href: "/restaurant/pos", icon: MonitorSmartphone },
   { label: "nav.qrOrders", href: "/restaurant/table-orders", icon: QrCode, key: "table_orders" },
   { label: "nav.tableLayout", href: "/restaurant/table-layout", icon: Table2 },
+  { label: "nav.printers", href: "/restaurant/printers", icon: Printer },
   { label: "nav.pickupOrders", href: "/restaurant/orders", icon: Soup, key: "pickup_orders" },
   { label: "nav.menu", href: "/restaurant/menu", icon: UtensilsCrossed },
   { label: "nav.offers", href: "/restaurant/offers", icon: Tag },
