@@ -24,6 +24,17 @@ function normalizeStaffRole(value) {
   return "restaurant_cashier";
 }
 
+async function validArea(admin, restaurantId, areaId) {
+  if (!areaId) return null;
+  const { data } = await admin
+    .from("restaurant_table_areas")
+    .select("id")
+    .eq("id", areaId)
+    .eq("restaurant_id", restaurantId)
+    .maybeSingle();
+  return data?.id || undefined;
+}
+
 function roleDisplay(role) {
   if (role === "restaurant_admin") return "Restaurant_Admin";
   if (role === "restaurant_kitchen") return "Restaurant_Kitchen";
@@ -122,10 +133,15 @@ export async function GET(request) {
 
     const { data: staffRows, error: staffErr } = await admin
       .from("restaurant_staff")
-      .select("id, role, created_at, user_id")
+      .select("id, role, area_id, created_at, user_id")
       .eq("restaurant_id", owner.restaurantId)
       .order("created_at", { ascending: false })
       .limit(100);
+    const { data: areaRows } = await admin
+      .from("restaurant_table_areas")
+      .select("id, name, sort_order")
+      .eq("restaurant_id", owner.restaurantId)
+      .order("sort_order", { ascending: true });
 
     if (staffErr) return NextResponse.json({ ok: false, error: staffErr.message }, { status: 400 });
 
@@ -151,6 +167,7 @@ export async function GET(request) {
     const members = (staffRows || []).map((m) => ({
       id: m.id,
       role: m.role,
+      area_id: m.area_id || null,
       created_at: m.created_at,
       user_id: m.user_id,
       full_name: userMap[m.user_id]?.full_name || "-",
@@ -158,7 +175,7 @@ export async function GET(request) {
       phone: userMap[m.user_id]?.phone || "-",
     }));
 
-    return NextResponse.json({ ok: true, members, restaurant_id: owner.restaurantId });
+    return NextResponse.json({ ok: true, members, areas: (areaRows || []).map((a) => ({ id: a.id, name: a.name })), restaurant_id: owner.restaurantId });
   } catch (error) {
     console.error("GET /api/restaurant/staff error:", error);
     return NextResponse.json({ ok: false, error: error?.message || "Unknown error" }, { status: 500 });
@@ -218,6 +235,8 @@ export async function POST(request) {
     const phone = String(body?.phone || "").trim() || null;
     const role = normalizeStaffRole(body?.role);
     const pin = body?.pin ? validatePin(body.pin) : null;
+    const areaId = role === "restaurant_cashier" ? await validArea(admin, owner.restaurantId, String(body?.area_id || "")) : null;
+    if (areaId === undefined) return NextResponse.json({ ok: false, error: "That area no longer exists." }, { status: 400 });
 
     if (role === "restaurant_admin" && !owner.isMaster) {
       return NextResponse.json(
@@ -267,6 +286,7 @@ export async function POST(request) {
       restaurant_id: owner.restaurantId,
       user_id: newUserId,
       role,
+      area_id: areaId,
       created_by: owner.ownerUserId,
     });
 
@@ -317,6 +337,16 @@ export async function PATCH(request) {
       .maybeSingle();
 
     if (!staffRow) return NextResponse.json({ ok: false, error: "Staff member not found" }, { status: 404 });
+
+    if (body.area_id !== undefined) {
+      const { data: roleRow } = await admin.from("restaurant_staff").select("role").eq("id", staffRow.id).maybeSingle();
+      if (roleRow?.role === "restaurant_cashier") {
+        const areaId = await validArea(admin, owner.restaurantId, String(body.area_id || ""));
+        if (areaId === undefined) return NextResponse.json({ ok: false, error: "That area no longer exists." }, { status: 400 });
+        const { error: areaErr } = await admin.from("restaurant_staff").update({ area_id: areaId }).eq("id", staffRow.id);
+        if (areaErr) return NextResponse.json({ ok: false, error: areaErr.message }, { status: 400 });
+      }
+    }
 
     const updates = {};
     if (body.full_name !== undefined) updates.full_name = String(body.full_name || "").trim() || null;

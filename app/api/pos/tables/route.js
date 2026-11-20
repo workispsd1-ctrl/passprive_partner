@@ -41,7 +41,7 @@ function menuSections(menuJson) {
     .map((section) => ({
       id: String(section?.id || section?.name || ""),
       name: String(section?.name || ""),
-      group: String(section?.group || "").trim() || "Other",
+      group: /bar|drink|beverage|boisson/i.test(String(section?.group || "")) ? "Bar" : "Kitchen",
       subcategories: publicSubcategories(section),
       items: (Array.isArray(section?.items) ? section.items : [])
         .filter((item) => item?.id && item.is_available !== false && (!(item.variants || []).length || publicVariants(item).length))

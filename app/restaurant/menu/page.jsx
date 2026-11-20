@@ -189,6 +189,10 @@ function Dialog({ open, onClose, title, children, footer }) {
   );
 }
 
+function menuKind(group) {
+  return /bar|drink|beverage|boisson/i.test(String(group || "")) ? "Bar" : "Kitchen";
+}
+
 export default function RestaurantMenuPage() {
   const [restaurantId, setRestaurantId] = useState(null);
   const [menu, setMenu] = useState(EMPTY_MENU());
@@ -493,7 +497,7 @@ export default function RestaurantMenuPage() {
 
     const name = sectionName.trim();
     const description = sectionDesc.trim();
-    const group = sectionGroup.trim().slice(0, 40) || null;
+    const group = menuKind(sectionGroup);
     if (!name) return;
 
     const nextMenu = (() => {
@@ -1021,9 +1025,7 @@ export default function RestaurantMenuPage() {
                           >
                             <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
                               {s.name}
-                              {s.group ? (
-                                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600">{s.group}</span>
-                              ) : null}
+                              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${menuKind(s.group) === "Bar" ? "bg-violet-100 text-violet-700" : "bg-gray-100 text-gray-600"}`}>{menuKind(s.group)}</span>
                             </div>
                             <div className="text-xs text-gray-500">
                               {(s.items || []).length} items {s.description ? `• ${s.description}` : ""}
@@ -1320,19 +1322,22 @@ export default function RestaurantMenuPage() {
 
           <div>
             <label className="text-sm font-semibold text-gray-700">Menu</label>
-            <input
-              value={sectionGroup}
-              onChange={(e) => setSectionGroup(e.target.value)}
-              list="menu-groups"
-              placeholder="e.g. Food, Bar"
-              className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-300"
-            />
-            <datalist id="menu-groups">
-              {Array.from(new Set(["Food", "Bar", ...sections.map((x) => x.group).filter(Boolean)])).map((g) => (
-                <option key={g} value={g} />
-              ))}
-            </datalist>
-            <p className="mt-1 text-xs text-gray-500">Staff see each menu as its own tab when taking orders.</p>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {["Kitchen", "Bar"].map((g) => {
+                const on = menuKind(sectionGroup) === g;
+                return (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => setSectionGroup(g)}
+                    className={`h-11 rounded-xl border text-sm font-semibold ${on ? "border-[#FF4800] bg-[#FF4800] text-white" : "border-gray-200 bg-white text-gray-700"}`}
+                  >
+                    {g} menu
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1 text-xs text-gray-500">Staff see the Kitchen and Bar menus as separate tabs when taking orders.</p>
           </div>
 
           <div>

@@ -51,6 +51,8 @@ export default function RestaurantStaffPage() {
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [editingMember, setEditingMember] = useState(null);
   const [editName, setEditName] = useState("");
+  const [editArea, setEditArea] = useState("");
+  const [areas, setAreas] = useState([]);
   const [editPhone, setEditPhone] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [members, setMembers] = useState([]);
@@ -151,6 +153,7 @@ export default function RestaurantStaffPage() {
         return;
       }
       setMembers(json.members || []);
+      setAreas(json.areas || []);
     } catch {
       setMembers([]);
       toast.error("Failed to load staff data.");
@@ -180,7 +183,8 @@ export default function RestaurantStaffPage() {
         body: JSON.stringify({ restaurant_id: await getActiveRestaurantId(),
           full_name: fullName,
           phone,
-          role,
+          role: role.split("@")[0],
+          area_id: role.split("@")[1] || null,
         }),
       });
 
@@ -202,6 +206,7 @@ export default function RestaurantStaffPage() {
   const openEditModal = (member) => {
     setEditingMember(member);
     setEditName(member.full_name === "-" ? "" : member.full_name);
+    setEditArea(member.area_id || "");
     setEditPhone(member.phone === "-" ? "" : member.phone);
   };
 
@@ -218,7 +223,7 @@ export default function RestaurantStaffPage() {
     const res = await fetch("/api/restaurant/staff", {
       method: "PATCH",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ restaurant_id: await getActiveRestaurantId(), user_id: editingMember.user_id, full_name: editName, phone: editPhone }),
+      body: JSON.stringify({ restaurant_id: await getActiveRestaurantId(), user_id: editingMember.user_id, full_name: editName, phone: editPhone, ...(editingMember.role === "restaurant_cashier" ? { area_id: editArea || null } : {}) }),
     });
     const json = await res.json();
     if (!res.ok || !json?.ok) {
@@ -253,7 +258,21 @@ export default function RestaurantStaffPage() {
     await loadMembers();
   };
 
-  const roleLabel = (value) => (value === "restaurant_bearer" ? "Waiter" : ROLE_OPTIONS.find((r) => r.value === value)?.label || value);
+  const roleOptions = [
+    { value: "restaurant_admin", label: "Admin" },
+    { value: "restaurant_cashier", label: "Main cashier · all areas" },
+    ...areas.map((a) => ({ value: `restaurant_cashier@${a.id}`, label: `Cashier · ${a.name}` })),
+    { value: "restaurant_kitchen", label: "Kitchen" },
+    { value: "restaurant_waiter", label: "Waiter" },
+  ];
+  const roleLabel = (value, areaId) => {
+    if (value === "restaurant_bearer") return "Waiter";
+    if (value === "restaurant_cashier") {
+      const area = areas.find((a) => a.id === areaId);
+      return area ? `Cashier · ${area.name}` : "Main cashier";
+    }
+    return ROLE_OPTIONS.find((r) => r.value === value)?.label || value;
+  };
 
   return (
     <div className="space-y-6">
@@ -275,7 +294,7 @@ export default function RestaurantStaffPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Staff name" />
             <Field label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number" />
-            <SelectField label="Role" value={role} onChange={(e) => setRole(e.target.value)} options={ROLE_OPTIONS} />
+            <SelectField label="Role" value={role} onChange={(e) => setRole(e.target.value)} options={roleOptions} />
           </div>
           <div className="mt-4 flex items-center gap-3">
             <button
@@ -337,7 +356,7 @@ export default function RestaurantStaffPage() {
               <tr key={m.id}>
                 <td className="px-4 py-2">{m.full_name}</td>
                 <td className="px-4 py-2">{m.phone}</td>
-                <td className="px-4 py-2 capitalize">{roleLabel(m.role)}</td>
+                <td className="px-4 py-2">{roleLabel(m.role, m.area_id)}</td>
                 <td className="px-4 py-2">
                   <div className="flex items-center justify-end gap-2">
                     <button type="button" onClick={() => setViewMember(m)} className="rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-slate-700 hover:bg-slate-100"><Eye className="h-4 w-4" /></button>
@@ -421,7 +440,7 @@ export default function RestaurantStaffPage() {
             <div className="mt-3 space-y-2 text-sm text-gray-700">
               <p><span className="font-semibold">Name:</span> {viewMember.full_name}</p>
               <p><span className="font-semibold">Phone:</span> {viewMember.phone}</p>
-              <p><span className="font-semibold">Role:</span> {roleLabel(viewMember.role)}</p>
+              <p><span className="font-semibold">Role:</span> {roleLabel(viewMember.role, viewMember.area_id)}</p>
             </div>
             <button type="button" onClick={() => setViewMember(null)} className="mt-4 w-full rounded-xl border border-gray-200 py-2 text-sm font-semibold bg-red-600 text-white cursor-pointer">Close</button>
           </div>
@@ -434,6 +453,14 @@ export default function RestaurantStaffPage() {
             <div className="text-sm font-semibold text-gray-900">Edit Staff Member</div>
             <div className="mt-3 grid gap-3">
               <Field label="Full name" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Staff name" />
+              {editingMember.role === "restaurant_cashier" ? (
+                <SelectField
+                  label="Till"
+                  value={editArea}
+                  onChange={(e) => setEditArea(e.target.value)}
+                  options={[{ value: "", label: "Main cashier · all areas" }, ...areas.map((a) => ({ value: a.id, label: `Cashier · ${a.name}` }))]}
+                />
+              ) : null}
               <Field label="Phone" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="Phone number" />
             </div>
             <div className="mt-4 flex items-center gap-2">

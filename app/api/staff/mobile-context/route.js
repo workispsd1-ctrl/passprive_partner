@@ -19,7 +19,7 @@ export async function POST(request) {
   try {
     const ctx = await requireTerminal(request, ["payments"]);
     if (ctx.error) return ctx.error;
-    const { admin, restaurantId, terminalId } = ctx;
+    const { admin, restaurantId, terminalId, userId } = ctx;
     const body = await request.json().catch(() => ({}));
     const knownMenu = String(body?.menu_v || "");
 
@@ -56,15 +56,21 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: "Restaurant not found." }, { status: 404 });
     }
 
-    const { data: terminalRow } = await admin
-      .from("pos_terminals")
-      .select("area_id, restaurant_table_areas:area_id(id, name)")
-      .eq("id", terminalId)
-      .maybeSingle();
-    const areaRow = Array.isArray(terminalRow?.restaurant_table_areas)
-      ? terminalRow.restaurant_table_areas[0]
-      : terminalRow?.restaurant_table_areas;
-    const area = terminalRow?.area_id && areaRow?.id ? { id: areaRow.id, name: areaRow.name || "" } : null;
+    const [{ data: terminalRow }, { data: staffRow }] = await Promise.all([
+      admin.from("pos_terminals").select("area_id, restaurant_table_areas:area_id(id, name)").eq("id", terminalId).maybeSingle(),
+      admin
+        .from("restaurant_staff")
+        .select("area_id, restaurant_table_areas:area_id(id, name)")
+        .eq("restaurant_id", restaurantId)
+        .eq("user_id", userId)
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    const areaOf = (row) => {
+      const a = Array.isArray(row?.restaurant_table_areas) ? row.restaurant_table_areas[0] : row?.restaurant_table_areas;
+      return row?.area_id && a?.id ? { id: a.id, name: a.name || "" } : null;
+    };
+    const area = areaOf(staffRow) || areaOf(terminalRow);
     const allTables = tableRows || [];
     const inArea = (t) => {
       if (!area) return true;
