@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { lanPrinters, queueTestPrint } from "@/lib/server/printJobs";
+import { lanDeviceOnline, queueTestPrint } from "@/lib/server/printJobs";
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -39,8 +39,7 @@ export async function POST(request) {
     });
     if (authErr || !allowed) return NextResponse.json({ ok: false, error: "You can't manage this restaurant." }, { status: 403 });
 
-    const online = await lanPrinters(db, printer.restaurant_id);
-    if (!online.length) {
+    if (!(await lanDeviceOnline(db, printer.restaurant_id))) {
       return NextResponse.json(
         {
           ok: false,

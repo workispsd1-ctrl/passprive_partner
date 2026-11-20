@@ -49,7 +49,7 @@ export default function PrintersPage() {
     const live = printers.filter((p) => p.is_active);
     return JOBS.map((j) => {
       const names = live.filter((p) => (p.prints || []).includes(j.key)).map((p) => p.name);
-      return { ...j, where: names.length ? names.join(", ") : "POS terminal (built-in printer)" };
+      return { ...j, where: names.length ? names.join(", ") : "Not printed — no printer chosen" };
     });
   }, [printers]);
 
@@ -80,7 +80,7 @@ export default function PrintersPage() {
   };
 
   const remove = async (p) => {
-    if (!window.confirm(`Remove ${p.name}? Its tickets will print on the POS terminal instead.`)) return;
+    if (!window.confirm(`Remove ${p.name}? What it prints will stop printing until another printer takes it over.`)) return;
     const { error } = await supabaseBrowser.from("restaurant_printers").delete().eq("id", p.id);
     if (error) return toast.error(error.message || "Could not remove the printer.");
     toast.success("Printer removed.");
@@ -141,8 +141,8 @@ export default function PrintersPage() {
           ))}
         </div>
         <p className="mt-3 text-xs text-gray-500">
-          Printing goes through the PassPrive POS terminal on the restaurant Wi-Fi. Anything without a printer, or while no updated POS is
-          online, prints on the POS terminal as before.
+          The PassPrive POS terminal sends everything to these printers over the restaurant Wi-Fi. The POS itself only prints its card
+          and MauCas payment slips.
         </p>
       </div>
 
