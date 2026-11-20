@@ -20,6 +20,7 @@ import {
 import { toast } from "sonner";
 import CustomiseDialog from "@/components/menu/CustomiseDialog";
 import { lineKey, publicModifierGroups, publicVariants } from "@/lib/server/menuPricing";
+import { isSoldOut } from "@/lib/soldOut";
 
 const mur = (n) => `MUR ${Number(n || 0).toLocaleString("en-US")}`;
 
@@ -391,10 +392,10 @@ export default function WaiterTableOrderPage() {
                       ) : (
                         <button 
                           onClick={() => addToCart(item)}
-                          disabled={!item.is_available}
+                          disabled={!item.is_available || isSoldOut(item)}
                           className="h-10 px-6 rounded-2xl bg-white border-2 border-slate-900 text-slate-900 text-[10px] font-black uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-all disabled:opacity-30 disabled:border-slate-200 disabled:text-slate-300"
                         >
-                          {item.is_available ? "Add Item" : "Out of Stock"}
+                          {item.is_available && !isSoldOut(item) ? "Add Item" : "Out of Stock"}
                         </button>
                       )}
                     </div>

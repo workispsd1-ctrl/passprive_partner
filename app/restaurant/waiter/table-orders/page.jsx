@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import Link from "next/link";
 import CustomiseDialog from "@/components/menu/CustomiseDialog";
 import { lineKey, publicModifierGroups, publicVariants } from "@/lib/server/menuPricing";
+import { isSoldOut } from "@/lib/soldOut";
 
 function money(n) {
   const num = Number(n);
@@ -19,7 +20,7 @@ function safeSections(menuObj) {
   return sections
     .map((s) => ({
       ...s,
-      items: (Array.isArray(s?.items) ? s.items : []).filter((i) => i?.is_available !== false),
+      items: (Array.isArray(s?.items) ? s.items : []).filter((i) => i?.is_available !== false && !isSoldOut(i)),
     }))
     .filter((s) => s.items.length > 0);
 }

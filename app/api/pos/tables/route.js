@@ -8,6 +8,7 @@ import { isBillClosed } from "@/lib/server/tableBill";
 import { readJson, reply, requireTerminal, serverError } from "../../staff/_terminal";
 import { publicModifierGroups, publicSubcategories, publicVariants } from "@/lib/server/menuPricing";
 import { menuAreas, menuTabs, sectionTab } from "@/lib/menuAreas";
+import { isSoldOut } from "@/lib/soldOut";
 
 const STORAGE_OBJECT_PATH = "/storage/v1/object/public/";
 const STORAGE_RENDER_PATH = "/storage/v1/render/image/public/";
@@ -60,7 +61,7 @@ function menuSections(menuJson) {
       comment_presets: [...new Set([...presets(section?.comment_presets), ...everyItem])].slice(0, 30),
       subcategories: publicSubcategories(section),
       items: (Array.isArray(section?.items) ? section.items : [])
-        .filter((item) => item?.id && item.is_available !== false && (!(item.variants || []).length || publicVariants(item).length))
+        .filter((item) => item?.id && item.is_available !== false && !isSoldOut(item) && (!(item.variants || []).length || publicVariants(item).length))
         .map((item) => {
           const groups = publicModifierGroups(item);
           const variants = publicVariants(item);

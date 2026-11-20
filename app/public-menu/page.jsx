@@ -8,6 +8,7 @@ import { createPublicMenuSession, finalizePublicMenuPayment } from "@/lib/public
 import { toast } from "sonner";
 import CustomiseDialog from "@/components/menu/CustomiseDialog";
 import { lineKey, publicModifierGroups, publicVariants } from "@/lib/server/menuPricing";
+import { isSoldOut } from "@/lib/soldOut";
 import {
   Leaf,
   CircleDot,
@@ -426,7 +427,7 @@ function PublicRestaurantMenuContent() {
     () =>
       (menu.sections || []).map((s) => ({
         ...s,
-        items: (s.items || []).filter((i) => i?.is_available !== false),
+        items: (s.items || []).filter((i) => i?.is_available !== false && !isSoldOut(i)),
       })),
     [menu]
   );

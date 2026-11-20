@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Plus, Minus, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { isSoldOut } from "@/lib/soldOut";
 
 function money(n) {
   const num = Number(n);
@@ -16,7 +17,7 @@ function safeSections(menuObj) {
   return sections
     .map((s) => ({
       ...s,
-      items: (Array.isArray(s?.items) ? s.items : []).filter((i) => i?.is_available !== false),
+      items: (Array.isArray(s?.items) ? s.items : []).filter((i) => i?.is_available !== false && !isSoldOut(i)),
     }))
     .filter((s) => s.items.length > 0);
 }
