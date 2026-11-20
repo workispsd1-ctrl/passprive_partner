@@ -193,6 +193,50 @@ function menuKind(group) {
   return /bar|drink|beverage|boisson/i.test(String(group || "")) ? "Bar" : "Kitchen";
 }
 
+function CommentPresetsEditor({ value, onChange }) {
+  const [draft, setDraft] = useState("");
+  const add = () => {
+    const text = draft.trim().replace(/\s+/g, " ").slice(0, 60);
+    if (!text) return;
+    if (!value.some((v) => v.toLowerCase() === text.toLowerCase())) onChange([...value, text].slice(0, 30));
+    setDraft("");
+  };
+  return (
+    <div className="mt-2">
+      {value.length ? (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {value.map((v) => (
+            <span key={v} className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 py-1 pl-3 pr-1.5 text-xs font-semibold text-gray-700">
+              {v}
+              <button type="button" aria-label={`Remove ${v}`} onClick={() => onChange(value.filter((x) => x !== v))} className="rounded-full p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-700">
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <div className="flex gap-2">
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+          maxLength={60}
+          placeholder="Type a comment and press Enter"
+          className="h-10 flex-1 rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-gray-300"
+        />
+        <button type="button" onClick={add} className="h-10 rounded-xl border border-gray-200 px-3 text-sm font-semibold hover:bg-gray-50">
+          Add
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function RestaurantMenuPage() {
   const [restaurantId, setRestaurantId] = useState(null);
   const [menu, setMenu] = useState(EMPTY_MENU());
@@ -218,6 +262,7 @@ export default function RestaurantMenuPage() {
   const [sectionName, setSectionName] = useState("");
   const [sectionDesc, setSectionDesc] = useState("");
   const [sectionGroup, setSectionGroup] = useState("");
+  const [sectionComments, setSectionComments] = useState([]);
 
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState(null);
@@ -243,6 +288,14 @@ export default function RestaurantMenuPage() {
   const originalMenuRef = useRef(EMPTY_MENU());
 
   const sections = menu.sections || [];
+  const [menuTab, setMenuTab] = useState("Kitchen");
+  const tabSections = useMemo(() => sections.filter((s) => menuKind(s.group) === menuTab), [sections, menuTab]);
+  const switchMenuTab = (tab) => {
+    setMenuTab(tab);
+    const first = sections.find((s) => menuKind(s.group) === tab);
+    setSelectedSectionId(first?.id || null);
+    setSelectedSubId("");
+  };
   const menuCardImages = useMemo(() => getMenuImageUrls(menu), [menu]);
 
   const selectedSection = useMemo(() => {
@@ -318,7 +371,7 @@ export default function RestaurantMenuPage() {
       const parsed = safeMenu(restaurant.menu);
       originalMenuRef.current = parsed;
       setMenu(parsed);
-      setSelectedSectionId(parsed.sections?.[0]?.id || null);
+      setSelectedSectionId((parsed.sections || []).find((x) => menuKind(x.group) === "Kitchen")?.id || null);
       setSelectedSubId("");
 
       if (typeof window !== "undefined") {
@@ -479,7 +532,8 @@ export default function RestaurantMenuPage() {
     setEditingSectionId(null);
     setSectionName("");
     setSectionDesc("");
-    setSectionGroup("");
+    setSectionGroup(menuTab);
+    setSectionComments([]);
     setSectionModalOpen(true);
   };
 
@@ -489,6 +543,7 @@ export default function RestaurantMenuPage() {
     setSectionName(s.name || "");
     setSectionDesc(s.description || "");
     setSectionGroup(s.group || "");
+    setSectionComments(Array.isArray(s.comment_presets) ? s.comment_presets : []);
     setSectionModalOpen(true);
   };
 
@@ -504,10 +559,10 @@ export default function RestaurantMenuPage() {
       const next = { ...menu, sections: [...(menu.sections || [])] };
       if (editingSectionId) {
         next.sections = next.sections.map((s) =>
-          s.id === editingSectionId ? { ...s, name, description: description || null, group } : s
+          s.id === editingSectionId ? { ...s, name, description: description || null, group, comment_presets: sectionComments } : s
         );
       } else {
-        const newSection = { id: uid(), name, description: description || null, group, subcategories: [], items: [] };
+        const newSection = { id: uid(), name, description: description || null, group, comment_presets: sectionComments, subcategories: [], items: [] };
         next.sections = [newSection, ...next.sections];
         setSelectedSectionId(newSection.id);
         setSelectedSubId("");
@@ -517,6 +572,8 @@ export default function RestaurantMenuPage() {
 
     setMenu(nextMenu);
     await saveMenu(nextMenu);
+    setMenuTab(group);
+    if (editingSectionId) setSelectedSectionId(editingSectionId);
 
     setSectionModalOpen(false);
     setEditingSectionId(null);
@@ -597,7 +654,10 @@ export default function RestaurantMenuPage() {
     const idx = copy.findIndex((s) => s.id === sectionId);
     if (idx < 0) return;
 
-    const target = dir === "up" ? idx - 1 : idx + 1;
+    const kind = menuKind(copy[idx].group);
+    let target = idx;
+    do target += dir === "up" ? -1 : 1;
+    while (target >= 0 && target < copy.length && menuKind(copy[target].group) !== kind);
     if (target < 0 || target >= copy.length) return;
 
     [copy[idx], copy[target]] = [copy[target], copy[idx]];
@@ -910,6 +970,19 @@ export default function RestaurantMenuPage() {
               Add section
             </button>
           </div>
+
+          <div className="mt-5 rounded-xl border border-gray-200 p-3">
+            <div className="text-sm font-semibold text-gray-900">Quick comments for every item</div>
+            <div className="mt-0.5 text-xs text-gray-500">Staff tap these when taking an order, e.g. “Take away”. Add more per section when you edit a section.</div>
+            <CommentPresetsEditor
+              value={Array.isArray(menu.comment_presets) ? menu.comment_presets : []}
+              onChange={async (list) => {
+                const nextMenu = { ...menu, comment_presets: list, updated_at: new Date().toISOString() };
+                setMenu(nextMenu);
+                await saveMenu(nextMenu);
+              }}
+            />
+          </div>
         </div>
 
         <div className="rounded-2xl border border-gray-200 bg-white p-4">
@@ -991,8 +1064,24 @@ export default function RestaurantMenuPage() {
         <div className="grid grid-cols-12 gap-4">
           <div className="col-span-12 lg:col-span-4">
             <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+              <div className="grid grid-cols-2 gap-1 border-b border-gray-100 p-2">
+                {["Kitchen", "Bar"].map((tab) => {
+                  const count = sections.filter((x) => menuKind(x.group) === tab).length;
+                  const on = menuTab === tab;
+                  return (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => switchMenuTab(tab)}
+                      className={`h-10 rounded-xl text-sm font-semibold ${on ? "bg-[#FF4800] text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"}`}
+                    >
+                      {tab} menu · {count}
+                    </button>
+                  );
+                })}
+              </div>
               <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                <div className="text-sm font-semibold text-gray-900">Sections</div>
+                <div className="text-sm font-semibold text-gray-900">{menuTab} sections</div>
                 <button
                   type="button"
                   onClick={openNewSection}
@@ -1003,11 +1092,13 @@ export default function RestaurantMenuPage() {
                 </button>
               </div>
 
-              {sections.length === 0 ? (
-                <div className="px-4 py-10 text-center text-sm text-gray-500">Create your first section.</div>
+              {tabSections.length === 0 ? (
+                <div className="px-4 py-10 text-center text-sm text-gray-500">
+                  {menuTab === "Bar" ? "No bar sections yet. Tap Add to create your first bar section, e.g. Cocktails." : "Create your first section."}
+                </div>
               ) : (
                 <div className="divide-y divide-gray-100">
-                  {sections.map((s, idx) => {
+                  {tabSections.map((s, idx) => {
                     const active = s.id === selectedSectionId && !selectedSubId;
                     const subcats = Array.isArray(s.subcategories) ? s.subcategories : [];
                     return (
@@ -1054,7 +1145,7 @@ export default function RestaurantMenuPage() {
                               type="button"
                               onClick={() => moveSection(s.id, "down")}
                               className="h-9 w-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center disabled:opacity-50"
-                              disabled={idx === sections.length - 1}
+                              disabled={idx === tabSections.length - 1}
                             >
                               <ChevronDown className="h-4 w-4 text-gray-700" />
                             </button>
@@ -1338,6 +1429,12 @@ export default function RestaurantMenuPage() {
               })}
             </div>
             <p className="mt-1 text-xs text-gray-500">Staff see the Kitchen and Bar menus as separate tabs when taking orders.</p>
+          </div>
+
+          <div>
+            <label className="text-sm font-semibold text-gray-700">Quick comments</label>
+            <p className="mt-0.5 text-xs text-gray-500">Shown for items in this section, e.g. “Sans tomate”, “Sans mayo”.</p>
+            <CommentPresetsEditor value={sectionComments} onChange={setSectionComments} />
           </div>
 
           <div>
