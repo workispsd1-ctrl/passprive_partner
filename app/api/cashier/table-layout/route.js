@@ -3,72 +3,12 @@ import { setBillItemQty } from "@/lib/server/billItems";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { resolveCashierRestaurant } from "../_shared";
 import { bookingStatusChangeError, isBillClosed, isBillPaid, quickPaymentRecord } from "@/lib/server/tableBill";
-import { isQrPending, queueReceiptJob } from "@/lib/server/printJobs";
+import { isQrPending, queueBillPrint, queueFinalPrint, queuePartPrint } from "@/lib/server/printJobs";
 import { payBillPart } from "@/lib/server/splitBill";
 import { changeTable } from "@/lib/server/changeTable";
 import { cancelPayRequest, createPayBills, createPayRequest, orderPayRequests } from "@/lib/server/payRequests";
 
 const isClosed = isBillClosed;
-
-async function queuePartPrint(ctx, orderId, out) {
-  const { data: row } = await ctx.admin
-    .from("restaurant_table_bookings")
-    .select("id, table_no, guest_count, customer_name, order_items, total_amount")
-    .eq("id", orderId)
-    .eq("restaurant_id", ctx.restaurantId)
-    .maybeSingle();
-  if (!row) return;
-  const totalCents = Math.round(Number(row.total_amount || 0) * 100);
-  const bill = { order_id: row.id, table_no: row.table_no, guests: row.guest_count, customer_name: row.customer_name || null, bill_total: totalCents / 100 };
-  const paidCents = (out.payments || []).reduce((n, p) => n + Math.round(Number(p.amount || 0) * 100), 0);
-  if (out.closed) {
-    await queueReceiptJob(ctx.admin, ctx.restaurantId, {
-      orderId: row.id,
-      kind: "final_bill",
-      payload: { ...bill, items: row.order_items || [], payments: out.payments || [] },
-    });
-  } else {
-    await queueReceiptJob(ctx.admin, ctx.restaurantId, {
-      orderId: row.id,
-      kind: "part_receipt",
-      payload: { ...bill, part: out.part, paid_so_far: paidCents / 100 },
-    });
-  }
-}
-
-async function queueBillPrint(ctx, orderId) {
-  const { data: row } = await ctx.admin
-    .from("restaurant_table_bookings")
-    .select("id, table_no, guest_count, customer_name, order_items, total_amount")
-    .eq("id", orderId)
-    .eq("restaurant_id", ctx.restaurantId)
-    .maybeSingle();
-  if (!row || !(row.order_items || []).length) return;
-  await queueReceiptJob(ctx.admin, ctx.restaurantId, {
-    orderId: row.id,
-    kind: "bill",
-    payload: { order_id: row.id, table_no: row.table_no, guests: row.guest_count, customer_name: row.customer_name || null, bill_total: Number(row.total_amount || 0), items: row.order_items },
-  });
-}
-
-async function queueFinalPrint(ctx, orderId) {
-  const { data: row } = await ctx.admin
-    .from("restaurant_table_bookings")
-    .select("id, table_no, guest_count, customer_name, order_items, total_amount, order_details")
-    .eq("id", orderId)
-    .eq("restaurant_id", ctx.restaurantId)
-    .maybeSingle();
-  const pay = row?.order_details?.payment;
-  if (!row || !pay) return;
-  const parts = Array.isArray(row.order_details?.payments) && row.order_details.payments.length
-    ? row.order_details.payments
-    : [{ no: 1, method: pay.method, amount: Number(pay.amount_due || 0), tip: Number(pay.tip || 0), received: Number(pay.amount_received || 0), change: Number(pay.change || 0), reference: pay.reference || null }];
-  await queueReceiptJob(ctx.admin, ctx.restaurantId, {
-    orderId: row.id,
-    kind: "final_bill",
-    payload: { order_id: row.id, table_no: row.table_no, guests: row.guest_count, customer_name: row.customer_name || null, bill_total: Number(row.total_amount || 0), items: row.order_items || [], payments: parts },
-  });
-}
 
 async function releaseFinished(ctx, tables, orders) {
   const active = new Set((orders || []).filter((o) => !isClosed(o)).map((o) => Number(o.table_no)));
@@ -232,7 +172,7 @@ export async function POST(request) {
         return NextResponse.json({ ok: false, error: "Card and MauCas are taken on the POS. Send the payment to the POS." }, { status: 400 });
       }
       const { status, body: out } = await payBillPart(ctx.admin, ctx.restaurantId, ctx.userId, { ...body, method: "CASH" });
-      if (out.ok) await queuePartPrint(ctx, String(body.order_id || ""), out);
+      if (out.ok) await queuePartPrint(ctx.admin, ctx.restaurantId, String(body.order_id || ""), out);
       return NextResponse.json(out, { status });
     }
 
@@ -258,7 +198,7 @@ export async function POST(request) {
 
     if (action === "settle") {
       const { status, body: out } = await settleTableBill(ctx.admin, ctx.restaurantId, ctx.userId, body);
-      if (out.ok) await queueFinalPrint(ctx, String(body?.order_id || "")).catch((e) => console.error("final bill print queue failed", e?.message));
+      if (out.ok) await queueFinalPrint(ctx.admin, ctx.restaurantId, String(body?.order_id || "")).catch((e) => console.error("final bill print queue failed", e?.message));
       return NextResponse.json(out, { status });
     }
 
@@ -363,9 +303,9 @@ export async function POST(request) {
         return NextResponse.json({ ok: false, error: "Order not found." }, { status: 404 });
       }
       if (["PAID", "COMPLETED"].includes(nextPaymentStatus) && !isBillPaid(row)) {
-        await queueFinalPrint(ctx, orderId).catch((e) => console.error("final bill print queue failed", e?.message));
+        await queueFinalPrint(ctx.admin, ctx.restaurantId, orderId).catch((e) => console.error("final bill print queue failed", e?.message));
       } else if (nextBookingStatus === "COMPLETED" && !isBillPaid(row)) {
-        await queueBillPrint(ctx, orderId).catch((e) => console.error("bill print queue failed", e?.message));
+        await queueBillPrint(ctx.admin, ctx.restaurantId, orderId).catch((e) => console.error("bill print queue failed", e?.message));
       }
       return NextResponse.json({ ok: true, order: updatedRows[0] });
     }

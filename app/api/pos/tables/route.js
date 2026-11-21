@@ -2,7 +2,7 @@ import { addBillItems, seatTable, setBillItemQty } from "@/lib/server/billItems"
 import { settleTableBill } from "@/lib/server/settleBill";
 import { payBillPart } from "@/lib/server/splitBill";
 import { finishDiscovery, pendingDiscovery } from "@/lib/server/printerDiscovery";
-import { activePrinters, claimPrintJob, confirmPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, releasePrintJob, unleasePrintJob } from "@/lib/server/printJobs";
+import { activePrinters, claimPrintJob, confirmPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, queueBillPrint, queueFinalPrint, queuePartPrint, releasePrintJob, unleasePrintJob } from "@/lib/server/printJobs";
 import { cancelPayRequest, pendingPayRequests } from "@/lib/server/payRequests";
 import { heldPromos, PROMO_ERRORS, promoDue, promoLocked, quotePromo, recordPromoAttempt, releasePromo, reservePromo } from "@/lib/server/promoCode";
 import { isBillClosed } from "@/lib/server/tableBill";
@@ -192,6 +192,7 @@ export async function POST(request) {
 
     if (action === "advance") {
       const ok = await advanceStatus(ctx, String(body.order_id || ""));
+      if (ok) await queueBillPrint(ctx.admin, ctx.restaurantId, String(body.order_id || "")).catch((e) => console.error("bill print queue failed", e?.message));
       return ok ? reply({ ok: true, ...(await liveTables(ctx)) }) : reply({ ok: false, error: "invalid_status" }, 409);
     }
 
@@ -297,6 +298,7 @@ export async function POST(request) {
         return reply({ ok: false, error: "Mark this table completed first." }, 409);
       }
       const { status, body: out } = await payBillPart(ctx.admin, ctx.restaurantId, ctx.userId, body, ctx.terminalId);
+      if (out.ok) await queuePartPrint(ctx.admin, ctx.restaurantId, String(body.order_id || ""), out).catch((e) => console.error("part print queue failed", e?.message));
       return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);
     }
 
@@ -314,6 +316,7 @@ export async function POST(request) {
         },
         ctx.terminalId
       );
+      if (out.ok) await queueFinalPrint(ctx.admin, ctx.restaurantId, String(body.order_id || "")).catch((e) => console.error("final bill print queue failed", e?.message));
       return reply(out, status);
     }
 
