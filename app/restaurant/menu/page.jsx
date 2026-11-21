@@ -942,8 +942,9 @@ export default function RestaurantMenuPage() {
     const groupsError = modifierGroupsError(itemGroups);
     if (groupsError) return setItemError(groupsError);
     const modifierGroups = cleanModifierGroups(itemGroups);
+    if (!modifierGroups.some((g) => g.per_pick)) variants.forEach((v) => delete v.picks);
     if (modifierGroups.some((g) => g.per_pick) && !variants.some((v) => v.picks)) {
-      return setItemError("“One pick per scoop” needs sizes with a number of scoops, e.g. 1 scoop = 1, 2 scoops = 2.");
+      return setItemError("“One pick per unit” needs a number of Picks on the variants, e.g. 1 scoop = 1, 2 scoops = 2.");
     }
     const subcats = (selectedSection?.subcategories || []).map((c) => c.id);
 
@@ -1864,7 +1865,7 @@ export default function RestaurantMenuPage() {
             <p className="mt-1 mb-3 text-xs text-gray-500">
               Versions of this dish, each with its own price, e.g. Pasta with Tomato Sauce MUR 490, with Smoked Marlin MUR 690. Staff and guests pick one.
             </p>
-            <VariantsEditor variants={itemVariants} onChange={setItemVariants} />
+            <VariantsEditor variants={itemVariants} onChange={setItemVariants} showPicks={itemGroups.some((g) => g.per_pick)} />
           </div>
 
           <div className="col-span-12 border-t border-gray-100 pt-4">

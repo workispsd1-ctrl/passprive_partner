@@ -117,9 +117,9 @@ export default function ModifierGroupsEditor({ groups, onChange }) {
                 onChange={(e) => setGroup(gi, { per_pick: e.target.checked })}
               />
               <span>
-                <span className="font-semibold text-gray-700">One pick per scoop</span>
+                <span className="font-semibold text-gray-700">One pick per unit</span>
                 <span className="block text-xs text-gray-500">
-                  E.g. Flavour: a 2-scoop size asks for Flavour 1 and Flavour 2, and the same flavour can be picked twice. Set the number of scoops on each variant above.
+                  The number of picks comes from the chosen variant, and the same option can be picked more than once. E.g. ice cream “2 scoops” asks for Flavour 1 and Flavour 2. Set “Picks” on each variant above.
                 </span>
               </span>
             </label>
@@ -246,7 +246,7 @@ export function variantsError(variants) {
     if (!v.name.trim()) return "Give every variant a name.";
     if (v.price === "" || !Number.isFinite(Number(v.price)) || Number(v.price) < 0) return `Enter a price for ${v.name.trim()}.`;
     if (v.picks !== "" && v.picks != null && !(Number.isInteger(Number(v.picks)) && Number(v.picks) >= 1 && Number(v.picks) <= 10)) {
-      return `Scoops for ${v.name.trim()} must be a number from 1 to 10.`;
+      return `Picks for ${v.name.trim()} must be a number from 1 to 10.`;
     }
   }
   return "";
@@ -264,7 +264,7 @@ export function cleanVariants(variants) {
   }));
 }
 
-export function VariantsEditor({ variants, onChange }) {
+export function VariantsEditor({ variants, onChange, showPicks = false }) {
   const set = (i, patch) => onChange(variants.map((v, j) => (j === i ? { ...v, ...patch } : v)));
   const move = (i, dir) => {
     const to = i + dir;
@@ -294,14 +294,16 @@ export function VariantsEditor({ variants, onChange }) {
                 className={`${input} pl-11`}
               />
             </div>
+            {showPicks ? (
             <input
               value={v.picks ?? ""}
               onChange={(e) => set(i, { picks: e.target.value.replace(/\D/g, "").slice(0, 2) })}
               inputMode="numeric"
-              placeholder="Scoops"
-              title="How many scoops (or picks) this size includes. Leave empty if not needed."
+              placeholder="Picks"
+              title="How many picks this variant includes for groups set to “One pick per unit”."
               className={`${input} w-24 shrink-0`}
             />
+            ) : null}
           </div>
           <div className="flex items-center gap-2">
             <input

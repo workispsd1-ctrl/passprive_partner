@@ -128,7 +128,7 @@ export default function CustomiseDialog({ item, money, onClose, onAdd, initialVa
                   <legend className="flex w-full items-baseline justify-between gap-2">
                     <span className="text-sm font-bold text-slate-900">{g.name}</span>
                     <span className={`text-xs font-medium ${bad ? "text-rose-600" : "text-slate-500"}`}>
-                      {n ? `Required · one per scoop (${n})` : "Choose a size first"}
+                      {n ? `Required · pick ${n}` : "Choose an option above first"}
                     </span>
                   </legend>
                   {Array.from({ length: n }, (_, i) => (
