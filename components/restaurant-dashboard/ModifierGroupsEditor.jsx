@@ -24,6 +24,7 @@ export function modifierGroupsError(groups) {
     const options = g.options.filter((o) => o.name.trim());
     if (!options.length) return `${label} needs at least one option.`;
     if (options.some((o) => !Number.isFinite(Number(o.price || 0)) || Number(o.price || 0) < 0)) return `${label} has an invalid price.`;
+    if (g.per_pick) continue;
     if (g.min > options.length) return `${label} asks for ${g.min} picks but has ${options.length} options.`;
     if (g.max < Math.max(1, g.min)) return `${label}: the maximum must be at least the minimum.`;
   }
@@ -42,7 +43,7 @@ export function cleanModifierGroups(groups) {
       }));
     const min = Math.max(0, Math.min(Number(g.min) || 0, options.length));
     const max = Math.max(Math.max(1, min), Math.min(Number(g.max) || 1, options.length));
-    return { id: g.id, name: g.name.trim().slice(0, 80), min, max, options };
+    return { id: g.id, name: g.name.trim().slice(0, 80), min, max, ...(g.per_pick ? { per_pick: true } : {}), options };
   });
 }
 
@@ -52,6 +53,7 @@ export function toEditableGroups(groups) {
     name: g.name || "",
     min: Number(g.min) || 0,
     max: Number(g.max) || 1,
+    per_pick: g.per_pick === true,
     options: (Array.isArray(g.options) ? g.options : []).map((o) => ({
       id: o.id || uid(),
       name: o.name || "",
@@ -107,6 +109,22 @@ export default function ModifierGroupsEditor({ groups, onChange }) {
               </button>
             </div>
 
+            <label className="flex items-start gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={g.per_pick === true}
+                onChange={(e) => setGroup(gi, { per_pick: e.target.checked })}
+              />
+              <span>
+                <span className="font-semibold text-gray-700">One pick per scoop</span>
+                <span className="block text-xs text-gray-500">
+                  E.g. Flavour: a 2-scoop size asks for Flavour 1 and Flavour 2, and the same flavour can be picked twice. Set the number of scoops on each variant above.
+                </span>
+              </span>
+            </label>
+
+            {g.per_pick ? null : (
             <div className="flex flex-wrap items-center gap-3 text-sm">
               <label className="inline-flex items-center gap-2 font-semibold text-gray-700">
                 <input
@@ -145,6 +163,7 @@ export default function ModifierGroupsEditor({ groups, onChange }) {
               </label>
               <span className="text-xs text-gray-500">{ruleText(g)}</span>
             </div>
+            )}
 
             <div className="space-y-2">
               {g.options.map((o, oi) => (
@@ -218,6 +237,7 @@ export function toEditableVariants(variants) {
     price: v.price != null ? String(v.price) : "",
     is_veg: v.is_veg === true,
     is_available: v.is_available !== false,
+    picks: v.picks ? String(v.picks) : "",
   }));
 }
 
@@ -225,6 +245,9 @@ export function variantsError(variants) {
   for (const v of variants) {
     if (!v.name.trim()) return "Give every variant a name.";
     if (v.price === "" || !Number.isFinite(Number(v.price)) || Number(v.price) < 0) return `Enter a price for ${v.name.trim()}.`;
+    if (v.picks !== "" && v.picks != null && !(Number.isInteger(Number(v.picks)) && Number(v.picks) >= 1 && Number(v.picks) <= 10)) {
+      return `Scoops for ${v.name.trim()} must be a number from 1 to 10.`;
+    }
   }
   return "";
 }
@@ -237,6 +260,7 @@ export function cleanVariants(variants) {
     price: Math.round(Number(v.price) * 100) / 100,
     is_veg: v.is_veg,
     is_available: v.is_available !== false,
+    ...(Number(v.picks) >= 1 ? { picks: Math.min(10, Math.floor(Number(v.picks))) } : {}),
   }));
 }
 
@@ -270,6 +294,14 @@ export function VariantsEditor({ variants, onChange }) {
                 className={`${input} pl-11`}
               />
             </div>
+            <input
+              value={v.picks ?? ""}
+              onChange={(e) => set(i, { picks: e.target.value.replace(/\D/g, "").slice(0, 2) })}
+              inputMode="numeric"
+              placeholder="Scoops"
+              title="How many scoops (or picks) this size includes. Leave empty if not needed."
+              className={`${input} w-24 shrink-0`}
+            />
           </div>
           <div className="flex items-center gap-2">
             <input
@@ -308,7 +340,7 @@ export function VariantsEditor({ variants, onChange }) {
       ))}
       <button
         type="button"
-        onClick={() => onChange([...variants, { id: uid(), name: "", description: "", price: "", is_veg: false, is_available: true }])}
+        onClick={() => onChange([...variants, { id: uid(), name: "", description: "", price: "", is_veg: false, is_available: true, picks: "" }])}
         className="h-10 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 px-3 text-sm font-semibold inline-flex items-center gap-2"
       >
         <Plus className="h-4 w-4" />

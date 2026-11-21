@@ -942,6 +942,9 @@ export default function RestaurantMenuPage() {
     const groupsError = modifierGroupsError(itemGroups);
     if (groupsError) return setItemError(groupsError);
     const modifierGroups = cleanModifierGroups(itemGroups);
+    if (modifierGroups.some((g) => g.per_pick) && !variants.some((v) => v.picks)) {
+      return setItemError("“One pick per scoop” needs sizes with a number of scoops, e.g. 1 scoop = 1, 2 scoops = 2.");
+    }
     const subcats = (selectedSection?.subcategories || []).map((c) => c.id);
 
     const nextMenu = (() => {

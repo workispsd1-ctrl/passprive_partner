@@ -36,9 +36,26 @@ export default function CustomiseDialog({ item, money, onClose, onAdd, initialVa
       return cur.length >= g.max ? prev : { ...prev, [g.id]: [...cur, id] };
     });
 
-  const missing = groups.filter((g) => (picked[g.id] || []).length < g.min);
-  const mods = groups.flatMap((g) => g.options.filter((o) => (picked[g.id] || []).includes(o.id)));
   const variant = variants.find((v) => v.id === variantId) || null;
+  const slotsOf = (g) => (g.per_pick && variant?.picks ? variant.picks : 0);
+  const pickSlot = (g, i, id) =>
+    setPicked((prev) => {
+      const cur = [...(prev[g.id] || [])];
+      cur[i] = id;
+      return { ...prev, [g.id]: cur };
+    });
+  const missing = groups.filter((g) => {
+    const n = slotsOf(g);
+    if (n) return Array.from({ length: n }, (_, i) => (picked[g.id] || [])[i]).some((x) => !x);
+    if (g.per_pick && variants.length) return false;
+    return (picked[g.id] || []).length < g.min;
+  });
+  const mods = groups.flatMap((g) => {
+    const n = slotsOf(g);
+    if (n) return (picked[g.id] || []).slice(0, n).map((id) => g.options.find((o) => o.id === id)).filter(Boolean);
+    if (g.per_pick && variants.length) return [];
+    return g.options.filter((o) => (picked[g.id] || []).includes(o.id));
+  });
   const needVariant = variants.length > 0 && !variant;
   const unit = Number(variant ? variant.price : item.price || 0) + mods.reduce((s, m) => s + Number(m.price || 0), 0);
 
@@ -104,6 +121,46 @@ export default function CustomiseDialog({ item, money, onClose, onAdd, initialVa
           {groups.map((g) => {
             const sel = picked[g.id] || [];
             const bad = tried && missing.includes(g);
+            if (g.per_pick && variants.length) {
+              const n = slotsOf(g);
+              return (
+                <fieldset key={g.id} className="space-y-2">
+                  <legend className="flex w-full items-baseline justify-between gap-2">
+                    <span className="text-sm font-bold text-slate-900">{g.name}</span>
+                    <span className={`text-xs font-medium ${bad ? "text-rose-600" : "text-slate-500"}`}>
+                      {n ? `Required · one per scoop (${n})` : "Choose a size first"}
+                    </span>
+                  </legend>
+                  {Array.from({ length: n }, (_, i) => (
+                    <div key={i} className="space-y-1.5">
+                      <div className="text-xs font-semibold text-slate-600">
+                        {g.name} {i + 1}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {g.options.map((o) => {
+                          const on = sel[i] === o.id;
+                          return (
+                            <button
+                              key={o.id}
+                              type="button"
+                              role="radio"
+                              aria-checked={on}
+                              onClick={() => pickSlot(g, i, o.id)}
+                              className={`min-h-[40px] rounded-full border px-3 text-sm font-medium ${
+                                on ? "border-[#DA3224] bg-[#DA3224] text-white" : bad && !sel[i] ? "border-rose-300 text-slate-800" : "border-slate-200 text-slate-800"
+                              }`}
+                            >
+                              {o.name}
+                              {o.price > 0 ? ` +${money(o.price)}` : ""}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </fieldset>
+              );
+            }
             return (
               <fieldset key={g.id} className="space-y-2">
                 <legend className="flex w-full items-baseline justify-between gap-2">
