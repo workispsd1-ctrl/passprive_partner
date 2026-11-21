@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { movesFor } from "@/lib/server/guestMoves";
+import { markDiscoveryCapable, pendingDiscovery } from "@/lib/server/printerDiscovery";
 import { requireTerminal, serverError } from "../_terminal";
 import { isQrPending } from "@/lib/server/printJobs";
 
@@ -20,9 +21,11 @@ export async function POST(request) {
   try {
     const ctx = await requireTerminal(request, ["payments"]);
     if (ctx.error) return ctx.error;
-    const { admin, restaurantId, terminalId, userId } = ctx;
+    const { admin, restaurantId, terminalId, userId, staffRole } = ctx;
     const body = await request.json().catch(() => ({}));
     const knownMenu = String(body?.menu_v || "");
+    const printerHelper = body?.discovery === true && (!staffRole || ["cashier", "restaurant_cashier", "restaurant_admin", "admin"].includes(staffRole));
+    if (printerHelper) await markDiscoveryCapable(admin, terminalId).catch(() => {});
 
     const [
       { data: restaurantRow, error: restaurantErr },
@@ -37,7 +40,7 @@ export async function POST(request) {
         .maybeSingle(),
       admin
         .from("restaurant_table_layouts")
-        .select("id, table_no, label, capacity, attached_to, area_id, restaurant_table_areas:area_id(name)")
+        .select("id, table_no, label, capacity, attached_to, area_id, restaurant_table_areas!restaurant_table_layouts_area_fk(name)")
         .eq("restaurant_id", restaurantId)
         .order("table_no", { ascending: true }),
       admin
@@ -98,6 +101,7 @@ export async function POST(request) {
       },
       ...(knownMenu === menuV ? {} : { menu }),
       area,
+      ...(printerHelper ? { printer_discovery: await pendingDiscovery(admin, restaurantId).catch(() => []) } : {}),
       guest_moves: await movesFor(admin, restaurantId, area?.id || null, userId).catch(() => ({ to_seat: [], notices: [] })),
       tables: areaTables,
       open_orders: openOrders,

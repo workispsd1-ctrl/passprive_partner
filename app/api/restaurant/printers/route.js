@@ -57,9 +57,6 @@ export async function POST(request) {
   }
 }
 
-const NO_POS =
-  "No PassPrive POS with network printing is online at the restaurant. Open the updated POS app on the restaurant Wi-Fi, then try again.";
-
 async function discovery(token, body) {
   const restaurantId = String(body?.restaurant_id || "");
   if (!UUID.test(restaurantId)) return NextResponse.json({ ok: false, error: "Invalid request." }, { status: 400 });
@@ -75,10 +72,15 @@ async function discovery(token, body) {
     return NextResponse.json({ ok: true, request: row });
   }
 
-  if (!(await lanDeviceOnline(db, restaurantId))) return NextResponse.json({ ok: false, error: NO_POS }, { status: 409 });
   if (!(await discoveryDeviceOnline(db, restaurantId))) {
+    const old = await lanDeviceOnline(db, restaurantId);
     return NextResponse.json(
-      { ok: false, error: "The PassPrive POS at the restaurant is online but needs the latest app update to search for printers. Update the POS app, open it, then try again." },
+      {
+        ok: false,
+        error: old
+          ? "The PassPrive app at the restaurant needs the latest update to search for printers. Update the till or POS app, open it, then try again."
+          : "No PassPrive till or POS is open at the restaurant. Open the PassPrive till (or POS) on the restaurant Wi-Fi, then try again.",
+      },
       { status: 409 }
     );
   }
@@ -87,6 +89,7 @@ async function discovery(token, body) {
     kind: body.action === "scan" ? "scan" : "test",
     ip: String(body?.ip || "").trim(),
     port: body?.port,
+    networks: body?.networks,
   });
   if (made.error) return NextResponse.json({ ok: false, error: made.error }, { status: 400 });
   return NextResponse.json({ ok: true, request: made.request });

@@ -16,8 +16,8 @@ const EMPTY = { id: "", name: "", ip: "", port: 9100, paper_mm: 80, prints: [], 
 const IP_RE = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 const inputCls = "h-10 w-full rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-gray-300";
 const SCAN_ERRORS = {
-  no_device: "No PassPrive POS answered. Make sure the POS app is open and connected to the restaurant Wi-Fi.",
-  no_network: "The POS is not connected to Wi-Fi.",
+  no_device: "No PassPrive till or POS answered. Make sure the app is open, signed in and connected to the restaurant Wi-Fi.",
+  no_network: "The till or POS is not connected to Wi-Fi.",
   printer_unreachable: "That printer did not answer. Check it is switched on.",
   printer_timeout: "That printer did not answer. Check it is switched on.",
 };
@@ -53,11 +53,12 @@ export default function PrintersPage() {
   const [testing, setTesting] = useState("");
   const [scan, setScan] = useState({ state: "idle", found: [], subnet: "", error: "" });
   const [ipTest, setIpTest] = useState("");
+  const [extraNet, setExtraNet] = useState("");
 
   const findPrinters = async () => {
     setScan({ state: "searching", found: [], subnet: "", error: "" });
     try {
-      const { request } = await printersApi({ action: "scan", restaurant_id: restaurantId });
+      const { request } = await printersApi({ action: "scan", restaurant_id: restaurantId, networks: extraNet });
       const done = await waitForPos(restaurantId, request.id);
       if (done.status !== "done") return setScan({ state: "failed", found: [], subnet: "", error: scanError(done.error) });
       setScan({ state: "done", found: done.result?.found || [], subnet: done.result?.subnet || "", error: "" });
@@ -194,8 +195,18 @@ export default function PrintersPage() {
           <div>
             <div className="text-sm font-semibold text-gray-900">Find printers on the restaurant Wi-Fi</div>
             <p className="mt-0.5 text-xs text-gray-500">
-              The PassPrive POS at the restaurant searches its Wi-Fi for network printers. Takes about 10 seconds.
+              The PassPrive till (or POS) open at the restaurant searches its Wi-Fi for network printers. Takes about 10 seconds.
             </p>
+            <label className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+              Also search network (optional)
+              <input
+                value={extraNet}
+                onChange={(e) => setExtraNet(e.target.value.replace(/[^\d.,\s/]/g, "").slice(0, 60))}
+                placeholder="e.g. 192.168.8"
+                className="h-8 w-40 rounded-lg border border-gray-200 px-2 text-xs outline-none focus:border-gray-300"
+              />
+              <span className="text-gray-400">Only if your printers use a different network range from the Wi-Fi.</span>
+            </label>
           </div>
           <button
             type="button"
