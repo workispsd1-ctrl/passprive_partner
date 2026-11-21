@@ -12,7 +12,7 @@ const JOBS = [
   { key: "receipts", label: "Customer receipts & bills", hint: "Part receipts and final bills" },
 ];
 
-const EMPTY = { id: "", name: "", ip: "", port: 9100, paper_mm: 80, prints: [], is_active: true };
+const EMPTY = { id: "", name: "", ip: "", port: 9100, paper_mm: 80, prints: [], is_active: true, backup_printer_id: "" };
 const IP_RE = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 const inputCls = "h-10 w-full rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-gray-300";
 
@@ -33,7 +33,7 @@ export default function PrintersPage() {
     }
     const { data, error } = await supabaseBrowser
       .from("restaurant_printers")
-      .select("id, name, ip, port, paper_mm, prints, is_active, created_at")
+      .select("id, name, ip, port, paper_mm, prints, is_active, backup_printer_id, created_at")
       .eq("restaurant_id", id)
       .order("created_at", { ascending: true });
     setLoading(false);
@@ -67,6 +67,7 @@ export default function PrintersPage() {
       paper_mm: Number(draft.paper_mm) === 58 ? 58 : 80,
       prints: JOBS.map((j) => j.key).filter((k) => draft.prints.includes(k)),
       is_active: draft.is_active,
+      backup_printer_id: draft.backup_printer_id && draft.backup_printer_id !== draft.id ? draft.backup_printer_id : null,
       updated_at: new Date().toISOString(),
     };
     const { error } = draft.id
@@ -123,7 +124,7 @@ export default function PrintersPage() {
         </div>
         <button
           type="button"
-          onClick={() => setDraft({ ...EMPTY })}
+          onClick={() => setDraft({ ...EMPTY, backup_printer_id: printers.find((b) => b.is_active && (b.prints || []).includes("receipts"))?.id || "" })}
           className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#FF4800] px-4 text-sm font-semibold text-white"
         >
           <Plus className="h-4 w-4" /> Add printer
@@ -164,6 +165,11 @@ export default function PrintersPage() {
                   </div>
                   <div className="text-sm text-gray-500">
                     {p.ip}:{p.port} · {p.paper_mm} mm
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {p.backup_printer_id && printers.some((b) => b.id === p.backup_printer_id)
+                      ? `If it doesn't respond: prints on ${printers.find((b) => b.id === p.backup_printer_id).name}`
+                      : "No backup printer"}
                   </div>
                   <div className="mt-1 flex flex-wrap gap-1.5">
                     {(p.prints || []).length ? (
@@ -285,6 +291,27 @@ export default function PrintersPage() {
                   })}
                 </div>
               </div>
+              <label className="block">
+                <span className="text-xs font-semibold text-gray-600">If this printer doesn&apos;t respond, print on</span>
+                <select
+                  value={draft.backup_printer_id || ""}
+                  onChange={(e) => setDraft((d) => ({ ...d, backup_printer_id: e.target.value }))}
+                  className="mt-1 h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm"
+                >
+                  <option value="">No backup (keep retrying this printer)</option>
+                  {printers
+                    .filter((b) => b.id !== draft.id)
+                    .map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name} · {b.ip}
+                        {b.is_active ? "" : " (off)"}
+                      </option>
+                    ))}
+                </select>
+                <span className="mt-1 block text-xs text-gray-500">
+                  The ticket prints there with a “BACKUP PRINT” banner so staff carry it over. It never prints twice.
+                </span>
+              </label>
               <label className="flex items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" checked={draft.is_active} onChange={(e) => setDraft((d) => ({ ...d, is_active: e.target.checked }))} />
                 Printer is on

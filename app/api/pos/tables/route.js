@@ -233,7 +233,7 @@ export async function POST(request) {
     }
 
     if (action === "confirm_print") {
-      await confirmPrintJob(ctx.admin, ctx.restaurantId, ctx.terminalId, String(body.job_id || ""));
+      await confirmPrintJob(ctx.admin, ctx.restaurantId, ctx.terminalId, String(body.job_id || ""), body.printer_id || null);
       return reply({ ok: true });
     }
 
