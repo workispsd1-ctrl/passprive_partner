@@ -2,7 +2,7 @@ import { addBillItems, seatTable, setBillItemQty } from "@/lib/server/billItems"
 import { settleTableBill } from "@/lib/server/settleBill";
 import { payBillPart } from "@/lib/server/splitBill";
 import { finishDiscovery, pendingDiscovery } from "@/lib/server/printerDiscovery";
-import { activePrinters, claimPrintJob, confirmPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, releasePrintJob, TICKET_KINDS, unleasePrintJob } from "@/lib/server/printJobs";
+import { activePrinters, claimPrintJob, confirmPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, releasePrintJob, unleasePrintJob } from "@/lib/server/printJobs";
 import { cancelPayRequest, pendingPayRequests } from "@/lib/server/payRequests";
 import { heldPromos, PROMO_ERRORS, promoDue, promoLocked, quotePromo, recordPromoAttempt, releasePromo, reservePromo } from "@/lib/server/promoCode";
 import { isBillClosed } from "@/lib/server/tableBill";
@@ -172,7 +172,7 @@ export async function POST(request) {
     const body = await readJson(request);
     const action = String(body.action || "list");
     const accepted = Array.isArray(body.print_kinds) ? body.print_kinds.map(String) : [];
-    ctx.printKinds = [...new Set([...TICKET_KINDS, ...accepted.filter((k) => ["bill", "part_receipt", "final_bill", "test"].includes(k))])];
+    ctx.printKinds = [...new Set(accepted.filter((k) => ["bill", "part_receipt", "final_bill", "test"].includes(k)))];
     ctx.lan = body.lan_print === true;
     if (ctx.lan) {
       const minuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
