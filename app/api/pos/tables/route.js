@@ -171,8 +171,7 @@ export async function POST(request) {
     if (ctx.error) return ctx.error;
     const body = await readJson(request);
     const action = String(body.action || "list");
-    const accepted = Array.isArray(body.print_kinds) ? body.print_kinds.map(String) : [];
-    ctx.printKinds = [...new Set(accepted.filter((k) => ["bill", "part_receipt", "final_bill", "test"].includes(k)))];
+    ctx.printKinds = [];
     ctx.lan = body.lan_print === true;
     if (ctx.lan) {
       const minuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
