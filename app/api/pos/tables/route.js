@@ -1,6 +1,7 @@
 import { addBillItems, seatTable, setBillItemQty } from "@/lib/server/billItems";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { payBillPart } from "@/lib/server/splitBill";
+import { finishDiscovery, pendingDiscovery } from "@/lib/server/printerDiscovery";
 import { activePrinters, claimPrintJob, confirmPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, releasePrintJob, TICKET_KINDS, unleasePrintJob } from "@/lib/server/printJobs";
 import { cancelPayRequest, pendingPayRequests } from "@/lib/server/payRequests";
 import { heldPromos, PROMO_ERRORS, promoDue, promoLocked, quotePromo, recordPromoAttempt, releasePromo, reservePromo } from "@/lib/server/promoCode";
@@ -80,7 +81,7 @@ function menuSections(menuJson) {
 }
 
 async function liveTables({ admin, restaurantId, printKinds, lan = false }) {
-  const [tablesRes, ordersRes, merchantRes, printJobs, payRequests, printers] = await Promise.all([
+  const [tablesRes, ordersRes, merchantRes, printJobs, payRequests, printers, discovery] = await Promise.all([
     admin
       .from("restaurant_table_layouts")
       .select("table_no, label, capacity")
@@ -102,6 +103,7 @@ async function liveTables({ admin, restaurantId, printKinds, lan = false }) {
     pendingPrintJobs(admin, restaurantId, printKinds, lan).catch(() => []),
     pendingPayRequests(admin, restaurantId).catch(() => []),
     lan ? activePrinters(admin, restaurantId).catch(() => []) : Promise.resolve([]),
+    lan ? pendingDiscovery(admin, restaurantId).catch(() => []) : Promise.resolve([]),
   ]);
   if (tablesRes.error) throw tablesRes.error;
   if (ordersRes.error) throw ordersRes.error;
@@ -111,7 +113,8 @@ async function liveTables({ admin, restaurantId, printKinds, lan = false }) {
   return {
     merchant: merchantRes.data || null,
     print_jobs: printJobs,
-    printers: printers.map((p) => ({ id: p.id, name: p.name, ip: p.ip, port: p.port, paper_mm: p.paper_mm, prints: p.prints })),
+    printers: printers.map((p) => ({ id: p.id, name: p.name, ip: p.ip, port: p.port, paper_mm: p.paper_mm, prints: p.prints, backup_printer_id: p.backup_printer_id || null })),
+    discovery,
     pay_requests: payRequests,
     tables: tablesRes.data || [],
     orders: orders.map((o) => (promos.has(o.id) ? { ...o, promo: promos.get(o.id) } : o)),
@@ -225,6 +228,11 @@ export async function POST(request) {
     if (action === "claim_print") {
       const ok = await claimPrintJob(ctx.admin, ctx.restaurantId, ctx.terminalId, String(body.job_id || ""));
       return reply({ ok: true, claimed: ok });
+    }
+
+    if (action === "discovery_result") {
+      await finishDiscovery(ctx.admin, ctx.restaurantId, ctx.terminalId, body);
+      return reply({ ok: true });
     }
 
     if (action === "lease_print") {

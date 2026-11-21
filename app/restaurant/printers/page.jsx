@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Pencil, Plus, Printer, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Plus, Printer, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { getActiveRestaurantId } from "@/lib/restaurant-partner/activeRestaurant";
@@ -15,6 +15,34 @@ const JOBS = [
 const EMPTY = { id: "", name: "", ip: "", port: 9100, paper_mm: 80, prints: [], is_active: true, backup_printer_id: "" };
 const IP_RE = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 const inputCls = "h-10 w-full rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-gray-300";
+const SCAN_ERRORS = {
+  no_device: "No PassPrive POS answered. Make sure the POS app is open and connected to the restaurant Wi-Fi.",
+  no_network: "The POS is not connected to Wi-Fi.",
+  printer_unreachable: "That printer did not answer. Check it is switched on.",
+  printer_timeout: "That printer did not answer. Check it is switched on.",
+};
+const scanError = (code) => SCAN_ERRORS[code] || "The search did not finish. Try again.";
+
+async function printersApi(body) {
+  const { data: sess } = await supabaseBrowser.auth.getSession();
+  const res = await fetch("/api/restaurant/printers", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${sess?.session?.access_token || ""}` },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json?.ok) throw new Error(json?.error || "Request failed.");
+  return json;
+}
+
+async function waitForPos(restaurantId, id) {
+  for (let i = 0; i < 70; i += 1) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const { request } = await printersApi({ action: "discovery_status", restaurant_id: restaurantId, id });
+    if (request.status !== "pending") return request;
+  }
+  return { status: "failed", error: "no_device" };
+}
 
 export default function PrintersPage() {
   const [restaurantId, setRestaurantId] = useState("");
@@ -23,6 +51,36 @@ export default function PrintersPage() {
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState("");
+  const [scan, setScan] = useState({ state: "idle", found: [], subnet: "", error: "" });
+  const [ipTest, setIpTest] = useState("");
+
+  const findPrinters = async () => {
+    setScan({ state: "searching", found: [], subnet: "", error: "" });
+    try {
+      const { request } = await printersApi({ action: "scan", restaurant_id: restaurantId });
+      const done = await waitForPos(restaurantId, request.id);
+      if (done.status !== "done") return setScan({ state: "failed", found: [], subnet: "", error: scanError(done.error) });
+      setScan({ state: "done", found: done.result?.found || [], subnet: done.result?.subnet || "", error: "" });
+    } catch (e) {
+      setScan({ state: "failed", found: [], subnet: "", error: e?.message || scanError() });
+    }
+  };
+
+  const testFound = async (f) => {
+    setIpTest(f.ip);
+    try {
+      const { request } = await printersApi({ action: "test_ip", restaurant_id: restaurantId, ip: f.ip, port: f.port });
+      const done = await waitForPos(restaurantId, request.id);
+      if (done.status !== "done") throw new Error(scanError(done.error));
+      toast.success(`Printed on ${f.ip}. The printer that printed “This printer is ${f.ip}” is this one.`);
+    } catch (e) {
+      toast.error(e?.message || "Test print failed.");
+    } finally {
+      setIpTest("");
+    }
+  };
+
+  const addedAs = (f) => printers.find((p) => p.ip === f.ip && Number(p.port || 9100) === Number(f.port || 9100));
 
   const load = async () => {
     const id = await getActiveRestaurantId();
@@ -129,6 +187,78 @@ export default function PrintersPage() {
         >
           <Plus className="h-4 w-4" /> Add printer
         </button>
+      </div>
+
+      <div className="rounded-2xl border border-gray-200 bg-white p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-gray-900">Find printers on the restaurant Wi-Fi</div>
+            <p className="mt-0.5 text-xs text-gray-500">
+              The PassPrive POS at the restaurant searches its Wi-Fi for network printers. Takes about 10 seconds.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={!restaurantId || scan.state === "searching"}
+            onClick={findPrinters}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50"
+          >
+            {scan.state === "searching" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            {scan.state === "searching" ? "Searching…" : scan.state === "idle" ? "Find printers" : "Search again"}
+          </button>
+        </div>
+        {scan.state === "failed" ? <p className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{scan.error}</p> : null}
+        {scan.state === "done" ? (
+          scan.found.length === 0 ? (
+            <p className="mt-3 rounded-xl bg-gray-50 p-3 text-sm text-gray-600">
+              No network printers found on {scan.subnet || "the POS Wi-Fi"}. Check the printer is on and connected to the same Wi-Fi or router, then
+              search again.
+            </p>
+          ) : (
+            <div className="mt-3 divide-y divide-gray-100 rounded-xl border border-gray-100">
+              {scan.found.map((f) => {
+                const added = addedAs(f);
+                return (
+                  <div key={`${f.ip}:${f.port}`} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center">
+                    <div className="flex-1">
+                      <div className="font-semibold text-gray-900">
+                        {f.ip}
+                        <span className="text-gray-400">:{f.port}</span>
+                      </div>
+                      <div className={`text-xs ${added ? "text-emerald-700" : "text-gray-500"}`}>{added ? `Added as “${added.name}”` : "Not added yet"}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={Boolean(ipTest)}
+                        onClick={() => testFound(f)}
+                        className="h-9 rounded-xl border border-gray-200 px-3 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        {ipTest === f.ip ? "Printing…" : "Test print"}
+                      </button>
+                      {added ? null : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDraft({
+                              ...EMPTY,
+                              ip: f.ip,
+                              port: f.port || 9100,
+                              backup_printer_id: printers.find((b) => b.is_active && (b.prints || []).includes("receipts"))?.id || "",
+                            })
+                          }
+                          className="h-9 rounded-xl bg-[#FF4800] px-3 text-sm font-semibold text-white"
+                        >
+                          Add
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )
+        ) : null}
       </div>
 
       <div className="rounded-2xl border border-gray-200 bg-white p-4">
