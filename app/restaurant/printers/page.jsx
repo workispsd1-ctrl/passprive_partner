@@ -55,9 +55,18 @@ export default function PrintersPage() {
   const [ipTest, setIpTest] = useState("");
   const [extraNet, setExtraNet] = useState("");
 
+  useEffect(() => {
+    try {
+      setExtraNet(window.localStorage.getItem("printers:extraNet") || "");
+    } catch {}
+  }, []);
+
   const findPrinters = async () => {
     setScan({ state: "searching", found: [], subnet: "", error: "" });
     try {
+      try {
+        window.localStorage.setItem("printers:extraNet", extraNet);
+      } catch {}
       const { request } = await printersApi({ action: "scan", restaurant_id: restaurantId, networks: extraNet });
       const done = await waitForPos(restaurantId, request.id);
       if (done.status !== "done") return setScan({ state: "failed", found: [], subnet: "", error: scanError(done.error) });
@@ -150,15 +159,10 @@ export default function PrintersPage() {
   const test = async (p) => {
     setTesting(p.id);
     try {
-      const { data: sess } = await supabaseBrowser.auth.getSession();
-      const res = await fetch("/api/restaurant/printers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sess?.session?.access_token || ""}` },
-        body: JSON.stringify({ action: "test", printer_id: p.id }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json?.ok) throw new Error(json?.error || "Test print failed.");
-      toast.success(`Test sent to ${p.name}. It prints within a few seconds.`);
+      const { request } = await printersApi({ action: "test_ip", restaurant_id: restaurantId, ip: p.ip, port: p.port });
+      const done = await waitForPos(restaurantId, request.id);
+      if (done.status !== "done") throw new Error(scanError(done.error));
+      toast.success(`${p.name} printed the test page.`);
     } catch (e) {
       toast.error(e?.message || "Test print failed.");
     } finally {
@@ -222,8 +226,8 @@ export default function PrintersPage() {
         {scan.state === "done" ? (
           scan.found.length === 0 ? (
             <p className="mt-3 rounded-xl bg-gray-50 p-3 text-sm text-gray-600">
-              No network printers found on {scan.subnet || "the POS Wi-Fi"}. Check the printer is on and connected to the same Wi-Fi or router, then
-              search again.
+              No network printers found on {scan.subnet || "the restaurant Wi-Fi"}. Check the printer is on and connected to the same Wi-Fi or router.
+              If the printer&apos;s IP starts differently (e.g. 192.168.8.x), type that range (192.168.8) in “Also search network” and search again.
             </p>
           ) : (
             <div className="mt-3 divide-y divide-gray-100 rounded-xl border border-gray-100">
