@@ -51,6 +51,25 @@ async function queueBillPrint(ctx, orderId) {
   });
 }
 
+async function queueFinalPrint(ctx, orderId) {
+  const { data: row } = await ctx.admin
+    .from("restaurant_table_bookings")
+    .select("id, table_no, guest_count, customer_name, order_items, total_amount, order_details")
+    .eq("id", orderId)
+    .eq("restaurant_id", ctx.restaurantId)
+    .maybeSingle();
+  const pay = row?.order_details?.payment;
+  if (!row || !pay) return;
+  const parts = Array.isArray(row.order_details?.payments) && row.order_details.payments.length
+    ? row.order_details.payments
+    : [{ no: 1, method: pay.method, amount: Number(pay.amount_due || 0), tip: Number(pay.tip || 0), received: Number(pay.amount_received || 0), change: Number(pay.change || 0), reference: pay.reference || null }];
+  await queueReceiptJob(ctx.admin, ctx.restaurantId, {
+    orderId: row.id,
+    kind: "final_bill",
+    payload: { order_id: row.id, table_no: row.table_no, guests: row.guest_count, customer_name: row.customer_name || null, bill_total: Number(row.total_amount || 0), items: row.order_items || [], payments: parts },
+  });
+}
+
 async function releaseFinished(ctx, tables, orders) {
   const active = new Set((orders || []).filter((o) => !isClosed(o)).map((o) => Number(o.table_no)));
   const byId = new Map((tables || []).map((t) => [String(t.id), t]));
@@ -239,6 +258,7 @@ export async function POST(request) {
 
     if (action === "settle") {
       const { status, body: out } = await settleTableBill(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      if (out.ok) await queueFinalPrint(ctx, String(body?.order_id || "")).catch((e) => console.error("final bill print queue failed", e?.message));
       return NextResponse.json(out, { status });
     }
 
@@ -342,7 +362,9 @@ export async function POST(request) {
       if (!Array.isArray(updatedRows) || !updatedRows.length) {
         return NextResponse.json({ ok: false, error: "Order not found." }, { status: 404 });
       }
-      if (nextBookingStatus === "COMPLETED" && !["PAID", "COMPLETED"].includes(nextPaymentStatus) && !isBillPaid(row)) {
+      if (["PAID", "COMPLETED"].includes(nextPaymentStatus) && !isBillPaid(row)) {
+        await queueFinalPrint(ctx, orderId).catch((e) => console.error("final bill print queue failed", e?.message));
+      } else if (nextBookingStatus === "COMPLETED" && !isBillPaid(row)) {
         await queueBillPrint(ctx, orderId).catch((e) => console.error("bill print queue failed", e?.message));
       }
       return NextResponse.json({ ok: true, order: updatedRows[0] });
