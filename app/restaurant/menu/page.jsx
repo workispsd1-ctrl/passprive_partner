@@ -254,8 +254,47 @@ function AreaModal({ initial, canDelete, onClose, onSave, onDelete }) {
   );
 }
 
-function CommentPresetsEditor({ value, onChange }) {
+const DEFAULT_COMMENTS = [
+  "Well done",
+  "Medium",
+  "Rare",
+  "Half cooked",
+  "No onion",
+  "No garlic",
+  "Not spicy",
+  "Extra spicy",
+  "No sauce",
+  "Sauce on the side",
+  "No ice",
+  "Less sugar",
+];
+
+const savedComments = (menu) => (Array.isArray(menu?.comment_library) ? menu.comment_library : DEFAULT_COMMENTS);
+
+function commentSuggestions(menu) {
+  const seen = new Set();
+  const out = [];
+  const push = (list) =>
+    (Array.isArray(list) ? list : []).forEach((v) => {
+      const text = String(v || "").trim().slice(0, 60);
+      if (text && !seen.has(text.toLowerCase())) {
+        seen.add(text.toLowerCase());
+        out.push(text);
+      }
+    });
+  push(savedComments(menu));
+  push(menu?.comment_presets);
+  (Array.isArray(menu?.sections) ? menu.sections : []).forEach((sec) => {
+    push(sec?.comment_presets);
+    (Array.isArray(sec?.items) ? sec.items : []).forEach((i) => push(i?.comment_presets));
+  });
+  return out;
+}
+
+function CommentPresetsEditor({ value, onChange, suggestions = [] }) {
   const [draft, setDraft] = useState("");
+  const chosen = new Set(value.map((v) => v.toLowerCase()));
+  const offer = suggestions.filter((v) => !chosen.has(v.toLowerCase()));
   const add = () => {
     const text = draft.trim().replace(/\s+/g, " ").slice(0, 60);
     if (!text) return;
@@ -274,6 +313,24 @@ function CommentPresetsEditor({ value, onChange }) {
               </button>
             </span>
           ))}
+        </div>
+      ) : null}
+      {offer.length ? (
+        <div className="mb-2">
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Tap to add</div>
+          <div className="flex flex-wrap gap-1.5">
+            {offer.map((v) => (
+              <button
+                key={v}
+                type="button"
+                disabled={value.length >= 30}
+                onClick={() => onChange([...value, v].slice(0, 30))}
+                className="rounded-full border border-dashed border-gray-300 px-3 py-1 text-xs font-semibold text-gray-600 hover:border-[#FF4800] hover:text-[#FF4800] disabled:opacity-40"
+              >
+                + {v}
+              </button>
+            ))}
+          </div>
         </div>
       ) : null}
       <div className="flex gap-2">
@@ -336,6 +393,7 @@ export default function RestaurantMenuPage() {
   const [itemBest, setItemBest] = useState(false);
   const [itemAvail, setItemAvail] = useState(true);
   const [itemGroups, setItemGroups] = useState([]);
+  const [itemComments, setItemComments] = useState([]);
   const [itemVariants, setItemVariants] = useState([]);
   const [itemSubcat, setItemSubcat] = useState("");
   const [itemError, setItemError] = useState("");
@@ -833,6 +891,7 @@ export default function RestaurantMenuPage() {
     setItemAvail(true);
     setItemImages([]);
     setItemGroups([]);
+    setItemComments([]);
     setItemVariants([]);
     setItemSubcat("");
     setItemError("");
@@ -861,6 +920,7 @@ export default function RestaurantMenuPage() {
     setItemAvail(item.is_available !== false);
     setItemImages(Array.isArray(item.image_urls) ? item.image_urls : []);
     setItemGroups(toEditableGroups(item.modifier_groups));
+    setItemComments(Array.isArray(item.comment_presets) ? item.comment_presets : []);
     setItemVariants(toEditableVariants(item.variants));
     setItemSubcat(item.subcategory_id || "");
     setItemModalOpen(true);
@@ -901,6 +961,7 @@ export default function RestaurantMenuPage() {
           is_available: itemAvail,
           subcategory_id: subcats.includes(itemSubcat) ? itemSubcat : null,
           modifier_groups: modifierGroups,
+          comment_presets: itemComments,
         };
 
         const idx = items.findIndex((i) => i.id === idToUse);
@@ -1079,10 +1140,26 @@ export default function RestaurantMenuPage() {
           </div>
 
           <div className="mt-5 rounded-xl border border-gray-200 p-3">
+            <div className="text-sm font-semibold text-gray-900">Saved comments</div>
+            <div className="mt-0.5 text-xs text-gray-500">
+              Your list of ready-made comments. They don&apos;t show on any dish by themselves: open a dish or section and tap the ones it needs.
+            </div>
+            <CommentPresetsEditor
+              value={savedComments(menu)}
+              onChange={async (list) => {
+                const nextMenu = { ...menu, comment_library: list, updated_at: new Date().toISOString() };
+                setMenu(nextMenu);
+                await saveMenu(nextMenu);
+              }}
+            />
+          </div>
+
+          <div className="mt-3 rounded-xl border border-gray-200 p-3">
             <div className="text-sm font-semibold text-gray-900">Quick comments for every item</div>
             <div className="mt-0.5 text-xs text-gray-500">Staff tap these when taking an order, e.g. “Take away”. Add more per section when you edit a section.</div>
             <CommentPresetsEditor
               value={Array.isArray(menu.comment_presets) ? menu.comment_presets : []}
+              suggestions={commentSuggestions(menu)}
               onChange={async (list) => {
                 const nextMenu = { ...menu, comment_presets: list, updated_at: new Date().toISOString() };
                 setMenu(nextMenu);
@@ -1593,7 +1670,7 @@ export default function RestaurantMenuPage() {
           <div>
             <label className="text-sm font-semibold text-gray-700">Quick comments</label>
             <p className="mt-0.5 text-xs text-gray-500">Shown for items in this section, e.g. “Sans tomate”, “Sans mayo”.</p>
-            <CommentPresetsEditor value={sectionComments} onChange={setSectionComments} />
+            <CommentPresetsEditor value={sectionComments} onChange={setSectionComments} suggestions={commentSuggestions(menu)} />
           </div>
 
           <div>
@@ -1793,6 +1870,14 @@ export default function RestaurantMenuPage() {
               Choices staff and guests pick when ordering, e.g. Size (required, pick 1) or Extras (optional, up to 3). Prices add to the item price.
             </p>
             <ModifierGroupsEditor groups={itemGroups} onChange={setItemGroups} />
+          </div>
+
+          <div className="col-span-12 border-t border-gray-100 pt-4">
+            <div className="text-sm font-semibold text-gray-700">Quick comments for this dish</div>
+            <p className="mt-1 mb-3 text-xs text-gray-500">
+              One-tap notes staff can add when ordering, e.g. for a steak: “Well done”, “Medium”, “Rare”. They show first, before the section&apos;s comments. Free, they don&apos;t change the price.
+            </p>
+            <CommentPresetsEditor value={itemComments} onChange={setItemComments} suggestions={commentSuggestions(menu)} />
           </div>
 
           {itemError ? <div className="col-span-12 text-sm text-red-600">{itemError}</div> : null}

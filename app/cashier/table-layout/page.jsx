@@ -677,8 +677,6 @@ export default function CashierTableLayoutPage() {
                     const payment = String(o?.payment_status || "").toUpperCase();
                     const isPaid = payment === "PAID" || payment === "COMPLETED";
                     const orderClosed = booking === "CANCELLED" || isPaid;
-                    const confirmedDone = ["CONFIRMED", "PREPARING", "SERVED", "COMPLETED"].includes(booking) || isPaid;
-                    const servedDone = ["SERVED", "COMPLETED"].includes(booking) || isPaid;
                     const completedDone = booking === "COMPLETED" || isPaid;
                     const paidDone = isPaid;
                     const busyOnOrder = updatingOrderKey.startsWith(`${o.id}:`);
@@ -705,22 +703,6 @@ export default function CashierTableLayoutPage() {
                         </div>
                         <div className="mt-3 text-sm font-semibold text-slate-900">Total: {money(o.total_amount)}</div>
                         <div className="mt-3 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            disabled={orderClosed || confirmedDone || busyOnOrder}
-                            onClick={() => updateOrderState(o.id, { booking_status: "CONFIRMED" }, "confirmed")}
-                            className="rounded-lg border border-sky-700 bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
-                          >
-                            Mark Confirmed
-                          </button>
-                          <button
-                            type="button"
-                            disabled={orderClosed || servedDone || busyOnOrder}
-                            onClick={() => updateOrderState(o.id, { booking_status: "SERVED" }, "served")}
-                            className="rounded-lg border border-indigo-700 bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
-                          >
-                            Mark Served
-                          </button>
                           <button
                             type="button"
                             disabled={orderClosed || completedDone || busyOnOrder}

@@ -278,14 +278,14 @@ export async function POST(request) {
       const orderId = String(body?.order_id || "").trim();
       const nextBookingStatus = String(body?.booking_status || "").trim().toUpperCase();
       const nextPaymentStatus = String(body?.payment_status || "").trim().toUpperCase();
-      const allowedBooking = new Set(["PLACED", "CONFIRMED", "PREPARING", "SERVED", "COMPLETED"]);
+      const allowedBooking = new Set(["COMPLETED"]);
       const allowedPayment = new Set(["PENDING", "PAID", "COMPLETED"]);
       if (!orderId) return NextResponse.json({ ok: false, error: "order_id is required" }, { status: 400 });
       if (!nextBookingStatus && !nextPaymentStatus) {
         return NextResponse.json({ ok: false, error: "booking_status or payment_status is required" }, { status: 400 });
       }
       if (nextBookingStatus && !allowedBooking.has(nextBookingStatus)) {
-        return NextResponse.json({ ok: false, error: "Invalid booking_status" }, { status: 400 });
+        return NextResponse.json({ ok: false, error: "The till can only mark a table completed." }, { status: 400 });
       }
       if (nextPaymentStatus && !allowedPayment.has(nextPaymentStatus)) {
         return NextResponse.json({ ok: false, error: "Invalid payment_status" }, { status: 400 });

@@ -172,7 +172,7 @@ export async function POST(request) {
             total_amount: nextTotal,
             payment_method: "CASH",
             payment_status: "PENDING",
-            booking_status: String(openExisting.booking_status || "").toUpperCase() === "SEATED" ? "PLACED" : "PREPARING",
+            booking_status: "PLACED",
             source: "cashier",
             notes: notes || prevDetails?.notes || null,
             updated_at: new Date().toISOString(),
@@ -214,7 +214,7 @@ export async function POST(request) {
         total_amount: total,
         payment_method: "CASH",
         payment_status: "PENDING",
-        booking_status: "PREPARING",
+        booking_status: "PLACED",
         source: "cashier",
         notes: notes || null,
       };

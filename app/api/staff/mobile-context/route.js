@@ -37,7 +37,7 @@ export async function POST(request) {
         .maybeSingle(),
       admin
         .from("restaurant_table_layouts")
-        .select("id, table_no, label, capacity, attached_to, area_id")
+        .select("id, table_no, label, capacity, attached_to, area_id, restaurant_table_areas:area_id(name)")
         .eq("restaurant_id", restaurantId)
         .order("table_no", { ascending: true }),
       admin
@@ -72,7 +72,10 @@ export async function POST(request) {
       return row?.area_id && a?.id ? { id: a.id, name: a.name || "" } : null;
     };
     const area = areaOf(staffRow) || areaOf(terminalRow);
-    const allTables = tableRows || [];
+    const allTables = (tableRows || []).map(({ restaurant_table_areas: a, ...t }) => ({
+      ...t,
+      area_name: (Array.isArray(a) ? a[0]?.name : a?.name) || null,
+    }));
     const inArea = (t) => {
       if (!area) return true;
       const host = t.attached_to ? allTables.find((x) => x.id === t.attached_to) : null;
