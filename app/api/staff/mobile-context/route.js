@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { movesFor } from "@/lib/server/guestMoves";
 import { markDiscoveryCapable, pendingDiscovery } from "@/lib/server/printerDiscovery";
+import { activePrinters, pendingPrintJobs, TICKET_KINDS } from "@/lib/server/printJobs";
 import { requireTerminal, serverError } from "../_terminal";
 import { isQrPending } from "@/lib/server/printJobs";
 
@@ -101,7 +102,21 @@ export async function POST(request) {
       },
       ...(knownMenu === menuV ? {} : { menu }),
       area,
-      ...(printerHelper ? { printer_discovery: await pendingDiscovery(admin, restaurantId).catch(() => []) } : {}),
+      ...(printerHelper
+        ? {
+            printer_discovery: await pendingDiscovery(admin, restaurantId).catch(() => []),
+            print_jobs: await pendingPrintJobs(admin, restaurantId, [...TICKET_KINDS, "test"], true).catch(() => []),
+            printers: (await activePrinters(admin, restaurantId).catch(() => [])).map((p) => ({
+              id: p.id,
+              name: p.name,
+              ip: p.ip,
+              port: p.port,
+              paper_mm: p.paper_mm,
+              prints: p.prints,
+              backup_printer_id: p.backup_printer_id || null,
+            })),
+          }
+        : {}),
       guest_moves: await movesFor(admin, restaurantId, area?.id || null, userId).catch(() => ({ to_seat: [], notices: [] })),
       tables: areaTables,
       open_orders: openOrders,
