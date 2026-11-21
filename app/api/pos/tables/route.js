@@ -178,7 +178,7 @@ export async function POST(request) {
       const minuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
       await ctx.admin
         .from("pos_terminals")
-        .update({ lan_print_at: new Date().toISOString() })
+        .update({ lan_print_at: new Date().toISOString(), ...(body.discovery === true ? { discovery_at: new Date().toISOString() } : {}) })
         .eq("id", ctx.terminalId)
         .or(`lan_print_at.is.null,lan_print_at.lt.${minuteAgo}`);
     }

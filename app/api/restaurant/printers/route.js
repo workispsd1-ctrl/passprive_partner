@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { lanDeviceOnline, queueTestPrint } from "@/lib/server/printJobs";
-import { discoveryStatus, requestDiscovery } from "@/lib/server/printerDiscovery";
+import { discoveryDeviceOnline, discoveryStatus, requestDiscovery } from "@/lib/server/printerDiscovery";
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -76,6 +76,12 @@ async function discovery(token, body) {
   }
 
   if (!(await lanDeviceOnline(db, restaurantId))) return NextResponse.json({ ok: false, error: NO_POS }, { status: 409 });
+  if (!(await discoveryDeviceOnline(db, restaurantId))) {
+    return NextResponse.json(
+      { ok: false, error: "The PassPrive POS at the restaurant is online but needs the latest app update to search for printers. Update the POS app, open it, then try again." },
+      { status: 409 }
+    );
+  }
   const { data: userData } = await asUser(token).auth.getUser();
   const made = await requestDiscovery(db, restaurantId, userData?.user?.id, {
     kind: body.action === "scan" ? "scan" : "test",
