@@ -36,6 +36,21 @@ async function queuePartPrint(ctx, orderId, out) {
   }
 }
 
+async function queueBillPrint(ctx, orderId) {
+  const { data: row } = await ctx.admin
+    .from("restaurant_table_bookings")
+    .select("id, table_no, guest_count, customer_name, order_items, total_amount")
+    .eq("id", orderId)
+    .eq("restaurant_id", ctx.restaurantId)
+    .maybeSingle();
+  if (!row || !(row.order_items || []).length) return;
+  await queueReceiptJob(ctx.admin, ctx.restaurantId, {
+    orderId: row.id,
+    kind: "bill",
+    payload: { order_id: row.id, table_no: row.table_no, guests: row.guest_count, customer_name: row.customer_name || null, bill_total: Number(row.total_amount || 0), items: row.order_items },
+  });
+}
+
 async function releaseFinished(ctx, tables, orders) {
   const active = new Set((orders || []).filter((o) => !isClosed(o)).map((o) => Number(o.table_no)));
   const byId = new Map((tables || []).map((t) => [String(t.id), t]));
@@ -326,6 +341,9 @@ export async function POST(request) {
       if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 400 });
       if (!Array.isArray(updatedRows) || !updatedRows.length) {
         return NextResponse.json({ ok: false, error: "Order not found." }, { status: 404 });
+      }
+      if (nextBookingStatus === "COMPLETED" && !["PAID", "COMPLETED"].includes(nextPaymentStatus) && !isBillPaid(row)) {
+        await queueBillPrint(ctx, orderId).catch((e) => console.error("bill print queue failed", e?.message));
       }
       return NextResponse.json({ ok: true, order: updatedRows[0] });
     }
