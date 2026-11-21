@@ -13,13 +13,13 @@ const isClosed = isBillClosed;
 async function queuePartPrint(ctx, orderId, out) {
   const { data: row } = await ctx.admin
     .from("restaurant_table_bookings")
-    .select("id, table_no, guest_count, order_items, total_amount")
+    .select("id, table_no, guest_count, customer_name, order_items, total_amount")
     .eq("id", orderId)
     .eq("restaurant_id", ctx.restaurantId)
     .maybeSingle();
   if (!row) return;
   const totalCents = Math.round(Number(row.total_amount || 0) * 100);
-  const bill = { order_id: row.id, table_no: row.table_no, guests: row.guest_count, bill_total: totalCents / 100 };
+  const bill = { order_id: row.id, table_no: row.table_no, guests: row.guest_count, customer_name: row.customer_name || null, bill_total: totalCents / 100 };
   const paidCents = (out.payments || []).reduce((n, p) => n + Math.round(Number(p.amount || 0) * 100), 0);
   if (out.closed) {
     await queueReceiptJob(ctx.admin, ctx.restaurantId, {
