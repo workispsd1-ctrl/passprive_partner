@@ -342,6 +342,9 @@ export async function POST(request) {
         .order("created_at", { ascending: true });
       if (rowsErr) return NextResponse.json({ ok: false, error: rowsErr.message }, { status: 400 });
       const sourceBill = (rows || []).find((r) => !isClosed(r) && Number(r.table_no) === fromTable);
+      if (!(rows || []).some((r) => !isClosed(r))) {
+        return NextResponse.json({ ok: false, error: "Tables are joined only while they share a bill. Seat the guests first." }, { status: 409 });
+      }
       let combined = null;
       if (sourceBill) {
         const { status, body: out } = await changeTable(ctx.admin, ctx.restaurantId, ctx.userId, { order_id: sourceBill.id, to_table: toTable });
@@ -351,7 +354,7 @@ export async function POST(request) {
 
       const { data: done, error: upErr } = await ctx.admin
         .from("restaurant_table_layouts")
-        .update({ attached_to: target.id, attached_auto_release: Boolean(combined) || (rows || []).some((r) => !isClosed(r)) })
+        .update({ attached_to: target.id, attached_auto_release: true })
         .eq("id", source.id)
         .eq("restaurant_id", ctx.restaurantId)
         .is("attached_to", null)
