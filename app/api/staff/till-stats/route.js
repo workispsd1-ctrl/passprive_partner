@@ -77,7 +77,12 @@ export async function POST(request) {
 
     if (body.action === "print") {
       const period = body.from === body.to ? body.from : `${body.from} to ${body.to}`;
-      const report = statsReport(full, { period, area: scope.area?.name || null, withItems: body.detail === "items" });
+      const report = statsReport(full, {
+        period,
+        area: scope.area?.name || null,
+        withItems: body.detail === "items",
+        sales: body.detail === "bills" ? sales : null,
+      });
       if (!mainPrinter(await activePrinters(admin, restaurantId))) {
         return reply({ ok: false, error: "No main printer is set up. On the partner dashboard, tick Customer receipts & bills on a printer." }, 409);
       }
