@@ -38,9 +38,13 @@ export default function CashierOrdersPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [cart, setCart] = useState({});
+  const [openBills, setOpenBills] = useState([]);
+  const [forGuest, setForGuest] = useState(null);
+  const [guestText, setGuestText] = useState("");
+  const [addingGuest, setAddingGuest] = useState(false);
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (quiet = false) => {
+    if (!quiet) setLoading(true);
     setError("");
     try {
       const { data: sess } = await supabaseBrowser.auth.getSession();
@@ -56,6 +60,7 @@ export default function CashierOrdersPage() {
       const tableRows = Array.isArray(json?.tables) ? json.tables : [];
       setTables(tableRows);
       setOccupiedTableNos(Array.isArray(json?.occupied_table_nos) ? json.occupied_table_nos.map((n) => Number(n)) : []);
+      setOpenBills(Array.isArray(json?.open_bills) ? json.open_bills : []);
       if (tableRows.length && !tableNo) setTableNo(String(tableRows[0].table_no || ""));
     } catch (e) {
       setError(e?.message || "Failed to load menu.");
@@ -66,13 +71,43 @@ export default function CashierOrdersPage() {
 
   useEffect(() => {
     load();
-    const onTopRefresh = () => load();
+    const onTopRefresh = () => load(true);
     window.addEventListener("cashier:refresh", onTopRefresh);
     return () => window.removeEventListener("cashier:refresh", onTopRefresh);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const cartItems = useMemo(() => Object.values(cart), [cart]);
+  const openBill = orderType === "TABLE" ? openBills.find((b) => Number(b.table_no) === Number(tableNo)) || null : null;
+  const guests = openBill?.guests || [];
+  const guestName = (id) => guests.find((g) => g.id === id)?.name || "";
+  const activeGuest = guests.some((g) => g.id === forGuest) ? forGuest : null;
+  const qtyOf = (itemId) => Number(cart[`${itemId}|${activeGuest || ""}`]?.qty || 0);
+
+  const addGuest = async () => {
+    if (!openBill || addingGuest) return;
+    setAddingGuest(true);
+    try {
+      const { data: sess } = await supabaseBrowser.auth.getSession();
+      const token = sess?.session?.access_token;
+      if (!token) throw new Error("Please sign in again.");
+      const res = await fetch("/api/cashier/table-layout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: "add_guest", order_id: openBill.order_id, name: guestText.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.ok) throw new Error(json?.error || "Could not add the guest.");
+      setGuestText("");
+      await load(true);
+      setForGuest(json.guest?.id || null);
+      toast.success(`${json.guest?.name || "Guest"} added`);
+    } catch (e) {
+      toast.error(e?.message || "Could not add the guest.");
+    } finally {
+      setAddingGuest(false);
+    }
+  };
 
   const subtotal = useMemo(
     () => cartItems.reduce((sum, it) => sum + Number(it.unit_price || 0) * Number(it.qty || 0), 0),
@@ -82,13 +117,15 @@ export default function CashierOrdersPage() {
 
   const addItem = (item, section) => {
     setCart((prev) => {
-      const key = String(item.id);
+      const key = `${item.id}|${activeGuest || ""}`;
       const current = prev[key];
       const qty = Number(current?.qty || 0) + 1;
       return {
         ...prev,
         [key]: {
-          item_id: key,
+          key,
+          guest_id: activeGuest,
+          item_id: String(item.id),
           name: item.name,
           unit_price: Number(item.price || 0),
           qty,
@@ -100,7 +137,7 @@ export default function CashierOrdersPage() {
 
   const removeItem = (itemId) => {
     setCart((prev) => {
-      const key = String(itemId);
+      const key = `${itemId}|${activeGuest || ""}`;
       const current = prev[key];
       if (!current) return prev;
       const nextQty = Number(current.qty || 0) - 1;
@@ -145,6 +182,7 @@ export default function CashierOrdersPage() {
           name: it.name,
           qty: Number(it.qty || 0),
           unit_price: Number(it.unit_price || 0),
+          guest_id: guests.some((g) => g.id === it.guest_id) ? it.guest_id : undefined,
         })),
       };
 
@@ -246,7 +284,7 @@ export default function CashierOrdersPage() {
               <div className="mb-3 text-sm font-semibold text-slate-900">{section.name}</div>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {section.items.map((item) => {
-                  const qty = Number(cart[item.id]?.qty || 0);
+                  const qty = qtyOf(item.id);
                   const img = Array.isArray(item.image_urls) ? item.image_urls[0] : "";
                   return (
                     <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -323,6 +361,42 @@ export default function CashierOrdersPage() {
                 </option>
               ))}
             </select>
+            {openBill ? (
+              <div className="mt-3">
+                <div className="text-xs font-semibold text-slate-600">Ordering for</div>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {[{ id: null, name: "Table" }, ...guests].map((g) => (
+                    <button
+                      key={g.id || "table"}
+                      type="button"
+                      onClick={() => setForGuest(g.id)}
+                      className={`h-8 max-w-[10rem] truncate rounded-full border px-3 text-xs font-semibold ${activeGuest === g.id ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 bg-white text-slate-700"}`}
+                    >
+                      {g.name}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-2 flex gap-1.5">
+                  <input
+                    type="text"
+                    value={guestText}
+                    maxLength={40}
+                    onChange={(e) => setGuestText(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addGuest()}
+                    placeholder="New guest name (optional)"
+                    className="h-8 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2 text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={addGuest}
+                    disabled={addingGuest}
+                    className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 disabled:opacity-50"
+                  >
+                    {addingGuest ? "Adding…" : "+ Guest"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -355,8 +429,11 @@ export default function CashierOrdersPage() {
               <div className="text-xs text-slate-500">No items selected.</div>
             ) : (
               cartItems.map((it) => (
-                <div key={it.item_id} className="flex items-center justify-between gap-2 text-xs text-slate-700">
-                  <span className="truncate">{it.name} x {it.qty}</span>
+                <div key={it.key} className="flex items-center justify-between gap-2 text-xs text-slate-700">
+                  <span className="truncate">
+                    {it.name} x {it.qty}
+                    {it.guest_id && guestName(it.guest_id) ? <span className="ml-1 font-semibold text-blue-700">· {guestName(it.guest_id)}</span> : null}
+                  </span>
                   <span>{money(Number(it.qty || 0) * Number(it.unit_price || 0))}</span>
                 </div>
               ))

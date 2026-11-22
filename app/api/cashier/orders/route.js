@@ -4,6 +4,7 @@ import { resolveCashierRestaurant } from "../_shared";
 import { fromCents, menuIndex, mergeLines, priceLines } from "@/lib/server/menuPricing";
 import { isBillClosed } from "@/lib/server/tableBill";
 import { queueOrderTicket } from "@/lib/server/printJobs";
+import { guestsOf } from "@/lib/server/splitBill";
 import { hostTable } from "@/lib/server/changeTable";
 
 function toFixed2(v) {
@@ -35,7 +36,7 @@ export async function GET(request) {
         .order("table_no", { ascending: true }),
       ctx.admin
         .from("restaurant_table_bookings")
-        .select("table_no,booking_status,payment_status")
+        .select("id,table_no,booking_status,payment_status,updated_at,guests:order_details->guests")
         .eq("restaurant_id", ctx.restaurantId),
     ]);
 
@@ -64,8 +65,20 @@ export async function GET(request) {
       )
     ).sort((a, b) => a - b);
 
+    const openBills = new Map();
+    for (const r of (Array.isArray(bookingsRes.data) ? bookingsRes.data : []).filter(isTableOccupied)) {
+      const no = Number(r?.table_no || 0);
+      const prev = openBills.get(no);
+      if (no > 0 && (!prev || String(r.updated_at) > String(prev.updated_at))) openBills.set(no, r);
+    }
+
     return NextResponse.json({
       ok: true,
+      open_bills: [...openBills.values()].map((r) => ({
+        table_no: Number(r.table_no),
+        order_id: r.id,
+        guests: (Array.isArray(r.guests) ? r.guests : []).filter((g) => g?.id).map((g) => ({ id: g.id, name: g.name })),
+      })),
       restaurant_id: ctx.restaurantId,
       restaurant_name: ctx.restaurantName,
       menu: menu && typeof menu === "object" ? menu : null,
@@ -114,16 +127,16 @@ export async function POST(request) {
       .maybeSingle();
     if (menuErr) return NextResponse.json({ ok: false, error: menuErr.message }, { status: 400 });
 
-    const priced = priceLines(
-      items.map((it) => ({
-        item_id: it?.item_id ?? it?.id,
-        variant_id: it?.variant_id,
-        quantity: Number(it?.quantity ?? it?.qty),
-        modifiers: it?.modifiers,
-        note: it?.note,
-      })),
-      menuIndex(menuRow?.menu_json)
-    );
+    const rawLines = items.map((it) => ({
+      item_id: it?.item_id ?? it?.id,
+      variant_id: it?.variant_id,
+      quantity: Number(it?.quantity ?? it?.qty),
+      modifiers: it?.modifiers,
+      note: it?.note,
+      guest_id: it?.guest_id,
+    }));
+    const index = menuIndex(menuRow?.menu_json);
+    const priced = priceLines(rawLines, index);
     if (!priced) {
       return NextResponse.json({ ok: false, error: "Some items are no longer on the menu. Refresh and try again." }, { status: 400 });
     }
@@ -145,10 +158,12 @@ export async function POST(request) {
       const openExisting = (Array.isArray(existingRows) ? existingRows : []).find(isTableOccupied) || null;
 
       if (openExisting?.id) {
+        const guests = guestsOf(openExisting);
+        const guestLines = guests.length ? priceLines(rawLines, index, { guests })?.lines || normalizedItems : normalizedItems;
         const prevSubtotal = Number(openExisting.subtotal_amount || 0);
         const prevTax = Number(openExisting.tax_amount || 0);
         const prevTotal = Number(openExisting.total_amount || 0);
-        const mergedItems = mergeLines(openExisting.order_items, normalizedItems);
+        const mergedItems = mergeLines(openExisting.order_items, guestLines);
         const nextSubtotal = toFixed2(prevSubtotal + subtotal);
         const nextTax = toFixed2(prevTax + tax);
         const nextTotal = toFixed2(prevTotal + total);
@@ -190,7 +205,7 @@ export async function POST(request) {
           orderId: openExisting.id,
           tableNo,
           guests: openExisting.guest_count,
-          lines: normalizedItems,
+          lines: guestLines,
           added: Array.isArray(openExisting.order_items) && openExisting.order_items.length > 0,
           notes,
           source: "Till",

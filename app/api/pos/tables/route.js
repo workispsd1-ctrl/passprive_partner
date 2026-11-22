@@ -1,4 +1,5 @@
 import { addBillItems, seatTable, setBillItemQty } from "@/lib/server/billItems";
+import { addGuest, setItemGuest } from "@/lib/server/billGuests";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { payBillPart } from "@/lib/server/splitBill";
 import { finishDiscovery, pendingDiscovery } from "@/lib/server/printerDiscovery";
@@ -21,7 +22,7 @@ function isPaidOnline(o) {
   return o?.source === "public_menu" && ["PAID", "COMPLETED"].includes(String(o?.payment_status || "").toUpperCase());
 }
 const ORDER_COLUMNS =
-  "id, table_no, guest_count, customer_name, notes, booking_status, payment_status, subtotal_amount, total_amount, tip_amount, order_items, created_at, updated_at, source, qr_pending:order_details->qr_pending, payments:order_details->payments";
+  "id, table_no, guest_count, customer_name, notes, booking_status, payment_status, subtotal_amount, total_amount, tip_amount, order_items, created_at, updated_at, source, qr_pending:order_details->qr_pending, payments:order_details->payments, guests:order_details->guests";
 
 function thumbnail(urls) {
   const url = Array.isArray(urls) ? String(urls[0] || "") : "";
@@ -292,6 +293,13 @@ export async function POST(request) {
     }
 
     if (action === "promo_due") return reply({ ok: true, ...(await promoDue(ctx.admin, ctx.restaurantId)) });
+
+    if (action === "add_guest" || action === "set_item_guest") {
+      const { status, body: out } = action === "add_guest"
+        ? await addGuest(ctx.admin, ctx.restaurantId, ctx.userId, body)
+        : await setItemGuest(ctx.admin, ctx.restaurantId, body);
+      return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);
+    }
 
     if (action === "pay_part") {
       if (!body.gateway && !body.request_id && !(await isReadyToPay(ctx, String(body.order_id || "")))) {

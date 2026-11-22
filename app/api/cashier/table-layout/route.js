@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { setBillItemQty } from "@/lib/server/billItems";
+import { addGuest, setItemGuest } from "@/lib/server/billGuests";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { resolveCashierRestaurant } from "../_shared";
 import { bookingStatusChangeError, isBillClosed, isBillPaid, quickPaymentRecord } from "@/lib/server/tableBill";
@@ -164,6 +165,16 @@ export async function POST(request) {
         ...body,
         qty: action === "cancel_item" ? 0 : body?.qty,
       });
+      return NextResponse.json(out, { status });
+    }
+
+    if (action === "add_guest") {
+      const { status, body: out } = await addGuest(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      return NextResponse.json(out, { status });
+    }
+
+    if (action === "set_item_guest") {
+      const { status, body: out } = await setItemGuest(ctx.admin, ctx.restaurantId, body);
       return NextResponse.json(out, { status });
     }
 
