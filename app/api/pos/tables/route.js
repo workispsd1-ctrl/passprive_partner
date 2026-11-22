@@ -4,7 +4,7 @@ import { settleTableBill } from "@/lib/server/settleBill";
 import { payBillPart } from "@/lib/server/splitBill";
 import { finishDiscovery, pendingDiscovery } from "@/lib/server/printerDiscovery";
 import { activePrinters, claimPrintJob, confirmPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, queueBillPrint, queueFinalPrint, queuePartPrint, releasePrintJob, unleasePrintJob } from "@/lib/server/printJobs";
-import { cancelPayRequest, pendingPayRequests } from "@/lib/server/payRequests";
+import { cancelPayRequest, claimPayRequest, pendingPayRequests } from "@/lib/server/payRequests";
 import { heldPromos, PROMO_ERRORS, promoDue, promoLocked, quotePromo, recordPromoAttempt, releasePromo, reservePromo } from "@/lib/server/promoCode";
 import { isBillClosed } from "@/lib/server/tableBill";
 import { readJson, reply, requireTerminal, serverError } from "../../staff/_terminal";
@@ -182,6 +182,11 @@ export async function POST(request) {
         .update({ lan_print_at: new Date().toISOString(), ...(body.discovery === true ? { discovery_at: new Date().toISOString() } : {}) })
         .eq("id", ctx.terminalId)
         .or(`lan_print_at.is.null,lan_print_at.lt.${minuteAgo}`);
+    }
+
+    if (action === "claim_request") {
+      const { status, body: out } = await claimPayRequest(ctx.admin, ctx.restaurantId, ctx.terminalId, body.request_id);
+      return reply(out, status);
     }
 
     if (action === "decline_payment") {

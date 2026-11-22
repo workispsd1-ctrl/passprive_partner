@@ -3,7 +3,7 @@ import { seatTable } from "@/lib/server/billItems";
 import { resolveCashierRestaurant } from "../_shared";
 import { fromCents, menuIndex, mergeLines, priceLines } from "@/lib/server/menuPricing";
 import { isBillClosed } from "@/lib/server/tableBill";
-import { queueOrderTicket } from "@/lib/server/printJobs";
+import { queueOrderTicket, queueTakeawayReceipt } from "@/lib/server/printJobs";
 import { guestsOf } from "@/lib/server/splitBill";
 import { hostTable } from "@/lib/server/changeTable";
 
@@ -265,6 +265,7 @@ export async function POST(request) {
       metadata: {
         source_channel: "cashier_orders",
         cashier_user_id: ctx.userId,
+        takeaway: true,
       },
       accepted_at: now.toISOString(),
     };
@@ -274,6 +275,14 @@ export async function POST(request) {
       .select("id, order_number, total_amount, order_status, payment_status, pickup_code")
       .single();
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+    await queueOrderTicket(ctx.admin, ctx.restaurantId, {
+      orderId: null,
+      tableNo: null,
+      lines: normalizedItems,
+      notes,
+      source: "Takeaway",
+      takeaway: { name: customerName, code: pickupCode, number: orderNumber },
+    }).catch((e) => console.error("takeaway ticket failed", e?.message));
     return NextResponse.json({ ok: true, order_type: "PICKUP", order: data });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error?.message || "Unknown error" }, { status: 500 });
@@ -295,6 +304,11 @@ export async function PATCH(request) {
 
     const allowedOrderStatus = new Set(["NEW", "ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "PICKED_UP", "CANCELLED"]);
     const allowedPaymentStatus = new Set(["PENDING", "PAID"]);
+    const allowedMethods = new Set(["CASH", "CARD", "MAUCAS", "JUICE"]);
+    const paymentMethod = String(body?.payment_method || "CASH").trim().toUpperCase();
+    if (paymentStatus === "PAID" && !allowedMethods.has(paymentMethod)) {
+      return NextResponse.json({ ok: false, error: "Pick how the order was paid." }, { status: 400 });
+    }
 
     if (!id) return NextResponse.json({ ok: false, error: "id is required" }, { status: 400 });
     if (!orderStatus && !paymentStatus) {
@@ -315,21 +329,49 @@ export async function PATCH(request) {
       if (orderStatus === "PICKED_UP") patch.picked_up_at = new Date().toISOString();
       if (orderStatus === "CANCELLED") patch.cancelled_at = new Date().toISOString();
     }
+    let before = null;
+    if (paymentStatus === "PAID") {
+      const { data: current } = await ctx.admin
+        .from("restaurant_orders")
+        .select("payment_status, metadata")
+        .eq("id", id)
+        .eq("restaurant_id", ctx.restaurantId)
+        .maybeSingle();
+      before = current;
+      if (String(current?.payment_status || "").toUpperCase() === "PAID") {
+        return NextResponse.json({ ok: false, error: "This order is already paid." }, { status: 409 });
+      }
+    }
     if (paymentStatus) {
       patch.payment_status = paymentStatus;
-      if (paymentStatus === "PAID") patch.payment_method = "CASH";
+      if (paymentStatus === "PAID") {
+        patch.payment_method = paymentMethod;
+        const received = Number(body?.amount_received);
+        patch.metadata = {
+          ...(before?.metadata && typeof before.metadata === "object" ? before.metadata : {}),
+          payment: { method: paymentMethod, by: ctx.userId, at: new Date().toISOString(), ...(Number.isFinite(received) && received > 0 ? { received } : {}) },
+        };
+      }
     }
 
-    const { data, error } = await ctx.admin
-      .from("restaurant_orders")
-      .update(patch)
-      .eq("id", id)
-      .eq("restaurant_id", ctx.restaurantId)
-      .select("id, order_number, order_status, payment_status, total_amount, pickup_code")
+    let query = ctx.admin.from("restaurant_orders").update(patch).eq("id", id).eq("restaurant_id", ctx.restaurantId);
+    if (paymentStatus === "PAID") query = query.neq("payment_status", "PAID");
+    const { data, error } = await query
+      .select("id, order_number, order_status, payment_status, total_amount, pickup_code, customer_name, items")
       .maybeSingle();
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
     if (!data?.id) return NextResponse.json({ ok: false, error: "Pickup order not found." }, { status: 404 });
+
+    if (paymentStatus === "PAID") {
+      const received = Number(body?.amount_received);
+      const total = Number(data.total_amount || 0);
+      await queueTakeawayReceipt(ctx.admin, ctx.restaurantId, data, {
+        method: paymentMethod,
+        received: paymentMethod === "CASH" && received >= total ? received : total,
+        change: paymentMethod === "CASH" && received > total ? Number((received - total).toFixed(2)) : 0,
+      }).catch((e) => console.error("takeaway receipt failed", e?.message));
+    }
 
     return NextResponse.json({ ok: true, order: data });
   } catch (error) {

@@ -33,13 +33,13 @@ export async function GET(request) {
       (dayRange
         ? ctx.admin
             .from("restaurant_orders")
-            .select("id,order_number,customer_name,customer_phone,order_status,payment_status,total_amount,created_at,pickup_code", { count: "exact" })
+            .select("id,order_number,customer_name,customer_phone,order_status,payment_status,payment_method,total_amount,created_at,pickup_code,items,notes,metadata", { count: "exact" })
             .eq("restaurant_id", ctx.restaurantId)
             .gte("created_at", dayRange.start)
             .lt("created_at", dayRange.end)
         : ctx.admin
             .from("restaurant_orders")
-            .select("id,order_number,customer_name,customer_phone,order_status,payment_status,total_amount,created_at,pickup_code", { count: "exact" })
+            .select("id,order_number,customer_name,customer_phone,order_status,payment_status,payment_method,total_amount,created_at,pickup_code,items,notes,metadata", { count: "exact" })
             .eq("restaurant_id", ctx.restaurantId)
       )
         .order("created_at", { ascending: false })

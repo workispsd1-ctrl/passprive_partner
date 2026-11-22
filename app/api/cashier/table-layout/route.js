@@ -9,6 +9,8 @@ import { payBillPart } from "@/lib/server/splitBill";
 import { changeTable } from "@/lib/server/changeTable";
 import { cancelPayRequest, createPayBills, createPayRequest, orderPayRequests } from "@/lib/server/payRequests";
 
+const TILL_METHODS = ["CASH", "AVOIR"];
+
 const isClosed = isBillClosed;
 
 async function releaseFinished(ctx, tables, orders) {
@@ -179,10 +181,11 @@ export async function POST(request) {
     }
 
     if (action === "pay_part") {
-      if (String(body?.method || "").toUpperCase() !== "CASH") {
+      const tillMethod = String(body?.method || "").toUpperCase();
+      if (!TILL_METHODS.includes(tillMethod)) {
         return NextResponse.json({ ok: false, error: "Card and MauCas are taken on the POS. Send the payment to the POS." }, { status: 400 });
       }
-      const { status, body: out } = await payBillPart(ctx.admin, ctx.restaurantId, ctx.userId, { ...body, method: "CASH" });
+      const { status, body: out } = await payBillPart(ctx.admin, ctx.restaurantId, ctx.userId, { ...body, method: tillMethod });
       if (out.ok) await queuePartPrint(ctx.admin, ctx.restaurantId, String(body.order_id || ""), out);
       return NextResponse.json(out, { status });
     }
@@ -214,7 +217,10 @@ export async function POST(request) {
     }
 
     if (action === "settle") {
-      const { status, body: out } = await settleTableBill(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      if (!TILL_METHODS.includes(String(body?.method || "").toUpperCase())) {
+        return NextResponse.json({ ok: false, error: "Card and MauCas are taken on the POS. Send the payment to the POS." }, { status: 400 });
+      }
+      const { status, body: out } = await settleTableBill(ctx.admin, ctx.restaurantId, ctx.userId, { ...body, method: String(body.method).toUpperCase() });
       if (out.ok) await queueFinalPrint(ctx.admin, ctx.restaurantId, String(body?.order_id || "")).catch((e) => console.error("final bill print queue failed", e?.message));
       return NextResponse.json(out, { status });
     }
