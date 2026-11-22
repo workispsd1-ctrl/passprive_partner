@@ -111,6 +111,7 @@ async function liveTables({ admin, restaurantId, printKinds, lan = false }) {
   const orders = (ordersRes.data || []).filter((o) => !isQrPending(o) && (!isBillClosed(o) || isPaidOnline(o)));
   const promos = await heldPromos(admin, restaurantId, orders.map((o) => o.id));
   return {
+    restaurant_id: restaurantId,
     merchant: merchantRes.data || null,
     print_jobs: printJobs,
     printers: printers.map((p) => ({ id: p.id, name: p.name, ip: p.ip, port: p.port, paper_mm: p.paper_mm, prints: p.prints, backup_printer_id: p.backup_printer_id || null })),
