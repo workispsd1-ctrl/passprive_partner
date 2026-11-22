@@ -75,7 +75,7 @@ export async function POST(request) {
       service: serviceStats(tables.filter((r) => isPaidTable(r) && live(r.booking_status)), stats.hours),
     };
 
-    if (body.action === "print") {
+    if (body.action === "print" || body.action === "preview") {
       const period = body.from === body.to ? body.from : `${body.from} to ${body.to}`;
       const report = statsReport(full, {
         period,
@@ -83,6 +83,10 @@ export async function POST(request) {
         withItems: body.detail === "items",
         sales: body.detail === "bills" ? sales : null,
       });
+      if (body.action === "preview") {
+        const { data: merchant } = await admin.from("restaurants").select("name").eq("id", restaurantId).maybeSingle();
+        return reply({ ok: true, report: { ...report, merchant: merchant?.name || null } });
+      }
       if (!mainPrinter(await activePrinters(admin, restaurantId))) {
         return reply({ ok: false, error: "No main printer is set up. On the partner dashboard, tick Customer receipts & bills on a printer." }, 409);
       }
