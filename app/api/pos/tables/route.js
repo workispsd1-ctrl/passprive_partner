@@ -4,7 +4,7 @@ import { settleTableBill } from "@/lib/server/settleBill";
 import { payBillPart } from "@/lib/server/splitBill";
 import { finishDiscovery, pendingDiscovery } from "@/lib/server/printerDiscovery";
 import { activePrinters, claimPrintJob, confirmPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, queueBillPrint, queueFinalPrint, queuePartPrint, releasePrintJob, unleasePrintJob } from "@/lib/server/printJobs";
-import { cancelPayRequest, claimPayRequest, pendingPayRequests } from "@/lib/server/payRequests";
+import { cancelPayRequest, claimPayRequest, failPayRequest, pendingPayRequests, retryPayRequest } from "@/lib/server/payRequests";
 import { heldPromos, PROMO_ERRORS, promoDue, promoLocked, quotePromo, recordPromoAttempt, releasePromo, reservePromo } from "@/lib/server/promoCode";
 import { isBillClosed } from "@/lib/server/tableBill";
 import { readJson, reply, requireTerminal, serverError } from "../../staff/_terminal";
@@ -189,8 +189,18 @@ export async function POST(request) {
       return reply(out, status);
     }
 
+    if (action === "fail_request") {
+      const { status, body: out } = await failPayRequest(ctx.admin, ctx.restaurantId, ctx.terminalId, body);
+      return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);
+    }
+
+    if (action === "retry_request") {
+      const { status, body: out } = await retryPayRequest(ctx.admin, ctx.restaurantId, ctx.terminalId, body);
+      return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);
+    }
+
     if (action === "decline_payment") {
-      const { status, body: out } = await cancelPayRequest(ctx.admin, ctx.restaurantId, ctx.userId, body, "declined");
+      const { status, body: out } = await cancelPayRequest(ctx.admin, ctx.restaurantId, ctx.userId, body, "declined", ctx.terminalId);
       return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);
     }
 

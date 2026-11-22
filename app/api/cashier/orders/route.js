@@ -110,7 +110,7 @@ export async function POST(request) {
     const notes = String(body?.notes || "").trim();
     const customerName = String(body?.customer_name || "Walk-in").trim() || "Walk-in";
     const customerPhone = String(body?.customer_phone || "").trim();
-    const tableNo = await hostTable(ctx.admin, ctx.restaurantId, Number(body?.table_no || 0));
+    const tableNo = await hostTable(ctx.admin, ctx.restaurantId, Number(body?.table_no || 0), { extra: true });
 
     if (!["TABLE", "PICKUP"].includes(orderType)) {
       return NextResponse.json({ ok: false, error: "Invalid order_type." }, { status: 400 });

@@ -18,7 +18,7 @@ export async function POST(request) {
     const body = await readJson(request);
     const asked = Number(body.table_no);
     if (!Number.isInteger(asked) || asked < 1) return reply({ ok: false, error: "invalid_table" }, 400);
-    const tableNo = await hostTable(admin, restaurantId, asked);
+    const tableNo = await hostTable(admin, restaurantId, asked, { extra: true });
     if (!tableNo) return reply({ ok: false, error: "That table is not in your table layout." }, 400);
 
     const { data: restaurant, error: menuErr } = await admin
