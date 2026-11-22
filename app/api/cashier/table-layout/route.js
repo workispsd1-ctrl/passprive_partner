@@ -4,7 +4,7 @@ import { addGuest, setItemGuest } from "@/lib/server/billGuests";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { resolveCashierRestaurant } from "../_shared";
 import { bookingStatusChangeError, isBillClosed, isBillPaid, quickPaymentRecord } from "@/lib/server/tableBill";
-import { isQrPending, queueBillPrint, queueFinalPrint, queuePartPrint } from "@/lib/server/printJobs";
+import { isQrPending, queueBillPrint, queueFinalPrint, queuePartPrint, queueShareBillPrint } from "@/lib/server/printJobs";
 import { payBillPart } from "@/lib/server/splitBill";
 import { changeTable } from "@/lib/server/changeTable";
 import { cancelPayRequest, createPayBills, createPayRequest, orderPayRequests } from "@/lib/server/payRequests";
@@ -194,6 +194,12 @@ export async function POST(request) {
 
     if (action === "split_to_pos") {
       const { status, body: out } = await createPayBills(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      const bills = Array.isArray(body?.bills) ? body.bills : [];
+      for (const [i, request] of (out.requests || []).entries()) {
+        if (bills[i]?.guest_id || bills[i]?.rest) {
+          await queueShareBillPrint(ctx.admin, ctx.restaurantId, String(body?.order_id || ""), request).catch((e) => console.error("share bill print failed", e?.message));
+        }
+      }
       return NextResponse.json(out, { status });
     }
 
