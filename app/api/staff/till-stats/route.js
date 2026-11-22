@@ -45,7 +45,7 @@ export async function POST(request) {
       loadSales(admin, restaurantId, start, end, scope.tableNos),
       admin
         .from("restaurant_bookings")
-        .select("status,party_size,source,payment_amount,cover_charge_amount")
+        .select("status,party_size,source,payment_amount,payment_status,cover_charge_amount")
         .eq("restaurant_id", restaurantId)
         .gte("booking_date", body.from)
         .lte("booking_date", body.to)

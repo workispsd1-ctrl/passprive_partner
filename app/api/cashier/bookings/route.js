@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveCashierRestaurant } from "../_shared";
+import { bookingTableNo, manageBooking } from "@/lib/server/bookingManage";
 
 function parseHHMM(value) {
   const raw = String(value || "").slice(0, 5);
@@ -48,6 +49,13 @@ async function createBooking(ctx, body) {
     .select("id")
     .single();
   if (error) return NextResponse.json({ ok: false, error: "Could not save the booking." }, { status: 400 });
+  const extras = {};
+  if (body?.table_no) extras.table_no = body.table_no;
+  if (body?.cover && Number(body.cover.amount) > 0) extras.cover = body.cover;
+  if (Object.keys(extras).length) {
+    const { body: out } = await manageBooking(ctx, { id: data.id, ...extras });
+    if (!out.ok) return NextResponse.json({ ok: true, booking: data, warning: out.message || out.error });
+  }
   return NextResponse.json({ ok: true, booking: data });
 }
 
@@ -63,7 +71,7 @@ export async function GET(request) {
     const dayFilter = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
     const bookingQuery = ctx.admin
       .from("restaurant_bookings")
-      .select("id,customer_name,customer_phone,customer_email,booking_date,booking_time,duration_minutes,party_size,status,source,created_at,booking_code,customer_booking_number,special_request,booked_slot_label,payment_status,notes_internal,read,proposed_at,cover_charge_amount,cover_request_status,cover_request_total,cover_request_due_at,updated_at")
+      .select("id,customer_name,customer_phone,customer_email,booking_date,booking_time,duration_minutes,party_size,status,source,created_at,booking_code,customer_booking_number,special_request,booked_slot_label,payment_status,payment_amount,payment_method,payment_reference,table_no,cancel_reason,notes_internal,read,proposed_at,cover_charge_amount,cover_request_status,cover_request_total,cover_request_due_at,updated_at")
       .eq("restaurant_id", ctx.restaurantId);
 
     const [bookingRes, tableOrderRes, layoutRes] = await Promise.all([
@@ -102,11 +110,7 @@ export async function GET(request) {
       return d.toISOString().slice(0, 10);
     };
 
-    const parseMappedTableNo = (notesInternal) => {
-      const raw = String(notesInternal || "");
-      const m = raw.match(/table_no\s*:\s*(\d+)/i);
-      return m ? Number(m[1]) : null;
-    };
+    const parseMappedTableNo = (row) => bookingTableNo(row);
 
     const activeBookingStatuses = new Set(["pending", "confirmed"]);
 
@@ -119,7 +123,7 @@ export async function GET(request) {
       if (!d || start == null) continue;
       const duration = Number(b?.duration_minutes || 90);
       const end = start + (Number.isFinite(duration) && duration > 0 ? duration : 90);
-      const mapped = parseMappedTableNo(b?.notes_internal);
+      const mapped = parseMappedTableNo(b);
       if (!mapped || !Number.isInteger(mapped) || mapped <= 0) continue;
       const key = `${d}::${mapped}`;
       if (!occupiedBySlot.has(key)) occupiedBySlot.set(key, []);
@@ -128,7 +132,7 @@ export async function GET(request) {
 
     const autoAssigned = [];
     for (const b of bookings) {
-      const mapped = parseMappedTableNo(b?.notes_internal);
+      const mapped = parseMappedTableNo(b);
       const status = String(b?.status || "").toLowerCase();
       if (mapped || !activeBookingStatuses.has(status)) continue;
       const bookingDate = String(b?.booking_date || "");
@@ -174,7 +178,7 @@ export async function GET(request) {
       const bDate = dateOnly(b.booking_date);
       const bPhone = normalizedPhone(b.customer_phone);
       const bName = normalizedName(b.customer_name);
-      const manualMappedNo = parseMappedTableNo(b.notes_internal);
+      const manualMappedNo = parseMappedTableNo(b);
       const matchedOrder =
         tableOrders.find((o) => {
           const oDate = dateOnly(o.created_at);
@@ -334,6 +338,10 @@ export async function PATCH(request) {
     const body = await request.json();
     const action = String(body?.action || "status").trim().toLowerCase();
     const id = String(body?.id || "").trim();
+    if (action === "manage") {
+      const { status: code, body: out } = await manageBooking(ctx, body);
+      return NextResponse.json(out, { status: code });
+    }
     const status = String(body?.status || "").trim().toLowerCase();
     const allowed = new Set(["pending", "confirmed", "payment_successfull", "completed", "cancelled", "no_show"]);
     if (!id) return NextResponse.json({ ok: false, error: "id is required" }, { status: 400 });
@@ -424,7 +432,7 @@ export async function PATCH(request) {
       const nextNotes = `${withoutOld}${withoutOld ? " " : ""}[table_no:${tableNo}]`.trim();
       const { data, error } = await ctx.admin
         .from("restaurant_bookings")
-        .update({ notes_internal: nextNotes, updated_at: new Date().toISOString() })
+        .update({ notes_internal: nextNotes, table_no: tableNo, updated_at: new Date().toISOString() })
         .eq("id", id)
         .eq("restaurant_id", ctx.restaurantId)
         .select("id,notes_internal")
