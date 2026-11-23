@@ -4,6 +4,9 @@ import { settleTableBill } from "@/lib/server/settleBill";
 import { payBillPart } from "@/lib/server/splitBill";
 import { finishDiscovery, pendingDiscovery } from "@/lib/server/printerDiscovery";
 import { activePrinters, claimPrintJob, confirmPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, queueBillPrint, queueFinalPrint, queuePartPrint, releasePrintJob, unleasePrintJob } from "@/lib/server/printJobs";
+import { setDiscount } from "@/lib/server/billDiscount";
+import { correctMethod, printCorrected, reopenPaidBill } from "@/lib/server/billCorrection";
+import { accountDetail, listAccounts, printStatement, settleAccount } from "@/lib/server/customerAccounts";
 import { cancelPayRequest, claimPayRequest, failPayRequest, pendingPayRequests, retryPayRequest } from "@/lib/server/payRequests";
 import { heldPromos, PROMO_ERRORS, promoDue, promoLocked, quotePromo, recordPromoAttempt, releasePromo, reservePromo } from "@/lib/server/promoCode";
 import { isBillClosed } from "@/lib/server/tableBill";
@@ -22,7 +25,7 @@ function isPaidOnline(o) {
   return o?.source === "public_menu" && ["PAID", "COMPLETED"].includes(String(o?.payment_status || "").toUpperCase());
 }
 const ORDER_COLUMNS =
-  "id, table_no, guest_count, customer_name, notes, booking_status, payment_status, subtotal_amount, total_amount, tip_amount, order_items, created_at, updated_at, source, qr_pending:order_details->qr_pending, payments:order_details->payments, guests:order_details->guests";
+  "id, table_no, guest_count, customer_name, notes, booking_status, payment_status, subtotal_amount, total_amount, tip_amount, order_items, created_at, updated_at, source, qr_pending:order_details->qr_pending, payments:order_details->payments, guests:order_details->guests, bill_discount:order_details->bill_discount";
 
 function thumbnail(urls) {
   const url = Array.isArray(urls) ? String(urls[0] || "") : "";
@@ -187,6 +190,44 @@ export async function POST(request) {
     if (action === "claim_request") {
       const { status, body: out } = await claimPayRequest(ctx.admin, ctx.restaurantId, ctx.terminalId, body.request_id);
       return reply(out, status);
+    }
+
+    if (action === "accounts_list") {
+      const { status, body: out } = await listAccounts(ctx.admin, ctx.restaurantId, { q: body?.q || "" });
+      return reply(out, status);
+    }
+
+    if (action === "account_detail") {
+      const { status, body: out } = await accountDetail(ctx.admin, ctx.restaurantId, body?.account_id);
+      return reply(out, status);
+    }
+
+    if (action === "account_statement") {
+      const { status, body: out } = await printStatement(ctx.admin, ctx.restaurantId, body?.account_id);
+      return reply(out, status);
+    }
+
+    if (action === "settle_account") {
+      const { status, body: out } = await settleAccount(ctx.admin, ctx.restaurantId, ctx.userId, body, { terminalId: ctx.terminalId });
+      return reply(out, status);
+    }
+
+    if (action === "correct_method") {
+      const { status, body: out } = await correctMethod(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      if (out.ok && body?.print !== false) {
+        await printCorrected(ctx.admin, ctx.restaurantId, body?.kind, String(body?.order_id || "")).catch((e) => console.error("corrected bill print failed", e?.message));
+      }
+      return reply(out, status);
+    }
+
+    if (action === "reopen_paid") {
+      const { status, body: out } = await reopenPaidBill(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);
+    }
+
+    if (action === "set_discount") {
+      const { status, body: out } = await setDiscount(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);
     }
 
     if (action === "fail_request") {

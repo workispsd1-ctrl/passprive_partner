@@ -13,7 +13,7 @@ export async function POST(request) {
     const [{ data, error }, { data: tables }] = await Promise.all([
       ctx.admin
         .from("restaurant_bookings")
-        .select("id,customer_name,customer_phone,customer_email,booking_date,booking_time,duration_minutes,party_size,status,source,created_at,booking_code,customer_booking_number,special_request,table_no,notes_internal,cover_charge_amount,payment_status,payment_amount,payment_method,payment_reference,cancel_reason,cover_request_status,cover_request_total,proposed_at")
+        .select("id,customer_name,customer_phone,customer_email,booking_date,booking_time,duration_minutes,party_size,status,source,created_at,booking_code,customer_booking_number,special_request,table_no,notes_internal,cover_charge_amount,payment_status,payment_amount,payment_method,payment_reference,cancel_reason,cover_request_status,cover_request_total,proposed_at,seated_at,seated_order_id")
         .eq("restaurant_id", ctx.restaurantId)
         .eq("booking_date", date)
         .order("booking_time", { ascending: true })

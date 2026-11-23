@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveCashierRestaurant } from "../_shared";
-import { bookingTableNo, manageBooking } from "@/lib/server/bookingManage";
+import { bookingTableNo, manageBooking, seatBooking } from "@/lib/server/bookingManage";
 
 function parseHHMM(value) {
   const raw = String(value || "").slice(0, 5);
@@ -67,23 +67,33 @@ export async function GET(request) {
     const ctx = await resolveCashierRestaurant(token);
     if (ctx.error) return NextResponse.json({ ok: false, error: ctx.error }, { status: ctx.status });
 
-    const date = new URL(request.url).searchParams.get("date") || "";
-    const dayFilter = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
+    const params = new URL(request.url).searchParams;
+    const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || "");
+    const date = params.get("date") || "";
+    const dayFilter = isDay(date) ? date : null;
+    const from = params.get("from");
+    const to = params.get("to");
+    const span = isDay(from) && isDay(to) ? (Date.parse(to) - Date.parse(from)) / 86400000 : -1;
+    const range = span >= 0 && span <= 400 ? { from, to } : null;
     const bookingQuery = ctx.admin
       .from("restaurant_bookings")
-      .select("id,customer_name,customer_phone,customer_email,booking_date,booking_time,duration_minutes,party_size,status,source,created_at,booking_code,customer_booking_number,special_request,booked_slot_label,payment_status,payment_amount,payment_method,payment_reference,table_no,cancel_reason,notes_internal,read,proposed_at,cover_charge_amount,cover_request_status,cover_request_total,cover_request_due_at,updated_at")
+      .select("id,customer_name,customer_phone,customer_email,booking_date,booking_time,duration_minutes,party_size,status,source,created_at,booking_code,customer_booking_number,special_request,booked_slot_label,payment_status,payment_amount,payment_method,payment_reference,table_no,cancel_reason,notes_internal,read,proposed_at,cover_charge_amount,cover_request_status,cover_request_total,cover_request_due_at,updated_at,seated_at,seated_order_id")
       .eq("restaurant_id", ctx.restaurantId);
 
     const [bookingRes, tableOrderRes, layoutRes] = await Promise.all([
       dayFilter
         ? bookingQuery.eq("booking_date", dayFilter).order("booking_time", { ascending: true }).limit(500)
+        : range
+        ? bookingQuery.gte("booking_date", range.from).lte("booking_date", range.to).order("booking_date", { ascending: true }).order("booking_time", { ascending: true }).limit(3000)
         : bookingQuery.order("created_at", { ascending: false }).limit(200),
-      ctx.admin
-        .from("restaurant_table_bookings")
-        .select("id,table_no,customer_name,customer_phone,created_at,booking_status,payment_status,total_amount,subtotal_amount,tax_amount,order_items,notes")
-        .eq("restaurant_id", ctx.restaurantId)
-        .order("created_at", { ascending: false })
-        .limit(1000),
+      (() => {
+        let q = ctx.admin
+          .from("restaurant_table_bookings")
+          .select("id,table_no,customer_name,customer_phone,created_at,booking_status,payment_status,total_amount,subtotal_amount,tax_amount,order_items,notes")
+          .eq("restaurant_id", ctx.restaurantId);
+        if (range) q = q.gte("created_at", `${range.from}T00:00:00+04:00`).lte("created_at", `${range.to}T23:59:59+04:00`);
+        return q.order("created_at", { ascending: false }).limit(1000);
+      })(),
       ctx.admin
         .from("restaurant_table_layouts")
         .select("id,table_no,label,shape,capacity,pos_x,pos_y")
@@ -338,6 +348,10 @@ export async function PATCH(request) {
     const body = await request.json();
     const action = String(body?.action || "status").trim().toLowerCase();
     const id = String(body?.id || "").trim();
+    if (action === "seat") {
+      const { status: code, body: out } = await seatBooking(ctx, body);
+      return NextResponse.json(out, { status: code });
+    }
     if (action === "manage") {
       const { status: code, body: out } = await manageBooking(ctx, body);
       return NextResponse.json(out, { status: code });

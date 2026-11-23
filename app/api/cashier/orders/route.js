@@ -6,10 +6,8 @@ import { isBillClosed } from "@/lib/server/tableBill";
 import { queueOrderTicket, queueTakeawayReceipt } from "@/lib/server/printJobs";
 import { guestsOf } from "@/lib/server/splitBill";
 import { hostTable } from "@/lib/server/changeTable";
-
-function toFixed2(v) {
-  return Number(Number(v || 0).toFixed(2));
-}
+import { billPct, priceLine, totalsOf } from "@/lib/server/billDiscount";
+import { checkCharge } from "@/lib/server/customerAccounts";
 
 function randomCode(prefix = "") {
   return `${prefix}${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
@@ -159,15 +157,15 @@ export async function POST(request) {
 
       if (openExisting?.id) {
         const guests = guestsOf(openExisting);
-        const guestLines = guests.length ? priceLines(rawLines, index, { guests })?.lines || normalizedItems : normalizedItems;
-        const prevSubtotal = Number(openExisting.subtotal_amount || 0);
-        const prevTax = Number(openExisting.tax_amount || 0);
-        const prevTotal = Number(openExisting.total_amount || 0);
-        const mergedItems = mergeLines(openExisting.order_items, guestLines);
-        const nextSubtotal = toFixed2(prevSubtotal + subtotal);
-        const nextTax = toFixed2(prevTax + tax);
-        const nextTotal = toFixed2(prevTotal + total);
         const prevDetails = openExisting.order_details && typeof openExisting.order_details === "object" ? openExisting.order_details : {};
+        const bill = billPct(prevDetails);
+        const pricedGuest = guests.length ? priceLines(rawLines, index, { guests })?.lines || normalizedItems : normalizedItems;
+        const guestLines = bill ? pricedGuest.map((l) => priceLine(l, bill)) : pricedGuest;
+        const mergedItems = mergeLines(openExisting.order_items, guestLines);
+        const sums = totalsOf(mergedItems);
+        const nextSubtotal = sums.subtotal_amount;
+        const nextTax = sums.tax_amount;
+        const nextTotal = sums.total_amount;
 
         const { data: updatedRows, error: updateErr } = await ctx.admin
           .from("restaurant_table_bookings")
@@ -213,6 +211,9 @@ export async function POST(request) {
         return NextResponse.json({ ok: true, order_type: "TABLE", continued: true, order: Array.isArray(updatedRows) ? updatedRows[0] || null : null });
       }
 
+      if (!String(body?.customer_name || "").trim()) {
+        return NextResponse.json({ ok: false, error: "Enter the customer's name." }, { status: 400 });
+      }
       const payload = {
         restaurant_id: ctx.restaurantId,
         table_no: tableNo,
@@ -304,7 +305,7 @@ export async function PATCH(request) {
 
     const allowedOrderStatus = new Set(["NEW", "ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "PICKED_UP", "CANCELLED"]);
     const allowedPaymentStatus = new Set(["PENDING", "PAID"]);
-    const allowedMethods = new Set(["CASH", "CARD", "MAUCAS", "JUICE"]);
+    const allowedMethods = new Set(["CASH", "CARD", "MAUCAS", "JUICE", "ACCOUNT"]);
     const paymentMethod = String(body?.payment_method || "CASH").trim().toUpperCase();
     if (paymentStatus === "PAID" && !allowedMethods.has(paymentMethod)) {
       return NextResponse.json({ ok: false, error: "Pick how the order was paid." }, { status: 400 });
@@ -330,10 +331,11 @@ export async function PATCH(request) {
       if (orderStatus === "CANCELLED") patch.cancelled_at = new Date().toISOString();
     }
     let before = null;
+    let account = null;
     if (paymentStatus === "PAID") {
       const { data: current } = await ctx.admin
         .from("restaurant_orders")
-        .select("payment_status, metadata")
+        .select("payment_status, metadata, total_amount")
         .eq("id", id)
         .eq("restaurant_id", ctx.restaurantId)
         .maybeSingle();
@@ -341,15 +343,28 @@ export async function PATCH(request) {
       if (String(current?.payment_status || "").toUpperCase() === "PAID") {
         return NextResponse.json({ ok: false, error: "This order is already paid." }, { status: 409 });
       }
+      if (paymentMethod === "ACCOUNT") {
+        if (ctx.isWaiter) return NextResponse.json({ ok: false, error: "Customer accounts are managed by the cashier." }, { status: 403 });
+        const check = await checkCharge(ctx.admin, ctx.restaurantId, body?.account_id, Math.round(Number(current?.total_amount || 0) * 100));
+        if (check.error) return NextResponse.json({ ok: false, error: check.error }, { status: 409 });
+        account = check.account;
+      }
     }
     if (paymentStatus) {
       patch.payment_status = paymentStatus;
       if (paymentStatus === "PAID") {
         patch.payment_method = paymentMethod;
+        if (account) patch.account_id = account.id;
         const received = Number(body?.amount_received);
         patch.metadata = {
           ...(before?.metadata && typeof before.metadata === "object" ? before.metadata : {}),
-          payment: { method: paymentMethod, by: ctx.userId, at: new Date().toISOString(), ...(Number.isFinite(received) && received > 0 ? { received } : {}) },
+          payment: {
+            method: paymentMethod,
+            by: ctx.userId,
+            at: new Date().toISOString(),
+            ...(account ? { account: { id: account.id, name: account.name } } : {}),
+            ...(Number.isFinite(received) && received > 0 ? { received } : {}),
+          },
         };
       }
     }

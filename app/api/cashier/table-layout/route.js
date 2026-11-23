@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { setDiscount } from "@/lib/server/billDiscount";
+import { closeOnDeposit } from "@/lib/server/splitBill";
+import { correctMethod, printCorrected, reopenPaidBill } from "@/lib/server/billCorrection";
 import { setBillItemQty } from "@/lib/server/billItems";
 import { addGuest, setItemGuest } from "@/lib/server/billGuests";
 import { settleTableBill } from "@/lib/server/settleBill";
@@ -9,7 +12,7 @@ import { payBillPart } from "@/lib/server/splitBill";
 import { changeTable } from "@/lib/server/changeTable";
 import { cancelPayRequest, createPayBills, createPayRequest, orderPayRequests } from "@/lib/server/payRequests";
 
-const TILL_METHODS = ["CASH", "AVOIR"];
+const TILL_METHODS = ["CASH", "AVOIR", "ACCOUNT"];
 
 const isClosed = isBillClosed;
 
@@ -156,7 +159,7 @@ export async function POST(request) {
     const body = await request.json();
     const action = String(body?.action || "").trim().toLowerCase();
 
-    const money = ["pay_part", "request_pos_payment", "split_to_pos", "cancel_pos_payment", "settle", "void_order"].includes(action) ||
+    const money = ["pay_part", "request_pos_payment", "split_to_pos", "cancel_pos_payment", "settle", "void_order", "set_discount", "close_on_deposit", "correct_method", "reopen_paid"].includes(action) ||
       (action === "update_order_state" && ["PAID", "COMPLETED"].includes(String(body?.payment_status || "").toUpperCase()));
     if (ctx.isWaiter && money) {
       return NextResponse.json({ ok: false, error: "Payments and cancelling tables are done by the cashier." }, { status: 403 });
@@ -167,6 +170,30 @@ export async function POST(request) {
         ...body,
         qty: action === "cancel_item" ? 0 : body?.qty,
       });
+      return NextResponse.json(out, { status });
+    }
+
+    if (action === "correct_method") {
+      const { status, body: out } = await correctMethod(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      if (out.ok && body?.print !== false) {
+        await printCorrected(ctx.admin, ctx.restaurantId, body?.kind, String(body?.order_id || "")).catch((e) => console.error("corrected bill print failed", e?.message));
+      }
+      return NextResponse.json(out, { status });
+    }
+
+    if (action === "reopen_paid") {
+      const { status, body: out } = await reopenPaidBill(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      return NextResponse.json(out, { status });
+    }
+
+    if (action === "close_on_deposit") {
+      const { status, body: out } = await closeOnDeposit(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      if (out.ok) await queueFinalPrint(ctx.admin, ctx.restaurantId, String(body?.order_id || "")).catch((e) => console.error("final bill print queue failed", e?.message));
+      return NextResponse.json(out, { status });
+    }
+
+    if (action === "set_discount") {
+      const { status, body: out } = await setDiscount(ctx.admin, ctx.restaurantId, ctx.userId, body);
       return NextResponse.json(out, { status });
     }
 

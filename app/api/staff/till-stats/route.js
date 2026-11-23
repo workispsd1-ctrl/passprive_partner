@@ -11,6 +11,7 @@ import {
   statsReport,
   tillStats,
   voidSummary,
+  accountPayments,
 } from "@/lib/server/tillStats";
 import { activePrinters, mainPrinter, queueReceiptJob } from "@/lib/server/printJobs";
 import { readJson, reply, requireTerminal, serverError } from "../_terminal";
@@ -60,6 +61,16 @@ export async function POST(request) {
       admin.from("restaurants").select("menu_json").eq("id", restaurantId).maybeSingle(),
       prevFrom && prevTo ? loadSales(admin, restaurantId, prevFrom.start, prevTo.end, scope.tableNos).catch(() => null) : null,
     ]);
+    const accountRes = scope.tableNos
+      ? { data: [] }
+      : await admin
+          .from("customer_account_payments")
+          .select("amount, method")
+          .eq("restaurant_id", restaurantId)
+          .gte("created_at", start)
+          .lt("created_at", end)
+          .limit(5000);
+    if (accountRes.error) return serverError(accountRes.error);
     if (bookingRes.error) return serverError(bookingRes.error);
     if (collectRes.error) return serverError(collectRes.error);
 
@@ -73,6 +84,7 @@ export async function POST(request) {
       bookings: bookingStats(bookingRes.data || []),
       collect: pickupStats(collectRes.data || []),
       service: serviceStats(tables.filter((r) => isPaidTable(r) && live(r.booking_status)), stats.hours),
+      account_payments: accountPayments(accountRes.data || []),
     };
 
     if (body.action === "print" || body.action === "preview") {
