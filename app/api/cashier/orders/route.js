@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { seatTable } from "@/lib/server/billItems";
 import { resolveCashierRestaurant } from "../_shared";
-import { fromCents, menuIndex, mergeLines, priceLines } from "@/lib/server/menuPricing";
+import { discountProblem, fromCents, itemDiscounts, menuIndex, mergeLines, priceLines } from "@/lib/server/menuPricing";
 import { isBillClosed } from "@/lib/server/tableBill";
 import { queueOrderTicket, queueTakeawayReceipt } from "@/lib/server/printJobs";
 import { guestsOf } from "@/lib/server/splitBill";
@@ -132,9 +132,13 @@ export async function POST(request) {
       modifiers: it?.modifiers,
       note: it?.note,
       guest_id: it?.guest_id,
+      discount_pct: it?.discount_pct,
+      discount_reason: it?.discount_reason,
     }));
+    const discountError = discountProblem(rawLines, !ctx.isWaiter);
+    if (discountError) return NextResponse.json({ ok: false, error: discountError }, { status: 400 });
     const index = menuIndex(menuRow?.menu_json);
-    const priced = priceLines(rawLines, index);
+    const priced = priceLines(rawLines, index, { allowDiscount: !ctx.isWaiter });
     if (!priced) {
       return NextResponse.json({ ok: false, error: "Some items are no longer on the menu. Refresh and try again." }, { status: 400 });
     }
@@ -159,7 +163,7 @@ export async function POST(request) {
         const guests = guestsOf(openExisting);
         const prevDetails = openExisting.order_details && typeof openExisting.order_details === "object" ? openExisting.order_details : {};
         const bill = billPct(prevDetails);
-        const pricedGuest = guests.length ? priceLines(rawLines, index, { guests })?.lines || normalizedItems : normalizedItems;
+        const pricedGuest = guests.length ? priceLines(rawLines, index, { guests, allowDiscount: !ctx.isWaiter })?.lines || normalizedItems : normalizedItems;
         const guestLines = bill ? pricedGuest.map((l) => priceLine(l, bill)) : pricedGuest;
         const mergedItems = mergeLines(openExisting.order_items, guestLines);
         const sums = totalsOf(mergedItems);
@@ -175,6 +179,7 @@ export async function POST(request) {
             order_items: mergedItems,
             order_details: {
               ...prevDetails,
+              discounts: [...(Array.isArray(prevDetails.discounts) ? prevDetails.discounts : []), ...itemDiscounts(guestLines, ctx.userId)].slice(-100),
               source_channel: "cashier_orders",
               cashier_user_id: ctx.userId,
               created_by: "cashier",
@@ -225,6 +230,7 @@ export async function POST(request) {
           source_channel: "cashier_orders",
           cashier_user_id: ctx.userId,
           created_by: "cashier",
+          ...(itemDiscounts(normalizedItems, ctx.userId).length ? { discounts: itemDiscounts(normalizedItems, ctx.userId) } : {}),
         },
         subtotal_amount: subtotal,
         tax_amount: tax,

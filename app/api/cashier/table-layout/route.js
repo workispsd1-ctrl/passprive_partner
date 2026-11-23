@@ -7,7 +7,7 @@ import { addGuest, setItemGuest } from "@/lib/server/billGuests";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { resolveCashierRestaurant } from "../_shared";
 import { bookingStatusChangeError, isBillClosed, isBillPaid, quickPaymentRecord } from "@/lib/server/tableBill";
-import { isQrPending, queueBillPrint, queueFinalPrint, queuePartPrint, queueShareBillPrint } from "@/lib/server/printJobs";
+import { isQrPending, queueBillPrint, queueFinalPrint, queueOrderTicket, queuePartPrint, queueShareBillPrint } from "@/lib/server/printJobs";
 import { payBillPart } from "@/lib/server/splitBill";
 import { changeTable } from "@/lib/server/changeTable";
 import { cancelPayRequest, createPayBills, createPayRequest, orderPayRequests } from "@/lib/server/payRequests";
@@ -260,7 +260,7 @@ export async function POST(request) {
 
       const { data: row, error: rowErr } = await ctx.admin
         .from("restaurant_table_bookings")
-        .select("id, order_details, payment_status, booking_status, total_amount")
+        .select("id, table_no, guest_count, order_items, order_details, payment_status, booking_status, total_amount")
         .eq("id", orderId)
         .eq("restaurant_id", ctx.restaurantId)
         .maybeSingle();
@@ -296,6 +296,18 @@ export async function POST(request) {
         .select("id");
       if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 400 });
       if (!voided?.length) return NextResponse.json({ ok: false, error: "This bill is already closed." }, { status: 409 });
+      if (Array.isArray(row.order_items) && row.order_items.length) {
+        await queueOrderTicket(ctx.admin, ctx.restaurantId, {
+          cancel: true,
+          by: ctx.userId,
+          orderId,
+          tableNo: row.table_no,
+          guests: row.guest_count,
+          lines: row.order_items,
+          notes: reason,
+          source: "Till",
+        }).catch((e) => console.error("cancel ticket failed", e?.message));
+      }
       return NextResponse.json({ ok: true });
     }
 
