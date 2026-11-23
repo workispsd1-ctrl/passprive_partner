@@ -9,7 +9,6 @@ import {
   previousPeriod,
   serviceStats,
   statsMenu,
-  statsReport,
   tillStats,
   voidSummary,
   accountPayments,
@@ -107,21 +106,8 @@ export async function POST(request) {
         refunds,
         printedBy: names[ctx.userId] || null,
         area: scope.area?.name || null,
+        sales,
       });
-      if (body.detail === "items" || body.detail === "bills") {
-        const extra = statsReport(full, {
-          period: body.from,
-          withItems: body.detail === "items",
-          sales: body.detail === "bills" ? sales : null,
-          lang,
-        });
-        const keep = extra.sections.filter((sec) => (body.detail === "bills" ? /^(EVERY BILL|TOUS LES TICKETS)/.test(sec.title) : !/^(SALES|VENTES|DETAILS|DÉTAILS|COMPARED|COMPARAISON|PAYMENT METHODS|MODES DE RÈGLEMENT|ACCOUNT PAYMENTS|RÈGLEMENTS DE COMPTES|TIPS BY|POURBOIRES PAR|SALES CHANNELS|MODES DE VENTE|CATEGORIES|RUBRIQUES|BEST SELLERS|MEILLEURES VENTES|OFFERED|OFFERTS|CANCELLATIONS|ANNULATIONS)$/.test(sec.title)));
-        for (const sec of keep) {
-          report.lines.push({ text: sec.title, bold: true }, { text: " " });
-          for (const r of sec.rows) report.lines.push({ text: `${r.label} : ${r.value}`, ...(r.bold ? { bold: true } : {}) });
-          report.lines.push({ rule: true });
-        }
-      }
       if (body.action === "preview") return reply({ ok: true, report: { ...report, merchant: merchant?.name || null } });
       if (!mainPrinter(await activePrinters(admin, restaurantId))) {
         return reply({ ok: false, error: "No main printer is set up. On the partner dashboard, tick Customer receipts & bills on a printer." }, 409);
