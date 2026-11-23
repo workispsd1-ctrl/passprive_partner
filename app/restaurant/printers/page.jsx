@@ -133,7 +133,7 @@ export default function PrintersPage() {
       ip: draft.ip.trim(),
       port: Number(draft.port) || 9100,
       paper_mm: Number(draft.paper_mm) === 58 ? 58 : 80,
-      bottom_feed_mm: Math.max(0, Math.min(50, Math.round(Number(draft.bottom_feed_mm) || 0))),
+      bottom_feed_mm: Math.max(0, Math.min(100, Math.round(Number(draft.bottom_feed_mm) || 0))),
       prints: JOBS.map((j) => j.key).filter((k) => draft.prints.includes(k)),
       is_active: draft.is_active,
       backup_printer_id: draft.backup_printer_id && draft.backup_printer_id !== draft.id ? draft.backup_printer_id : null,
@@ -418,10 +418,10 @@ export default function PrintersPage() {
                 <input
                   inputMode="numeric"
                   value={String(draft.bottom_feed_mm ?? 0)}
-                  onChange={(e) => setDraft((d) => ({ ...d, bottom_feed_mm: e.target.value.replace(/\D/g, "").slice(0, 2) }))}
+                  onChange={(e) => setDraft((d) => ({ ...d, bottom_feed_mm: e.target.value.replace(/\D/g, "").slice(0, 3) }))}
                   className={`mt-1 ${inputCls}`}
                 />
-                <span className="mt-1 block text-xs text-gray-500">0 to 50 mm. 20 mm = 2 cm of empty paper before the cut.</span>
+                <span className="mt-1 block text-xs text-gray-500">0 to 100 mm. 20 mm = 2 cm of empty paper before the cut.</span>
               </label>
               <div>
                 <span className="text-xs font-semibold text-gray-600">What this printer prints</span>
