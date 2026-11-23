@@ -12,7 +12,7 @@ const JOBS = [
   { key: "receipts", label: "Customer receipts & bills", hint: "Part receipts and final bills" },
 ];
 
-const EMPTY = { id: "", name: "", ip: "", port: 9100, paper_mm: 80, prints: [], is_active: true, backup_printer_id: "" };
+const EMPTY = { id: "", name: "", ip: "", port: 9100, paper_mm: 80, prints: [], is_active: true, backup_printer_id: "", bottom_feed_mm: 0 };
 const IP_RE = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 const inputCls = "h-10 w-full rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-gray-300";
 const SCAN_ERRORS = {
@@ -101,7 +101,7 @@ export default function PrintersPage() {
     }
     const { data, error } = await supabaseBrowser
       .from("restaurant_printers")
-      .select("id, name, ip, port, paper_mm, prints, is_active, backup_printer_id, created_at")
+      .select("id, name, ip, port, paper_mm, prints, is_active, backup_printer_id, bottom_feed_mm, created_at")
       .eq("restaurant_id", id)
       .order("created_at", { ascending: true });
     setLoading(false);
@@ -133,6 +133,7 @@ export default function PrintersPage() {
       ip: draft.ip.trim(),
       port: Number(draft.port) || 9100,
       paper_mm: Number(draft.paper_mm) === 58 ? 58 : 80,
+      bottom_feed_mm: Math.max(0, Math.min(50, Math.round(Number(draft.bottom_feed_mm) || 0))),
       prints: JOBS.map((j) => j.key).filter((k) => draft.prints.includes(k)),
       is_active: draft.is_active,
       backup_printer_id: draft.backup_printer_id && draft.backup_printer_id !== draft.id ? draft.backup_printer_id : null,
@@ -309,7 +310,7 @@ export default function PrintersPage() {
                     {!p.is_active ? <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-500">Off</span> : null}
                   </div>
                   <div className="text-sm text-gray-500">
-                    {p.ip}:{p.port} · {p.paper_mm} mm
+                    {p.ip}:{p.port} · {p.paper_mm} mm{p.bottom_feed_mm ? ` · +${p.bottom_feed_mm} mm space` : ""}
                   </div>
                   <div className="text-xs text-gray-500">
                     {p.backup_printer_id && printers.some((b) => b.id === p.backup_printer_id)
@@ -412,6 +413,16 @@ export default function PrintersPage() {
                   ))}
                 </div>
               </div>
+              <label className="block">
+                <span className="text-xs font-semibold text-gray-600">Blank space at the bottom of each ticket (mm)</span>
+                <input
+                  inputMode="numeric"
+                  value={String(draft.bottom_feed_mm ?? 0)}
+                  onChange={(e) => setDraft((d) => ({ ...d, bottom_feed_mm: e.target.value.replace(/\D/g, "").slice(0, 2) }))}
+                  className={`mt-1 ${inputCls}`}
+                />
+                <span className="mt-1 block text-xs text-gray-500">0 to 50 mm. 20 mm = 2 cm of empty paper before the cut.</span>
+              </label>
               <div>
                 <span className="text-xs font-semibold text-gray-600">What this printer prints</span>
                 <div className="mt-1 grid gap-2">

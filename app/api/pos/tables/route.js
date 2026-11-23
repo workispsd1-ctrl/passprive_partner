@@ -118,7 +118,7 @@ async function liveTables({ admin, restaurantId, printKinds, lan = false }) {
     restaurant_id: restaurantId,
     merchant: merchantRes.data || null,
     print_jobs: printJobs,
-    printers: printers.map((p) => ({ id: p.id, name: p.name, ip: p.ip, port: p.port, paper_mm: p.paper_mm, prints: p.prints, backup_printer_id: p.backup_printer_id || null })),
+    printers: printers.map((p) => ({ id: p.id, name: p.name, ip: p.ip, port: p.port, paper_mm: p.paper_mm, prints: p.prints, backup_printer_id: p.backup_printer_id || null, bottom_feed_mm: p.bottom_feed_mm || 0 })),
     discovery,
     pay_requests: payRequests,
     tables: tablesRes.data || [],
