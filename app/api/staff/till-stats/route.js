@@ -1,3 +1,4 @@
+import { closingReport } from "@/lib/server/closingReport";
 import { mauritiusDayRange } from "@/lib/server/billHistory";
 import {
   bookingStats,
@@ -88,17 +89,40 @@ export async function POST(request) {
     };
 
     if (body.action === "print" || body.action === "preview") {
-      const period = body.from === body.to ? body.from : `${body.from} to ${body.to}`;
-      const report = statsReport(full, {
-        period,
+      const lang = body.lang === "fr" ? "fr" : "en";
+      const ids = [...new Set([...(full.payers || []).map((u) => u.id), ...(full.sellers || []).map((u) => u.id), ctx.userId].filter((id) => id && id !== "unknown"))];
+      const [{ data: people }, { data: merchant }] = await Promise.all([
+        ids.length ? admin.from("users").select("id, full_name").in("id", ids) : Promise.resolve({ data: [] }),
+        admin.from("restaurants").select("name, full_address, phone").eq("id", restaurantId).maybeSingle(),
+      ]);
+      const names = Object.fromEntries((people || []).map((u) => [u.id, u.full_name || ""]));
+      const inPeriod = (at) => at && new Date(at) >= new Date(start) && new Date(at) < new Date(end);
+      const refunds = tables.reduce((n, r) => n + (Array.isArray(r.order_details?.reopened) ? r.order_details.reopened.filter((x) => inPeriod(x.at)).length : 0), 0);
+      const report = closingReport(full, {
+        from: body.from,
+        to: body.to,
+        lang,
+        merchant,
+        names,
+        refunds,
+        printedBy: names[ctx.userId] || null,
         area: scope.area?.name || null,
-        withItems: body.detail === "items",
-        sales: body.detail === "bills" ? sales : null,
       });
-      if (body.action === "preview") {
-        const { data: merchant } = await admin.from("restaurants").select("name").eq("id", restaurantId).maybeSingle();
-        return reply({ ok: true, report: { ...report, merchant: merchant?.name || null } });
+      if (body.detail === "items" || body.detail === "bills") {
+        const extra = statsReport(full, {
+          period: body.from,
+          withItems: body.detail === "items",
+          sales: body.detail === "bills" ? sales : null,
+          lang,
+        });
+        const keep = extra.sections.filter((sec) => (body.detail === "bills" ? /^(EVERY BILL|TOUS LES TICKETS)/.test(sec.title) : !/^(SALES|VENTES|DETAILS|DÉTAILS|COMPARED|COMPARAISON|PAYMENT METHODS|MODES DE RÈGLEMENT|ACCOUNT PAYMENTS|RÈGLEMENTS DE COMPTES|TIPS BY|POURBOIRES PAR|SALES CHANNELS|MODES DE VENTE|CATEGORIES|RUBRIQUES|BEST SELLERS|MEILLEURES VENTES|OFFERED|OFFERTS|CANCELLATIONS|ANNULATIONS)$/.test(sec.title)));
+        for (const sec of keep) {
+          report.lines.push({ text: sec.title, bold: true }, { text: " " });
+          for (const r of sec.rows) report.lines.push({ text: `${r.label} : ${r.value}`, ...(r.bold ? { bold: true } : {}) });
+          report.lines.push({ rule: true });
+        }
       }
+      if (body.action === "preview") return reply({ ok: true, report: { ...report, merchant: merchant?.name || null } });
       if (!mainPrinter(await activePrinters(admin, restaurantId))) {
         return reply({ ok: false, error: "No main printer is set up. On the partner dashboard, tick Customer receipts & bills on a printer." }, 409);
       }

@@ -203,7 +203,7 @@ export async function POST(request) {
     }
 
     if (action === "account_statement") {
-      const { status, body: out } = await printStatement(ctx.admin, ctx.restaurantId, body?.account_id);
+      const { status, body: out } = await printStatement(ctx.admin, ctx.restaurantId, body?.account_id, body?.lang === "fr" ? "fr" : "en");
       return reply(out, status);
     }
 

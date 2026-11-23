@@ -39,7 +39,7 @@ export async function POST(request) {
     else if (action === "settle") out = await settleAccount(ctx.admin, ctx.restaurantId, ctx.userId, body, { allowed: TILL_SETTLE });
     else if (action === "statement") {
       out = mainPrinter(await activePrinters(ctx.admin, ctx.restaurantId))
-        ? await printStatement(ctx.admin, ctx.restaurantId, body?.id)
+        ? await printStatement(ctx.admin, ctx.restaurantId, body?.id, body?.lang === "fr" ? "fr" : "en")
         : { status: 409, body: { ok: false, error: "No main printer is set up. On the partner dashboard, tick Customer receipts & bills on a printer." } };
     }
     else out = { status: 400, body: { ok: false, error: "Unknown action" } };

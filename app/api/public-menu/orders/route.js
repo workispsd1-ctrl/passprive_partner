@@ -155,6 +155,7 @@ async function upsertOrder(admin, ctx, body) {
         lines: items,
         notes,
         source: ctx.staffUserId ? "Staff" : "QR",
+        by: ctx.staffUserId || null,
         needsAck: !ctx.staffUserId,
       });
       return reply({ ok: true, order_id: data.id });
@@ -194,6 +195,7 @@ async function upsertOrder(admin, ctx, body) {
         added: (current.order_items || []).length > 0,
         notes,
         source: ctx.staffUserId ? "Staff" : "QR",
+        by: ctx.staffUserId || null,
         needsAck: !ctx.staffUserId,
       });
       return reply({ ok: true, order_id: open.id });

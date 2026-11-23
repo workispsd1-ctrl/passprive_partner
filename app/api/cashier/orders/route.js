@@ -200,6 +200,7 @@ export async function POST(request) {
           return NextResponse.json({ ok: false, error: "This table was just updated. Please try again." }, { status: 409 });
         }
         await queueOrderTicket(ctx.admin, ctx.restaurantId, {
+          by: ctx.userId,
           orderId: openExisting.id,
           tableNo,
           guests: openExisting.guest_count,
@@ -241,7 +242,8 @@ export async function POST(request) {
         .select("id, table_no, total_amount, booking_status, payment_status")
         .single();
       if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
-      await queueOrderTicket(ctx.admin, ctx.restaurantId, { orderId: data.id, tableNo, lines: normalizedItems, notes, source: "Till" });
+      await queueOrderTicket(ctx.admin, ctx.restaurantId, {
+          by: ctx.userId, orderId: data.id, tableNo, lines: normalizedItems, notes, source: "Till" });
       return NextResponse.json({ ok: true, order_type: "TABLE", continued: false, order: data });
     }
 
@@ -277,6 +279,7 @@ export async function POST(request) {
       .single();
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
     await queueOrderTicket(ctx.admin, ctx.restaurantId, {
+          by: ctx.userId,
       orderId: null,
       tableNo: null,
       lines: normalizedItems,
