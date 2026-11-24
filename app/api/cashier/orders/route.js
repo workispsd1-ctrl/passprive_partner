@@ -394,6 +394,7 @@ export async function PATCH(request) {
         method: paymentMethod,
         received: paymentMethod === "CASH" && received >= total ? received : total,
         change: paymentMethod === "CASH" && received > total ? Number((received - total).toFixed(2)) : 0,
+        by: ctx.userId,
       }).catch((e) => console.error("takeaway receipt failed", e?.message));
     }
 

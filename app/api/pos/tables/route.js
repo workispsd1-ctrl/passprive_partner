@@ -1,4 +1,4 @@
-import { addBillItems, seatTable, setBillItemQty } from "@/lib/server/billItems";
+import { addBillItems, cancelBillItems, seatTable, setBillItemQty } from "@/lib/server/billItems";
 import { addGuest, setItemGuest } from "@/lib/server/billGuests";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { payBillPart } from "@/lib/server/splitBill";
@@ -25,7 +25,7 @@ function isPaidOnline(o) {
   return o?.source === "public_menu" && ["PAID", "COMPLETED"].includes(String(o?.payment_status || "").toUpperCase());
 }
 const ORDER_COLUMNS =
-  "id, table_no, guest_count, customer_name, notes, booking_status, payment_status, subtotal_amount, total_amount, tip_amount, order_items, created_at, updated_at, source, qr_pending:order_details->qr_pending, payments:order_details->payments, guests:order_details->guests, bill_discount:order_details->bill_discount";
+  "id, table_no, guest_count, customer_name, notes, invoice_no, booking_status, payment_status, subtotal_amount, total_amount, tip_amount, order_items, created_at, updated_at, source, qr_pending:order_details->qr_pending, payments:order_details->payments, guests:order_details->guests, bill_discount:order_details->bill_discount";
 
 function thumbnail(urls) {
   const url = Array.isArray(urls) ? String(urls[0] || "") : "";
@@ -101,7 +101,7 @@ async function liveTables({ admin, restaurantId, printKinds, lan = false }) {
       .limit(100),
     admin
       .from("restaurants")
-      .select("name, registered_name, brn, full_address, phone")
+      .select("name, registered_name, brn, vat_number, full_address, phone")
       .eq("id", restaurantId)
       .maybeSingle(),
     pendingPrintJobs(admin, restaurantId, printKinds, lan).catch(() => []),
@@ -258,6 +258,11 @@ export async function POST(request) {
       return ok ? reply({ ok: true, ...(await liveTables(ctx)) }) : reply({ ok: false, error: "invalid_status" }, 409);
     }
 
+    if (action === "cancel_items") {
+      const { status, body: out } = await cancelBillItems(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      return out.ok ? reply({ ok: true, ...(await liveTables(ctx)) }) : reply(out, status);
+    }
+
     if (action === "set_item_qty") {
       const { status, body: out } = await setBillItemQty(ctx.admin, ctx.restaurantId, ctx.userId, body);
       return out.ok ? reply({ ok: true, ...(await liveTables(ctx)) }) : reply(out, status);
@@ -362,7 +367,10 @@ export async function POST(request) {
         return reply({ ok: false, error: "Mark this table completed first." }, 409);
       }
       const { status, body: out } = await payBillPart(ctx.admin, ctx.restaurantId, ctx.userId, body, ctx.terminalId);
-      if (out.ok) await queuePartPrint(ctx.admin, ctx.restaurantId, String(body.order_id || ""), out).catch((e) => console.error("part print queue failed", e?.message));
+      if (out.ok) {
+        const invoice = await queuePartPrint(ctx.admin, ctx.restaurantId, String(body.order_id || ""), out).catch((e) => console.error("part print queue failed", e?.message));
+        if (invoice) out.invoice = invoice;
+      }
       return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);
     }
 
@@ -380,7 +388,10 @@ export async function POST(request) {
         },
         ctx.terminalId
       );
-      if (out.ok) await queueFinalPrint(ctx.admin, ctx.restaurantId, String(body.order_id || "")).catch((e) => console.error("final bill print queue failed", e?.message));
+      if (out.ok) {
+        const invoice = await queueFinalPrint(ctx.admin, ctx.restaurantId, String(body.order_id || "")).catch((e) => console.error("final bill print queue failed", e?.message));
+        if (invoice) out.invoice = invoice;
+      }
       return reply(out, status);
     }
 
