@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { toast } from "sonner";
 import { Clock, ChefHat } from "lucide-react";
+import { useTillPush } from "@/lib/useTillPush";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 const AGE_AMBER_MIN = 5;
@@ -113,16 +114,16 @@ export default function WaiterFloor() {
 
   useEffect(() => {
     load();
-    const poll = setInterval(() => load(true), 5000);
     const timer = setInterval(() => setTick((n) => n + 1), 15000);
     const onRefresh = () => load(true);
     window.addEventListener("waiter:refresh", onRefresh);
     return () => {
-      clearInterval(poll);
       clearInterval(timer);
       window.removeEventListener("waiter:refresh", onRefresh);
     };
   }, [load]);
+
+  useTillPush(() => load(true), ["restaurant_table_bookings", "restaurant_table_layouts"]);
 
   // ── ownership helpers ────────────────────────────────────────────────────────
   const ownerByTable = useMemo(() => {

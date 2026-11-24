@@ -6,9 +6,9 @@ import { ShoppingBag } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useI18n } from "@/lib/i18n";
 import { isStaffPlacedOrder } from "@/lib/staffOrder";
+import { useTillPush } from "@/lib/useTillPush";
 
 const ORDER_FIELDS = "id,restaurant_id,order_number,customer_name,customer_phone,items,total_amount,payment_status,pickup_code,pickup_eta,created_at,metadata";
-const POLL_MS = 5000;
 
 function money(n) {
   return `MUR ${Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
@@ -28,6 +28,8 @@ export default function OrderRealtimeNotifier() {
 
   const startedAtRef = useRef(new Date().toISOString());
   const seenIdsRef = useRef(new Set());
+  const pullRef = useRef(null);
+  useTillPush(() => pullRef.current?.(), ["restaurant_orders"]);
   const audioRef = useRef(null);
   const audioUnlockedRef = useRef(false);
   const pendingPlayRef = useRef(false);
@@ -96,7 +98,8 @@ export default function OrderRealtimeNotifier() {
     };
 
     pull();
-    const timer = window.setInterval(pull, POLL_MS);
+    pullRef.current = pull;
+    const timer = null;
 
     return () => {
       active = false;

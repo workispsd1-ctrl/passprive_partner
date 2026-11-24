@@ -101,12 +101,14 @@ function ReceiptDetails({ restaurantId }) {
             <div className="text-sm font-medium text-gray-900">Logo</div>
             <div className="mt-2 grid h-32 place-items-center rounded-xl border border-dashed border-gray-300 bg-gray-50 p-3">
               {settings.logo ? (
-                <img src={settings.logo.png} alt="Printed logo preview" className="max-h-full max-w-full object-contain" />
+                <div className="w-full max-w-[288px] rounded bg-white py-3 shadow-sm">
+                  <img src={settings.logo.png} alt="Printed logo preview" className="mx-auto" style={{ width: `${Math.min(100, (settings.logo.width / 576) * 100)}%`, imageRendering: "pixelated" }} />
+                </div>
               ) : (
                 <span className="text-sm text-gray-500">No logo yet</span>
               )}
             </div>
-            <p className="mt-1 text-xs text-gray-500">Preview of how it prints: black and white only. A dark logo on a white or transparent background prints best.</p>
+            <p className="mt-1 text-xs text-gray-500">Shown at its printed size on an 80 mm receipt: about the size the restaurant name used to print. Black and white only; a dark logo on a white or transparent background prints best.</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl bg-[#FF4800] px-4 text-sm font-semibold text-white">
                 {busy === "logo" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageUp className="h-4 w-4" />}

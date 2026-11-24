@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { X, Clock3 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { toast } from "sonner";
+import { useTillPush } from "@/lib/useTillPush";
 
 function toDateTime(dateStr, timeStr) {
   const d = String(dateStr || "");
@@ -114,13 +115,7 @@ export default function CashierBookingsPage() {
     return () => window.removeEventListener("cashier:refresh", onTopRefresh);
   }, []);
 
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      if (typeof document !== "undefined" && document.hidden) return;
-      load({ silent: true });
-    }, 6000);
-    return () => window.clearInterval(id);
-  }, []);
+  useTillPush(() => load({ silent: true }), ["restaurant_bookings"]);
 
   useEffect(() => {
     const id = setInterval(() => setTick((n) => n + 1), 30000);

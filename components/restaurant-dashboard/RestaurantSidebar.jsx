@@ -331,7 +331,7 @@ export default function RestaurantSidebar({ collapsed: collapsedPref = false, mo
       )
       .subscribe();
 
-    const pollId = window.setInterval(refreshUnreadCounts, 5000);
+    const pollId = window.setInterval(refreshUnreadCounts, 60000);
 
     const onFocus = () => refreshUnreadCounts();
     const onVisibilityChange = () => {

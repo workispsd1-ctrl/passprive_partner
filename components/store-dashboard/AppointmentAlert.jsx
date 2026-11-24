@@ -22,8 +22,15 @@ export default function AppointmentAlert() {
 
   useEffect(() => {
     load();
-    const timer = setInterval(load, 5000);
-    return () => clearInterval(timer);
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, 20000);
+    const onVisible = () => document.visibilityState === "visible" && load();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [load]);
 
   const active = queue[0];

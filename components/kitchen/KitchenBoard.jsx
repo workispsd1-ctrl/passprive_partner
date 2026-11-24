@@ -5,6 +5,7 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { toast } from "sonner";
 import { Clock, Flame, CheckCircle2, RotateCcw } from "lucide-react";
 import LineExtras from "@/components/menu/LineExtras";
+import { useTillPush } from "@/lib/useTillPush";
 
 const AGE_AMBER_MIN = 6;
 const AGE_RED_MIN = 12;
@@ -148,12 +149,13 @@ export default function KitchenBoard() {
 
   useEffect(() => {
     load();
-    const poll = setInterval(() => load(true), 5000);
     const timer = setInterval(() => setTick((n) => n + 1), 15000);
     const onRefresh = () => load(true);
     window.addEventListener("kitchen:refresh", onRefresh);
-    return () => { clearInterval(poll); clearInterval(timer); window.removeEventListener("kitchen:refresh", onRefresh); };
+    return () => { clearInterval(timer); window.removeEventListener("kitchen:refresh", onRefresh); };
   }, [load]);
+
+  useTillPush(() => load(true), ["restaurant_table_bookings", "restaurant_orders"]);
 
   const advance = async (o, to, key, isPickup) => {
     if (busyId) return;

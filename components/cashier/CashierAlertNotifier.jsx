@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { isStaffPlacedOrder } from "@/lib/staffOrder";
+import { useTillPush } from "@/lib/useTillPush";
 
 function fmtDateTime(v) {
   if (!v) return "—";
@@ -27,6 +28,8 @@ export default function CashierAlertNotifier() {
 
   const seenIdsRef = useRef(new Set());
   const pollRef = useRef(null);
+  const pullRef = useRef(null);
+  useTillPush(() => pullRef.current?.(), ["restaurant_bookings", "restaurant_orders", "restaurant_table_bookings", "pos_payment_requests"]);
   const activeRef = useRef(null);
   const audioRef = useRef(null);
   const audioUnlockedRef = useRef(false);
@@ -188,10 +191,7 @@ export default function CashierAlertNotifier() {
     };
 
     poll(true);
-    pollRef.current = window.setInterval(() => {
-      if (!activeTurn) return;
-      poll(false);
-    }, 5000);
+    pullRef.current = () => activeTurn && poll(false);
 
     return () => {
       activeTurn = false;

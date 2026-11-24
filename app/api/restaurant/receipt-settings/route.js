@@ -21,13 +21,13 @@ function asUser(token) {
 async function current(db, restaurantId) {
   const [{ data: r }, { data: logo }] = await Promise.all([
     db.from("restaurants").select("vat_number, brn, registered_name").eq("id", restaurantId).maybeSingle(),
-    db.from("restaurant_receipt_logos").select("png_b64, updated_at").eq("restaurant_id", restaurantId).maybeSingle(),
+    db.from("restaurant_receipt_logos").select("png_b64, width, updated_at").eq("restaurant_id", restaurantId).maybeSingle(),
   ]);
   return {
     vat_number: r?.vat_number || "",
     brn: r?.brn || "",
     registered_name: r?.registered_name || "",
-    logo: logo ? { png: `data:image/png;base64,${logo.png_b64}`, updated_at: logo.updated_at } : null,
+    logo: logo ? { png: `data:image/png;base64,${logo.png_b64}`, width: logo.width, updated_at: logo.updated_at } : null,
   };
 }
 

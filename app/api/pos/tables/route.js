@@ -4,7 +4,7 @@ import { addGuest, setItemGuest } from "@/lib/server/billGuests";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { payBillPart } from "@/lib/server/splitBill";
 import { finishDiscovery, pendingDiscovery } from "@/lib/server/printerDiscovery";
-import { activePrinters, claimPrintJob, confirmPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, queueBillPrint, queueFinalPrint, queuePartPrint, releasePrintJob, unleasePrintJob } from "@/lib/server/printJobs";
+import { activePrinters, claimPrintJob, confirmPrintJob, failPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, printHistory, queueBillPrint, queueFinalPrint, queuePartPrint, RECEIPT_KINDS, releasePrintJob, reprintJob, TICKET_KINDS, unleasePrintJob } from "@/lib/server/printJobs";
 import { setDiscount } from "@/lib/server/billDiscount";
 import { correctMethod, printCorrected, reopenPaidBill } from "@/lib/server/billCorrection";
 import { accountDetail, listAccounts, printStatement, settleAccount } from "@/lib/server/customerAccounts";
@@ -85,6 +85,8 @@ function menuSections(menuJson) {
     .filter((section) => section.items.length > 0);
 }
 
+const POS_BACKUP_MS = 20 * 1000;
+
 async function liveTables({ admin, restaurantId, printKinds, lan = false }) {
   const [tablesRes, ordersRes, merchantRes, printJobs, payRequests, printers, discovery, logoAt] = await Promise.all([
     admin
@@ -105,7 +107,7 @@ async function liveTables({ admin, restaurantId, printKinds, lan = false }) {
       .select("name, registered_name, brn, vat_number, full_address, phone")
       .eq("id", restaurantId)
       .maybeSingle(),
-    pendingPrintJobs(admin, restaurantId, printKinds, lan).catch(() => []),
+    pendingPrintJobs(admin, restaurantId, printKinds, lan, { minAgeMs: POS_BACKUP_MS }).catch(() => []),
     pendingPayRequests(admin, restaurantId).catch(() => []),
     lan ? activePrinters(admin, restaurantId).catch(() => []) : Promise.resolve([]),
     lan ? pendingDiscovery(admin, restaurantId).catch(() => []) : Promise.resolve([]),
@@ -178,7 +180,8 @@ export async function POST(request) {
     if (ctx.error) return ctx.error;
     const body = await readJson(request);
     const action = String(body.action || "list");
-    ctx.printKinds = [];
+    const accepted = Array.isArray(body.print_kinds) ? body.print_kinds.map(String) : [];
+    ctx.printKinds = [...new Set(accepted.filter((k) => [...TICKET_KINDS, ...RECEIPT_KINDS, "test"].includes(k)))];
     ctx.lan = body.lan_print === true;
     if (ctx.lan) {
       const minuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
@@ -308,6 +311,24 @@ export async function POST(request) {
     if (action === "confirm_print") {
       await confirmPrintJob(ctx.admin, ctx.restaurantId, ctx.terminalId, String(body.job_id || ""), body.printer_id || null);
       return reply({ ok: true });
+    }
+
+    if (action === "fail_print") {
+      await failPrintJob(ctx.admin, ctx.restaurantId, ctx.terminalId, String(body.job_id || ""), body.reason);
+      return reply({ ok: true });
+    }
+
+    if (action === "print_history") {
+      const orderId = String(body.order_id || "");
+      if (!/^[0-9a-f-]{36}$/i.test(orderId)) return reply({ ok: false, error: "invalid_order" }, 400);
+      return reply({ ok: true, jobs: await printHistory(ctx.admin, ctx.restaurantId, orderId) });
+    }
+
+    if (action === "reprint") {
+      const jobId = String(body.job_id || "");
+      if (!/^[0-9a-f-]{36}$/i.test(jobId)) return reply({ ok: false, error: "invalid_job" }, 400);
+      const out = await reprintJob(ctx.admin, ctx.restaurantId, jobId, ctx.terminalId);
+      return reply(out, out.ok ? 200 : 409);
     }
 
     if (action === "unlease_print") {

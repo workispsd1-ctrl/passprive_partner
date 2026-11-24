@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { toast } from "sonner";
+import { useTillPush } from "@/lib/useTillPush";
 
 function money(n) {
   const num = Number(n);
@@ -74,11 +75,12 @@ export default function CashierWalkInOrdersPage() {
 
   useEffect(() => {
     load();
-    const poll = setInterval(() => load(true), 7000);
     const onRefresh = () => load(true);
     window.addEventListener("cashier:refresh", onRefresh);
-    return () => { clearInterval(poll); window.removeEventListener("cashier:refresh", onRefresh); };
+    return () => window.removeEventListener("cashier:refresh", onRefresh);
   }, [load]);
+
+  useTillPush(() => load(true), ["restaurant_table_bookings", "restaurant_orders"]);
 
   const update = async (order, body, key) => {
     if (busyKey) return;

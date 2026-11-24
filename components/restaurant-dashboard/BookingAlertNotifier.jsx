@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useI18n } from "@/lib/i18n";
+import { useTillPush } from "@/lib/useTillPush";
 
 const ESCALATION_DELAY_MS = 3 * 60 * 1000;
 
@@ -56,6 +57,8 @@ export default function BookingAlertNotifier() {
 
   const channelRef = useRef(null);
   const pollRef = useRef(null);
+  const pullRef = useRef(null);
+  useTillPush(() => pullRef.current?.(), ["restaurant_bookings"]);
   const audioRef = useRef(null);
   const escalationTimerRef = useRef(null);
   const activeBookingRef = useRef(null);
@@ -357,7 +360,7 @@ export default function BookingAlertNotifier() {
         .subscribe();
 
       await pullRecentBookings();
-      pollRef.current = window.setInterval(pullRecentBookings, 5000);
+      pullRef.current = pullRecentBookings;
     };
 
     setup();

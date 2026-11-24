@@ -409,10 +409,15 @@ function PublicRestaurantMenuContent() {
     const timer = setInterval(() => {
       if (typeof document !== "undefined" && document.hidden) return;
       poll();
-    }, 5000);
+    }, 15000);
+    const onVisible = () => {
+      if (!document.hidden) poll();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
       clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [orderRecordId, restaurantId, tableFromQr, tableNo]);
 

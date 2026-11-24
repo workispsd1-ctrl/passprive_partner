@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { CircleCheck, X } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useI18n } from "@/lib/i18n";
+import { useTillPush } from "@/lib/useTillPush";
 
-const POLL_MS = 8000;
 const LOOKBACK_MS = 120000;
 
 export function paymentTypeKey(p) {
@@ -24,6 +24,8 @@ export default function PaymentAlertNotifier() {
   const [queue, setQueue] = useState([]);
   const seenRef = useRef(new Set());
   const sinceRef = useRef(null);
+  const pullRef = useRef(null);
+  useTillPush(() => pullRef.current?.(), ["payment_sessions"]);
   const audioRef = useRef(null);
   const unlockedRef = useRef(false);
 
@@ -87,7 +89,7 @@ export default function PaymentAlertNotifier() {
       if (!active || error) return;
       (latest || []).forEach((p) => seenRef.current.add(p.id));
       sinceRef.current = latest?.[0]?.paid_at ? new Date(latest[0].paid_at) : new Date();
-      timer = window.setInterval(poll, POLL_MS);
+      pullRef.current = poll;
     };
 
     boot();

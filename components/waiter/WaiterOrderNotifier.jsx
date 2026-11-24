@@ -5,6 +5,7 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { toast } from "sonner";
 import { Bell, CheckCircle2, X } from "lucide-react";
 import { isStaffPlacedOrder } from "@/lib/staffOrder";
+import { useTillPush } from "@/lib/useTillPush";
 
 // Web Audio cues. soft = single short beep (awareness); loud = triple beep (action).
 function beep(times = 1) {
@@ -129,9 +130,9 @@ export default function WaiterOrderNotifier() {
 
   useEffect(() => {
     poll();
-    const id = setInterval(poll, 5000);
-    return () => clearInterval(id);
   }, [poll]);
+
+  useTillPush(poll, ["restaurant_table_bookings"]);
 
   const dismiss = () => setQueue((q) => q.slice(1));
 

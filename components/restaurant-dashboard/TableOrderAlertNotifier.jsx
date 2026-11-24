@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useI18n } from "@/lib/i18n";
 import { isStaffPlacedOrder } from "@/lib/staffOrder";
+import { useTillPush } from "@/lib/useTillPush";
 
 const TABLE_ORDER_FIELDS = [
   "id",
@@ -50,6 +51,8 @@ export default function TableOrderAlertNotifier() {
 
   const channelRef = useRef(null);
   const pollRef = useRef(null);
+  const pullRef = useRef(null);
+  useTillPush(() => pullRef.current?.(), ["restaurant_table_bookings"]);
   const startedAtRef = useRef(new Date().toISOString());
   const seenIdsRef = useRef(new Set());
   const activeRef = useRef(null);
@@ -203,7 +206,7 @@ export default function TableOrderAlertNotifier() {
         .subscribe();
 
       await pullRecent();
-      pollRef.current = window.setInterval(pullRecent, 5000);
+      pullRef.current = pullRecent;
     };
 
     setup();

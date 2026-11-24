@@ -61,8 +61,8 @@ export function useDashboard(storeId, filters) {
       .subscribe();
 
     pollId = window.setInterval(() => {
-      loadDashboard(true);
-    }, 10000);
+      if (document.visibilityState === "visible") loadDashboard(true);
+    }, 60000);
 
     return () => {
       cancelled = true;

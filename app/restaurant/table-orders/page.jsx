@@ -6,6 +6,7 @@ import { resolveActiveRestaurant } from "@/lib/restaurant-partner/activeRestaura
 import { Bell, Phone, Hash, ArrowLeft } from "lucide-react";
 import { isStaffPlacedOrder } from "@/lib/staffOrder";
 import { extrasText } from "@/components/menu/LineExtras";
+import { useTillPush } from "@/lib/useTillPush";
 
 const STATUS = {
   PLACED: "PLACED",
@@ -384,12 +385,7 @@ export default function TableOrdersPage() {
     };
   }
 
-  useEffect(() => {
-    if (!restaurantId) return;
-    const interval = setInterval(() => fetchOrders(restaurantId, false), 10000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restaurantId, tableLayoutNumbers.length]);
+  useTillPush(() => restaurantId && fetchOrders(restaurantId, false), ["restaurant_table_bookings", "restaurant_table_layouts"]);
 
   function startOrderSound() {
     if (soundRef.current) return; // already looping

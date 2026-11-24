@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { QrCode, Clock3, ReceiptText, UserRound, X } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import LineExtras from "@/components/menu/LineExtras";
+import { useTillPush } from "@/lib/useTillPush";
 
 const STATUS = ["PLACED", "CONFIRMED", "PREPARING", "SERVED", "CANCELLED"];
 
@@ -104,13 +105,7 @@ export default function CashierTableOrdersPage() {
     return () => window.removeEventListener("cashier:refresh", onTopRefresh);
   }, []);
 
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      if (typeof document !== "undefined" && document.hidden) return;
-      load({ silent: true });
-    }, 7000);
-    return () => window.clearInterval(id);
-  }, []);
+  useTillPush(() => load({ silent: true }), ["restaurant_table_bookings"]);
 
   const updateStatus = async (id, booking_status) => {
     setUpdatingId(id);
