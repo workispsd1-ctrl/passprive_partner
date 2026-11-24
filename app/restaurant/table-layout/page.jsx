@@ -946,9 +946,9 @@ export default function RestaurantTableLayoutPage() {
 
   useEffect(() => () => clearTimeout(itemTimerRef.current), []);
 
-  const resize = async (factor) => {
+  const resize = async (factor, from = tableScale) => {
     if (busy === "zoom" || !activeArea || activeAreaId === UNASSIGNED) return;
-    const next = resizeTables(tableScale, factor);
+    const next = resizeTables(from, factor);
     if (!next) return;
     const areaId = activeAreaId;
     setBusy("zoom");
@@ -963,6 +963,33 @@ export default function RestaurantTableLayoutPage() {
       await load();
     }
     setBusy("");
+  };
+
+  const onResizeDown = (e, table) => {
+    if (!activeArea || activeAreaId === UNASSIGNED) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const areaId = activeAreaId;
+    const start = tableScale;
+    const base = sizeForShape(table.shape).w * canvasScale * start;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let factor = 1;
+    const onMove = (mv) => {
+      const grow = ((mv.clientX - startX) + (mv.clientY - startY)) / 2;
+      factor = Math.max(0.1, (base + grow * 2) / base);
+      const live = resizeTables(start, factor);
+      if (live) setAreas((prev) => prev.map((a) => (a.id === areaId ? { ...a, table_scale: live } : a)));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      if (factor !== 1) resize(factor, start);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
   };
 
   const zoom = async (factor) => {
@@ -1494,6 +1521,14 @@ export default function RestaurantTableLayoutPage() {
                           : "ring-1 ring-gray-200 shadow-sm hover:ring-gray-300"
                       } ${dragId === t.id ? "scale-[1.03]" : ""}`}
                     />
+                    {isSelected && activeArea && activeAreaId !== UNASSIGNED ? (
+                      <span
+                        role="presentation"
+                        title="Drag to resize the tables in this area"
+                        onPointerDown={(e) => onResizeDown(e, t)}
+                        className="absolute -bottom-2 -right-2 h-5 w-5 cursor-nwse-resize rounded-md border-2 border-white bg-[#FF4800] shadow touch-none"
+                      />
+                    ) : null}
                   </button>
                 );
               })}
