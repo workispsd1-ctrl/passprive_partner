@@ -18,6 +18,7 @@ import {
   ZoomIn,
   ZoomOut,
   Minus,
+  ImageUp,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { getActiveRestaurantId } from "@/lib/restaurant-partner/activeRestaurant";
@@ -376,6 +377,58 @@ function nextInArea(tables, areas, areaId) {
   return n;
 }
 
+function ImportPreviewModal({ preview, onClose, onCreate, saving }) {
+  const shapeClass = (shape) => (shape === "circle" ? "rounded-full" : "rounded-md");
+  return (
+    <Modal
+      open
+      title={`Found ${preview.tables.length} table${preview.tables.length === 1 ? "" : "s"}${preview.items.length ? ` and ${preview.items.length} item${preview.items.length === 1 ? "" : "s"}` : ""}`}
+      onClose={onClose}
+      footer={
+        <div className="flex gap-2">
+          <button type="button" onClick={onClose} disabled={saving} className="h-11 flex-1 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onCreate}
+            disabled={saving || (!preview.tables.length && !preview.items.length)}
+            className="inline-flex h-11 flex-[2] items-center justify-center gap-2 rounded-xl bg-[#FF4800] text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {preview.tables.length ? `Create ${preview.tables.length} table${preview.tables.length === 1 ? "" : "s"}` : "Add items"}
+          </button>
+        </div>
+      }
+    >
+      <p className="text-sm text-gray-600">Check the layout read from your photo. Your existing tables are not changed. After creating, drag anything into its exact place.</p>
+      <div className="relative mt-3 aspect-[16/10] w-full overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+        <img src={preview.photo} alt="" className="absolute inset-0 h-full w-full object-fill opacity-30" />
+        {preview.items.map((i, k) => (
+          <div
+            key={`i${k}`}
+            className="absolute flex items-center justify-center rounded border border-sky-400 bg-sky-100/70 text-[9px] font-semibold uppercase text-sky-800"
+            style={{ left: `${i.x - i.w / 2}%`, top: `${i.y - i.h / 2}%`, width: `${i.w}%`, height: `${i.h}%` }}
+          >
+            {floorItemMeta(i.kind).label}
+          </div>
+        ))}
+        {preview.tables.map((t, k) => (
+          <div
+            key={`t${k}`}
+            className={`absolute flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center border-2 border-[#FF4800] bg-white text-[9px] font-bold text-gray-900 ${shapeClass(t.shape)} ${t.shape === "rectangle" ? "w-10" : ""}`}
+            style={{ left: `${t.x}%`, top: `${t.y}%` }}
+            title={`${t.label || "Table"} · ${t.seats} seats`}
+          >
+            {t.label || "?"}
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-xs text-gray-500">Tables without a readable number get the next free number in this area.</p>
+    </Modal>
+  );
+}
+
 function AddTableModal({ areas, tables, defaultAreaId, nextTableNo, onClose, onSubmit, saving }) {
   const [areaId, setAreaId] = useState(defaultAreaId || areas[0]?.id || "");
   const [tableNo, setTableNo] = useState(String(nextInArea(tables, areas, defaultAreaId || areas[0]?.id || "")));
@@ -706,6 +759,7 @@ export default function RestaurantTableLayoutPage() {
 
   const [areaModal, setAreaModal] = useState(null); // null | {} (add) | area (edit)
   const [addTableOpen, setAddTableOpen] = useState(false);
+  const [importPreview, setImportPreview] = useState(null);
   const [confirm, setConfirm] = useState(null); // { type: "table" | "area", item }
   const [busy, setBusy] = useState("");
 
@@ -945,6 +999,79 @@ export default function RestaurantTableLayoutPage() {
   }, [selectedId]);
 
   useEffect(() => () => clearTimeout(itemTimerRef.current), []);
+
+  const importPhoto = async (file) => {
+    if (!file || !restaurantId || !activeArea || activeAreaId === UNASSIGNED) return;
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error("The photo is too large. Use one under 8 MB.");
+      return;
+    }
+    setBusy("import");
+    try {
+      const photo = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const { data: sess } = await supabaseBrowser.auth.getSession();
+      const res = await fetch("/api/restaurant/layout-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sess?.session?.access_token || ""}` },
+        body: JSON.stringify({ restaurant_id: restaurantId, image: photo }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) throw new Error(json?.error || "We couldn't read that photo.");
+      setImportPreview({ areaId: activeAreaId, photo, tables: json.tables || [], items: json.items || [] });
+    } catch (e) {
+      toast.error(e?.message || "We couldn't read that photo.");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const createImported = async () => {
+    const plan = importPreview;
+    if (!plan || !restaurantId) return;
+    setBusy("import");
+    try {
+      const prefix = areaPrefix(areas, plan.areaId);
+      const taken = new Set(tables.filter((t) => t.area_id === plan.areaId).map((t) => String(t.label || "").trim().toLowerCase()));
+      const used = new Set(tables.map((t) => t.table_no));
+      let nextNo = 1;
+      let nextLabel = 1;
+      const rows = plan.tables.map((t) => {
+        while (used.has(nextNo)) nextNo += 1;
+        used.add(nextNo);
+        let label = t.label ? (/^\d+$/.test(t.label) ? `${prefix}${t.label}` : t.label) : "";
+        if (!label || taken.has(label.toLowerCase())) {
+          while (taken.has(`${prefix}${nextLabel}`.toLowerCase())) nextLabel += 1;
+          label = `${prefix}${nextLabel}`;
+        }
+        taken.add(label.toLowerCase());
+        return { restaurant_id: restaurantId, area_id: plan.areaId, table_no: nextNo, label: label.slice(0, 40), shape: t.shape, capacity: t.seats, pos_x: t.x, pos_y: t.y };
+      });
+      if (rows.length) {
+        const { data, error } = await supabaseBrowser
+          .from("restaurant_table_layouts")
+          .insert(rows)
+          .select("id, table_no, label, shape, capacity, pos_x, pos_y, area_id");
+        if (error) throw error;
+        setTables((prev) => [...prev, ...(data || []).map((r) => ({ ...r, pos_x: Number(r.pos_x), pos_y: Number(r.pos_y) }))]);
+      }
+      if (plan.items.length) {
+        const current = areas.find((a) => a.id === plan.areaId)?.floor_objects || [];
+        const added = plan.items.map((i) => ({ id: crypto.randomUUID(), kind: i.kind, shape: floorItemMeta(i.kind).shape, w: i.w, h: i.h, x: i.x, y: i.y, rotation: i.rotation }));
+        commitItems(plan.areaId, [...current, ...added].slice(0, MAX_ITEMS));
+      }
+      setImportPreview(null);
+      toast.success(`${rows.length} table${rows.length === 1 ? "" : "s"} added from your photo. Drag them into their exact place.`);
+    } catch (e) {
+      toast.error(friendlyError(e, "Couldn't create the tables."));
+    } finally {
+      setBusy("");
+    }
+  };
 
   const resize = async (factor, from = tableScale) => {
     if (busy === "zoom" || !activeArea || activeAreaId === UNASSIGNED) return;
@@ -1245,6 +1372,9 @@ export default function RestaurantTableLayoutPage() {
           onSubmit={saveArea}
         />
       ) : null}
+      {importPreview ? (
+        <ImportPreviewModal preview={importPreview} saving={busy === "import"} onClose={() => busy !== "import" && setImportPreview(null)} onCreate={createImported} />
+      ) : null}
       {addTableOpen ? (
         <AddTableModal
         areas={sortedAreas}
@@ -1441,6 +1571,20 @@ export default function RestaurantTableLayoutPage() {
                     <ZoomIn className="h-4 w-4" />
                   </button>
                 </div>
+                <label className={`inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-800 hover:bg-gray-50 ${busy === "import" ? "pointer-events-none opacity-60" : ""}`}>
+                  {busy === "import" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageUp className="h-4 w-4" />}
+                  {busy === "import" ? "Reading photo…" : "Import from photo"}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/heic"
+                    className="hidden"
+                    disabled={busy === "import"}
+                    onChange={(e) => {
+                      importPhoto(e.target.files?.[0]);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
                 <select
                   value=""
                   aria-label="Add a floor item"
