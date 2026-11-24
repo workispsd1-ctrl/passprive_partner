@@ -416,7 +416,7 @@ function ImportPreviewModal({ preview, onClose, onCreate, onChange, saving }) {
         {preview.tables.map((t, k) => (
           <div
             key={`t${k}`}
-            className={`absolute flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center border-2 border-[#FF4800] bg-white text-[9px] font-bold text-gray-900 ${shapeClass(t.shape)} ${t.shape === "rectangle" ? "w-10" : ""}`}
+            className={`absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center border-2 border-[#FF4800] bg-white text-[9px] font-bold text-gray-900 ${shapeClass(t.shape)} ${t.shape === "rectangle" ? "h-6 w-12" : "h-7 w-7"}`}
             style={{ left: `${t.x}%`, top: `${t.y}%` }}
             title={`${t.label || "Table"} · ${t.seats} seats`}
           >
