@@ -65,7 +65,7 @@ export async function POST(request) {
         .limit(2000),
       admin
         .from("restaurants")
-        .select("name,registered_name,brn,full_address,phone")
+        .select("name,registered_name,brn,vat_number,full_address,phone")
         .eq("id", restaurantId)
         .maybeSingle(),
     ]);
