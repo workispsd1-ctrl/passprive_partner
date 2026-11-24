@@ -377,7 +377,7 @@ function nextInArea(tables, areas, areaId) {
   return n;
 }
 
-function ImportPreviewModal({ preview, onClose, onCreate, saving }) {
+function ImportPreviewModal({ preview, onClose, onCreate, onChange, saving }) {
   const shapeClass = (shape) => (shape === "circle" ? "rounded-full" : "rounded-md");
   return (
     <Modal
@@ -401,7 +401,7 @@ function ImportPreviewModal({ preview, onClose, onCreate, saving }) {
         </div>
       }
     >
-      <p className="text-sm text-gray-600">Check the layout read from your photo. Your existing tables are not changed. After creating, drag anything into its exact place.</p>
+      <p className="text-sm text-gray-600">Check what was read from your photo and fix any number, shape or seat count below. Your existing tables are not changed. After creating, drag anything into its exact place.</p>
       <div className="relative mt-3 aspect-[16/10] w-full overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
         <img src={preview.photo} alt="" className="absolute inset-0 h-full w-full object-fill opacity-30" />
         {preview.items.map((i, k) => (
@@ -425,6 +425,53 @@ function ImportPreviewModal({ preview, onClose, onCreate, saving }) {
         ))}
       </div>
       <p className="mt-2 text-xs text-gray-500">Tables without a readable number get the next free number in this area.</p>
+      {preview.tables.length ? (
+        <div className="mt-3 divide-y divide-gray-100 rounded-xl border border-gray-200">
+          {preview.tables.map((t, k) => {
+            const set = (patch) => onChange({ ...preview, tables: preview.tables.map((x, i) => (i === k ? { ...x, ...patch } : x)) });
+            return (
+              <div key={`row${k}`} className="flex items-center gap-2 px-3 py-2">
+                <input
+                  value={t.label || ""}
+                  onChange={(e) => set({ label: e.target.value.slice(0, 40) || null })}
+                  placeholder="Auto"
+                  aria-label="Table number"
+                  className="h-9 w-20 rounded-lg border border-gray-200 px-2 text-sm font-semibold outline-none focus:border-gray-300"
+                />
+                <select
+                  value={t.shape}
+                  onChange={(e) => set({ shape: e.target.value })}
+                  aria-label="Shape"
+                  className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-sm outline-none"
+                >
+                  {SHAPES.map((sh) => (
+                    <option key={sh.value} value={sh.value}>
+                      {sh.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="ml-auto flex items-center rounded-lg border border-gray-200">
+                  <button type="button" aria-label="Fewer seats" onClick={() => set({ seats: Math.max(1, t.seats - 1) })} className="flex h-9 w-8 items-center justify-center text-gray-700 hover:bg-gray-50">
+                    <Minus className="h-3.5 w-3.5" />
+                  </button>
+                  <span className="w-14 text-center text-sm font-semibold text-gray-800">{t.seats} seats</span>
+                  <button type="button" aria-label="More seats" onClick={() => set({ seats: Math.min(30, t.seats + 1) })} className="flex h-9 w-8 items-center justify-center text-gray-700 hover:bg-gray-50">
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Remove this table"
+                  onClick={() => onChange({ ...preview, tables: preview.tables.filter((_, i) => i !== k) })}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-rose-50 hover:text-rose-600"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
     </Modal>
   );
 }
@@ -1373,7 +1420,7 @@ export default function RestaurantTableLayoutPage() {
         />
       ) : null}
       {importPreview ? (
-        <ImportPreviewModal preview={importPreview} saving={busy === "import"} onClose={() => busy !== "import" && setImportPreview(null)} onCreate={createImported} />
+        <ImportPreviewModal preview={importPreview} onChange={setImportPreview} saving={busy === "import"} onClose={() => busy !== "import" && setImportPreview(null)} onCreate={createImported} />
       ) : null}
       {addTableOpen ? (
         <AddTableModal
