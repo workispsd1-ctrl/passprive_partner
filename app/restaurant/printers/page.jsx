@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Pencil, Plus, Printer, Search, Trash2 } from "lucide-react";
+import { ImageUp, Loader2, Pencil, Plus, Printer, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { getActiveRestaurantId } from "@/lib/restaurant-partner/activeRestaurant";
@@ -33,6 +33,115 @@ async function printersApi(body) {
   const json = await res.json().catch(() => ({}));
   if (!res.ok || !json?.ok) throw new Error(json?.error || "Request failed.");
   return json;
+}
+
+async function receiptApi(body) {
+  const { data: sess } = await supabaseBrowser.auth.getSession();
+  const res = await fetch("/api/restaurant/receipt-settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${sess?.session?.access_token || ""}` },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json?.ok) throw new Error(json?.error || "Request failed.");
+  return json.settings;
+}
+
+function ReceiptDetails({ restaurantId }) {
+  const [settings, setSettings] = useState(null);
+  const [vat, setVat] = useState("");
+  const [busy, setBusy] = useState("");
+
+  useEffect(() => {
+    if (!restaurantId) return;
+    receiptApi({ action: "get", restaurant_id: restaurantId })
+      .then((next) => {
+        setSettings(next);
+        setVat(next.vat_number);
+      })
+      .catch((e) => toast.error(e.message));
+  }, [restaurantId]);
+
+  const run = async (key, body, done) => {
+    setBusy(key);
+    try {
+      const next = await receiptApi({ ...body, restaurant_id: restaurantId });
+      setSettings(next);
+      setVat(next.vat_number);
+      toast.success(done);
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const pickLogo = (file) => {
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) {
+      toast.error("The image is too large. Use one under 3 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => run("logo", { action: "upload_logo", image: String(reader.result || "") }, "Logo saved. It will print on all tickets and bills.");
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-4">
+      <h2 className="text-base font-semibold text-gray-900">Receipt details</h2>
+      <p className="text-sm text-gray-600">Your logo prints at the top of order receipts, bills and every other printout. The VAT number prints on the final invoice.</p>
+      {!settings ? (
+        <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-6 md:grid-cols-2">
+          <div>
+            <div className="text-sm font-medium text-gray-900">Logo</div>
+            <div className="mt-2 grid h-32 place-items-center rounded-xl border border-dashed border-gray-300 bg-gray-50 p-3">
+              {settings.logo ? (
+                <img src={settings.logo.png} alt="Printed logo preview" className="max-h-full max-w-full object-contain" />
+              ) : (
+                <span className="text-sm text-gray-500">No logo yet</span>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-gray-500">Preview of how it prints: black and white only. A dark logo on a white or transparent background prints best.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl bg-[#FF4800] px-4 text-sm font-semibold text-white">
+                {busy === "logo" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageUp className="h-4 w-4" />}
+                {settings.logo ? "Change logo" : "Upload logo"}
+                <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={Boolean(busy)} onChange={(e) => { pickLogo(e.target.files?.[0]); e.target.value = ""; }} />
+              </label>
+              {settings.logo ? (
+                <button
+                  type="button"
+                  disabled={Boolean(busy)}
+                  onClick={() => run("remove", { action: "remove_logo" }, "Logo removed.")}
+                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-gray-200 px-4 text-sm font-semibold text-gray-700"
+                >
+                  {busy === "remove" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Remove
+                </button>
+              ) : null}
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-900" htmlFor="vat-number">VAT number</label>
+            <input id="vat-number" className={`${inputCls} mt-2`} placeholder="e.g. 20497279" value={vat} onChange={(e) => setVat(e.target.value.replace(/\s+/g, "").slice(0, 20))} />
+            <p className="mt-1 text-xs text-gray-500">Printed on the final invoice with your BRN{settings.brn ? ` (${settings.brn})` : ""}.</p>
+            <button
+              type="button"
+              disabled={Boolean(busy) || vat === settings.vat_number}
+              onClick={() => run("vat", { action: "set_vat", vat_number: vat }, "VAT number saved.")}
+              className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl bg-gray-900 px-4 text-sm font-semibold text-white disabled:opacity-40"
+            >
+              {busy === "vat" ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Save VAT number
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 async function waitForPos(restaurantId, id) {
@@ -194,6 +303,8 @@ export default function PrintersPage() {
           <Plus className="h-4 w-4" /> Add printer
         </button>
       </div>
+
+      <ReceiptDetails restaurantId={restaurantId} />
 
       <div className="rounded-2xl border border-gray-200 bg-white p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

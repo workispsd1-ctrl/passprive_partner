@@ -1,3 +1,4 @@
+import { logoStamp } from "@/lib/server/receiptLogo";
 import { addBillItems, cancelBillItems, seatTable, setBillItemQty } from "@/lib/server/billItems";
 import { addGuest, setItemGuest } from "@/lib/server/billGuests";
 import { settleTableBill } from "@/lib/server/settleBill";
@@ -85,7 +86,7 @@ function menuSections(menuJson) {
 }
 
 async function liveTables({ admin, restaurantId, printKinds, lan = false }) {
-  const [tablesRes, ordersRes, merchantRes, printJobs, payRequests, printers, discovery] = await Promise.all([
+  const [tablesRes, ordersRes, merchantRes, printJobs, payRequests, printers, discovery, logoAt] = await Promise.all([
     admin
       .from("restaurant_table_layouts")
       .select("table_no, label, capacity")
@@ -108,6 +109,7 @@ async function liveTables({ admin, restaurantId, printKinds, lan = false }) {
     pendingPayRequests(admin, restaurantId).catch(() => []),
     lan ? activePrinters(admin, restaurantId).catch(() => []) : Promise.resolve([]),
     lan ? pendingDiscovery(admin, restaurantId).catch(() => []) : Promise.resolve([]),
+    logoStamp(admin, restaurantId).catch(() => null),
   ]);
   if (tablesRes.error) throw tablesRes.error;
   if (ordersRes.error) throw ordersRes.error;
@@ -116,7 +118,7 @@ async function liveTables({ admin, restaurantId, printKinds, lan = false }) {
   const promos = await heldPromos(admin, restaurantId, orders.map((o) => o.id));
   return {
     restaurant_id: restaurantId,
-    merchant: merchantRes.data || null,
+    merchant: merchantRes.data ? { ...merchantRes.data, ...(logoAt ? { logo_at: logoAt } : {}) } : null,
     print_jobs: printJobs,
     printers: printers.map((p) => ({ id: p.id, name: p.name, ip: p.ip, port: p.port, paper_mm: p.paper_mm, prints: p.prints, backup_printer_id: p.backup_printer_id || null, bottom_feed_mm: p.bottom_feed_mm || 0 })),
     discovery,
