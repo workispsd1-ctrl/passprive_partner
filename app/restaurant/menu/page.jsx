@@ -31,6 +31,7 @@ import {
 } from "@/lib/restaurantData";
 import ApplyToBranchesButton from "@/components/restaurant-dashboard/ApplyToBranchesButton";
 import { MENU_KINDS, menuAreas, sectionPlace } from "@/lib/menuAreas";
+import MenuImport from "@/components/restaurant-dashboard/MenuImport";
 import ModifierGroupsEditor, {
   VariantsEditor,
   cleanModifierGroups,
@@ -1157,7 +1158,18 @@ export default function RestaurantMenuPage() {
               : "Catalogue editing is hidden until premium is active."}
           </div>
 
-          <div className="mt-4 flex items-center gap-2">
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <MenuImport
+              restaurantId={restaurantId}
+              menu={menu}
+              areas={areas}
+              menuCardImages={menuCardImages}
+              disabled={!isSubscribed || saving}
+              onApply={async (next) => {
+                setMenu(next);
+                await saveMenu(next);
+              }}
+            />
             <button
               type="button"
               disabled={!isSubscribed}
