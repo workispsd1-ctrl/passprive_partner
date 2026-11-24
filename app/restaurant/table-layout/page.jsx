@@ -15,6 +15,7 @@ import {
   Move,
   Copy,
   RotateCw,
+  RotateCcw,
   ZoomIn,
   ZoomOut,
   Minus,
@@ -55,9 +56,9 @@ function round1(v) {
   return Math.round(v * 10) / 10;
 }
 
-function sizeForShape(shape) {
+function sizeForShape(shape, capacity = 4) {
   if (shape === "circle") return { w: 110, h: 110 };
-  if (shape === "rectangle") return { w: 156, h: 96 };
+  if (shape === "rectangle") return { w: 70 + 34 * Math.ceil(Math.max(2, Number(capacity) || 4) / 2), h: 78 };
   return { w: 124, h: 124 };
 }
 
@@ -104,8 +105,8 @@ function findFreeSpot(areaTables) {
   return { x: 50, y: 50 };
 }
 
-function TableShape({ shape, capacity, label, sublabel, scale = 1, className = "", style }) {
-  const size = sizeForShape(shape);
+function TableShape({ shape, capacity, label, sublabel, scale = 1, rotation = 0, className = "", style }) {
+  const size = sizeForShape(shape, capacity);
   const chairs = chairPositions(shape, capacity);
   return (
     <div
@@ -114,6 +115,7 @@ function TableShape({ shape, capacity, label, sublabel, scale = 1, className = "
         width: size.w * scale,
         height: size.h * scale,
         borderRadius: shape === "circle" ? 999 : 14 * scale,
+        transform: rotation ? `rotate(${rotation}deg)` : undefined,
         ...style,
       }}
     >
@@ -124,16 +126,18 @@ function TableShape({ shape, capacity, label, sublabel, scale = 1, className = "
           style={{ left: `${c.x}%`, top: `${c.y}%`, width: 14 * scale, height: 14 * scale }}
         />
       ))}
-      {label ? (
-        <div className="pointer-events-none max-w-[85%] truncate font-bold" style={{ fontSize: 13 * scale }}>
-          {label}
-        </div>
-      ) : null}
-      {sublabel ? (
-        <div className="pointer-events-none text-gray-500" style={{ fontSize: 11 * scale }}>
-          {sublabel}
-        </div>
-      ) : null}
+      <div className="pointer-events-none flex flex-col items-center" style={rotation ? { transform: `rotate(${-rotation}deg)` } : undefined}>
+        {label ? (
+          <div className="max-w-full truncate font-bold" style={{ fontSize: 13 * scale }}>
+            {label}
+          </div>
+        ) : null}
+        {sublabel ? (
+          <div className="text-gray-500" style={{ fontSize: 11 * scale }}>
+            {sublabel}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -705,19 +709,30 @@ function ConfirmModal({ open, title, description, confirmText, onConfirm, onClos
 }
 
 // Mounted per table (keyed by id), so the draft always starts from the selected table.
-function TableEditor({ table, areas, saving, onSave, onDelete, onClose }) {
-  const [draft, setDraft] = useState({
+function TableEditor({ table, areas, saving, onSave, onDelete, onClose, onPreview }) {
+  const start = {
     label: table.label,
     shape: table.shape,
     capacity: table.capacity,
     area_id: table.area_id || "",
-  });
+    rotation: Number(table.rotation) || 0,
+  };
+  const [draft, setDraft] = useState(start);
 
   const dirty =
     draft.label !== table.label ||
     draft.shape !== table.shape ||
     draft.capacity !== table.capacity ||
-    draft.area_id !== (table.area_id || "");
+    draft.area_id !== (table.area_id || "") ||
+    draft.rotation !== (Number(table.rotation) || 0);
+
+  useEffect(() => {
+    onPreview?.(dirty ? { shape: draft.shape, capacity: draft.capacity, rotation: draft.rotation, label: draft.label } : null);
+  }, [dirty, draft.shape, draft.capacity, draft.rotation, draft.label, onPreview]);
+
+  useEffect(() => () => onPreview?.(null), [onPreview]);
+
+  const turn = (by) => setDraft((d) => ({ ...d, rotation: (((d.rotation + by) % 360) + 360) % 360 }));
 
   const save = () =>
     onSave({
@@ -725,6 +740,7 @@ function TableEditor({ table, areas, saving, onSave, onDelete, onClose }) {
       shape: draft.shape,
       capacity: draft.capacity,
       area_id: draft.area_id || null,
+      rotation: draft.rotation,
     });
 
   return (
@@ -778,10 +794,34 @@ function TableEditor({ table, areas, saving, onSave, onDelete, onClose }) {
         <SeatPicker value={draft.capacity} onChange={(capacity) => setDraft((d) => ({ ...d, capacity }))} />
       </Field>
 
+      <Field label="Rotation">
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => turn(-45)} aria-label="Rotate left" className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 hover:bg-gray-50">
+            <RotateCcw className="h-4 w-4 text-gray-700" />
+          </button>
+          <span className="w-14 text-center text-sm font-semibold text-gray-800">{draft.rotation}°</span>
+          <button type="button" onClick={() => turn(45)} aria-label="Rotate right" className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 hover:bg-gray-50">
+            <RotateCw className="h-4 w-4 text-gray-700" />
+          </button>
+          {draft.rotation ? (
+            <button type="button" onClick={() => setDraft((d) => ({ ...d, rotation: 0 }))} className="ml-1 text-xs font-semibold text-gray-500 hover:text-gray-800">
+              Reset
+            </button>
+          ) : null}
+        </div>
+      </Field>
+
+      {dirty ? <p className="text-xs text-gray-500">Previewing on the plan. Save to keep it, or Cancel to undo.</p> : null}
+
       <div className="flex gap-2 pt-1">
         <PrimaryButton onClick={save} loading={saving} disabled={!dirty} className="flex-1">
           Save changes
         </PrimaryButton>
+        {dirty ? (
+          <SecondaryButton onClick={() => setDraft(start)} className="px-3">
+            Cancel
+          </SecondaryButton>
+        ) : null}
         <SecondaryButton
           onClick={onDelete}
           className="px-3 text-rose-600 hover:bg-rose-50"
@@ -807,6 +847,7 @@ export default function RestaurantTableLayoutPage() {
   const [areaModal, setAreaModal] = useState(null); // null | {} (add) | area (edit)
   const [addTableOpen, setAddTableOpen] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
+  const [editPreview, setEditPreview] = useState(null);
   const [confirm, setConfirm] = useState(null); // { type: "table" | "area", item }
   const [busy, setBusy] = useState("");
 
@@ -879,7 +920,7 @@ export default function RestaurantTableLayoutPage() {
           .order("sort_order", { ascending: true }),
         supabaseBrowser
           .from("restaurant_table_layouts")
-          .select("id, table_no, label, shape, capacity, pos_x, pos_y, area_id")
+          .select("id, table_no, label, shape, capacity, pos_x, pos_y, area_id, rotation")
           .eq("restaurant_id", rid)
           .order("table_no", { ascending: true }),
       ]);
@@ -894,6 +935,7 @@ export default function RestaurantTableLayoutPage() {
         capacity: CAPACITIES.includes(row.capacity) ? row.capacity : 4,
         pos_x: Number(row.pos_x) || 10,
         pos_y: Number(row.pos_y) || 10,
+        rotation: Number(row.rotation) || 0,
       }));
       setAreas(nextAreas);
       setTables(nextTables);
@@ -1102,7 +1144,7 @@ export default function RestaurantTableLayoutPage() {
         const { data, error } = await supabaseBrowser
           .from("restaurant_table_layouts")
           .insert(rows)
-          .select("id, table_no, label, shape, capacity, pos_x, pos_y, area_id");
+          .select("id, table_no, label, shape, capacity, pos_x, pos_y, area_id, rotation");
         if (error) throw error;
         setTables((prev) => [...prev, ...(data || []).map((r) => ({ ...r, pos_x: Number(r.pos_x), pos_y: Number(r.pos_y) }))]);
       }
@@ -1145,7 +1187,7 @@ export default function RestaurantTableLayoutPage() {
     e.stopPropagation();
     const areaId = activeAreaId;
     const start = tableScale;
-    const base = sizeForShape(table.shape).w * canvasScale * start;
+    const base = sizeForShape(table.shape, table.capacity).w * canvasScale * start;
     const startX = e.clientX;
     const startY = e.clientY;
     let factor = 1;
@@ -1269,7 +1311,7 @@ export default function RestaurantTableLayoutPage() {
       const { data, error } = await supabaseBrowser
         .from("restaurant_table_layouts")
         .insert({ restaurant_id: restaurantId, ...values, pos_x: spot.x, pos_y: spot.y })
-        .select("id, table_no, label, shape, capacity, pos_x, pos_y, area_id")
+        .select("id, table_no, label, shape, capacity, pos_x, pos_y, area_id, rotation")
         .single();
       if (error) throw error;
       const row = { ...data, pos_x: Number(data.pos_x), pos_y: Number(data.pos_y) };
@@ -1682,7 +1724,8 @@ export default function RestaurantTableLayoutPage() {
                 onSelect={setSelectedItemId}
               />
 
-              {areaTables.map((t) => {
+              {areaTables.map((saved) => {
+                const t = editPreview && selectedId === saved.id ? { ...saved, ...editPreview } : saved;
                 const isSelected = selectedId === t.id;
                 return (
                   <button
@@ -1706,6 +1749,7 @@ export default function RestaurantTableLayoutPage() {
                       label={t.label}
                       sublabel={`${t.capacity} seats`}
                       scale={canvasScale * tableScale}
+                      rotation={Number(t.rotation) || 0}
                       className={`transition-shadow ${
                         isSelected
                           ? "ring-2 ring-[#FF4800] shadow-[0_12px_28px_rgba(255,72,0,0.22)]"
@@ -1791,6 +1835,7 @@ export default function RestaurantTableLayoutPage() {
               onSave={saveTable}
               onDelete={() => setConfirm({ type: "table", item: selected })}
               onClose={() => setSelectedId(null)}
+              onPreview={setEditPreview}
             />
           )}
         </div>

@@ -59,7 +59,7 @@ export async function GET(request) {
         .order("table_no", { ascending: true });
 
     const [firstLayoutRes, areasRes, ordersRes] = await Promise.all([
-      loadLayout("id, table_no, label, shape, capacity, pos_x, pos_y, area_id, attached_to, attached_auto_release"),
+      loadLayout("id, table_no, label, shape, capacity, pos_x, pos_y, area_id, attached_to, attached_auto_release, rotation"),
       ctx.admin
         .from("restaurant_table_areas")
         .select("id, name, kind, sort_order, created_at, floor_objects, table_scale")
@@ -73,6 +73,7 @@ export async function GET(request) {
     ]);
 
     let layoutRes = firstLayoutRes;
+    if (layoutRes.error?.code === "42703") layoutRes = await loadLayout("id, table_no, label, shape, capacity, pos_x, pos_y, area_id, attached_to, attached_auto_release");
     if (layoutRes.error?.code === "42703") layoutRes = await loadLayout("id, table_no, label, shape, capacity, pos_x, pos_y, area_id");
     if (layoutRes.error?.code === "42703") layoutRes = await loadLayout("id, table_no, label, shape, capacity, pos_x, pos_y");
     if (layoutRes.error) return NextResponse.json({ ok: false, error: layoutRes.error.message }, { status: 400 });
