@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { setDiscount } from "@/lib/server/billDiscount";
 import { closeOnDeposit } from "@/lib/server/splitBill";
 import { correctMethod, printCorrected, reopenPaidBill } from "@/lib/server/billCorrection";
-import { cancelBillItems, setBillItemQty, setCovers } from "@/lib/server/billItems";
+import { cancelBillItems, setBillItemQty, setCovers, voidTable } from "@/lib/server/billItems";
 import { addGuest, setItemGuest } from "@/lib/server/billGuests";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { resolveCashierRestaurant } from "../_shared";
 import { bookingStatusChangeError, isBillClosed, isBillPaid, quickPaymentRecord } from "@/lib/server/tableBill";
-import { isQrPending, queueBillPrint, queueFinalPrint, queueOrderTicket, queuePartPrint, queueShareBillPrint } from "@/lib/server/printJobs";
+import { isQrPending, queueBillPrint, queueFinalPrint, queuePartPrint, queueShareBillPrint } from "@/lib/server/printJobs";
 import { payBillPart } from "@/lib/server/splitBill";
 import { changeTable } from "@/lib/server/changeTable";
 import { cancelPayRequest, createPayBills, createPayRequest, orderPayRequests } from "@/lib/server/payRequests";
@@ -263,62 +263,8 @@ export async function POST(request) {
     }
 
     if (action === "void_order") {
-      const orderId = String(body?.order_id || "").trim();
-      const reason = String(body?.reason || "").trim().slice(0, 120);
-      if (!orderId) return NextResponse.json({ ok: false, error: "order_id is required" }, { status: 400 });
-      if (!reason) return NextResponse.json({ ok: false, error: "A reason is required to cancel a table." }, { status: 400 });
-
-      const { data: row, error: rowErr } = await ctx.admin
-        .from("restaurant_table_bookings")
-        .select("id, table_no, guest_count, order_items, order_details, payment_status, booking_status, total_amount")
-        .eq("id", orderId)
-        .eq("restaurant_id", ctx.restaurantId)
-        .maybeSingle();
-      if (rowErr) return NextResponse.json({ ok: false, error: rowErr.message }, { status: 400 });
-      if (!row?.id) return NextResponse.json({ ok: false, error: "Order not found." }, { status: 404 });
-      if (isClosed(row)) return NextResponse.json({ ok: false, error: "This bill is already closed." }, { status: 400 });
-      if (Array.isArray(row.order_details?.payments) && row.order_details.payments.length) {
-        return NextResponse.json({ ok: false, error: "Part of this bill is already paid, so the table can't be cancelled." }, { status: 409 });
-      }
-      const { data: held } = await ctx.admin
-        .from("pos_payment_requests")
-        .select("id")
-        .eq("restaurant_id", ctx.restaurantId)
-        .eq("order_id", orderId)
-        .eq("status", "pending")
-        .limit(1);
-      if (held?.length) {
-        return NextResponse.json({ ok: false, error: "This bill is split. Cancel the split bills first." }, { status: 409 });
-      }
-
-      const prevDetails = row.order_details && typeof row.order_details === "object" ? row.order_details : {};
-      const { data: voided, error: upErr } = await ctx.admin
-        .from("restaurant_table_bookings")
-        .update({
-          booking_status: "CANCELLED",
-          order_details: { ...prevDetails, void: { reason, by: ctx.userId, at: new Date().toISOString(), total_amount: row.total_amount } },
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", orderId)
-        .eq("restaurant_id", ctx.restaurantId)
-        .not("payment_status", "in", "(PAID,COMPLETED)")
-        .neq("booking_status", "PAID")
-        .select("id");
-      if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 400 });
-      if (!voided?.length) return NextResponse.json({ ok: false, error: "This bill is already closed." }, { status: 409 });
-      if (Array.isArray(row.order_items) && row.order_items.length) {
-        await queueOrderTicket(ctx.admin, ctx.restaurantId, {
-          cancel: true,
-          by: ctx.userId,
-          orderId,
-          tableNo: row.table_no,
-          guests: row.guest_count,
-          lines: row.order_items,
-          notes: reason,
-          source: "Till",
-        }).catch((e) => console.error("cancel ticket failed", e?.message));
-      }
-      return NextResponse.json({ ok: true });
+      const { status, body: out } = await voidTable(ctx.admin, ctx.restaurantId, ctx.userId, body, "Till");
+      return NextResponse.json(out, { status });
     }
 
     if (action === "update_order_state") {

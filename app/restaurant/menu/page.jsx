@@ -388,6 +388,7 @@ export default function RestaurantMenuPage() {
 
   const [itemName, setItemName] = useState("");
   const [itemDesc, setItemDesc] = useState("");
+  const [itemLabel, setItemLabel] = useState("");
   const [itemPrice, setItemPrice] = useState("199");
   const [itemVeg, setItemVeg] = useState(false);
   const [itemBest, setItemBest] = useState(false);
@@ -832,6 +833,28 @@ export default function RestaurantMenuPage() {
     await saveMenu(nextMenu);
   };
 
+  const moveItem = async (sectionId, itemId, dir) => {
+    if (!isSubscribed) return;
+    const sections = (menu.sections || []).map((sec) => {
+      if (sec.id !== sectionId) return sec;
+      const items = [...(sec.items || [])];
+      const idx = items.findIndex((i) => i.id === itemId);
+      if (idx < 0) return sec;
+      const known = new Set((sec.subcategories || []).map((c) => c.id));
+      const groupOf = (i) => (known.has(i.subcategory_id) ? i.subcategory_id : null);
+      const group = groupOf(items[idx]);
+      let target = idx;
+      do target += dir === "up" ? -1 : 1;
+      while (target >= 0 && target < items.length && groupOf(items[target]) !== group);
+      if (target < 0 || target >= items.length) return sec;
+      [items[idx], items[target]] = [items[target], items[idx]];
+      return { ...sec, items };
+    });
+    const nextMenu = { ...menu, sections, updated_at: new Date().toISOString() };
+    setMenu(nextMenu);
+    await saveMenu(nextMenu);
+  };
+
   const uploadFilesToBucket = async (files) => {
     if (!restaurantId || !isSubscribed) return [];
     const itemId = editItemIdRef.current;
@@ -885,6 +908,7 @@ export default function RestaurantMenuPage() {
     editItemIdRef.current = null;
     setItemName("");
     setItemDesc("");
+    setItemLabel("");
     setItemPrice("199");
     setItemVeg(false);
     setItemBest(false);
@@ -914,6 +938,7 @@ export default function RestaurantMenuPage() {
 
     setItemName(item.name || "");
     setItemDesc(item.description || "");
+    setItemLabel(item.kitchen_label || "");
     setItemPrice(String(item.price ?? 0));
     setItemVeg(!!item.is_veg);
     setItemBest(!!item.is_bestseller);
@@ -956,6 +981,7 @@ export default function RestaurantMenuPage() {
         const payload = {
           id: idToUse,
           name,
+          kitchen_label: itemLabel.trim().slice(0, 40) || null,
           description: description || null,
           price: variants.length ? Math.min(...variants.map((v) => v.price)) : priceNum,
           variants,
@@ -1484,7 +1510,7 @@ export default function RestaurantMenuPage() {
                       {bucket.name && !bucket.items.length ? (
                         <div className="px-4 py-3 text-xs text-gray-400">No items yet.</div>
                       ) : null}
-                  {bucket.items.map((it) => {
+                  {bucket.items.map((it, ii) => {
                     const imgs = Array.isArray(it.image_urls) ? it.image_urls : [];
                     const first = imgs[0] || null;
 
@@ -1533,6 +1559,7 @@ export default function RestaurantMenuPage() {
                                 ) : null}
                               </div>
 
+                              {it.kitchen_label ? <div className="mt-0.5 text-xs font-semibold text-gray-700">Kitchen ticket: {it.kitchen_label}</div> : null}
                               <div className="text-xs text-gray-500 mt-0.5">{it.description || "—"}</div>
                               {(it.variants || []).length ? (
                                 <div className="mt-1 space-y-0.5">
@@ -1550,6 +1577,26 @@ export default function RestaurantMenuPage() {
                           </div>
 
                           <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              aria-label="Move up"
+                              title="Move up"
+                              onClick={() => moveItem(selectedSection.id, it.id, "up")}
+                              disabled={ii === 0}
+                              className="h-9 w-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center disabled:opacity-40"
+                            >
+                              <ChevronUp className="h-4 w-4 text-gray-700" />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label="Move down"
+                              title="Move down"
+                              onClick={() => moveItem(selectedSection.id, it.id, "down")}
+                              disabled={ii === bucket.items.length - 1}
+                              className="h-9 w-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center disabled:opacity-40"
+                            >
+                              <ChevronDown className="h-4 w-4 text-gray-700" />
+                            </button>
                             <button
                               type="button"
                               onClick={() => toggleAvailability(selectedSection.id, it.id)}
@@ -1729,6 +1776,17 @@ export default function RestaurantMenuPage() {
               placeholder="e.g. Chicken Manchuria"
               className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-300"
             />
+          </div>
+
+          <div className="col-span-12">
+            <label className="text-sm font-semibold text-gray-700">Kitchen label (optional)</label>
+            <input
+              value={itemLabel}
+              onChange={(e) => setItemLabel(e.target.value.slice(0, 40))}
+              placeholder={itemName ? `Printed on kitchen & bar tickets instead of “${itemName.trim()}”` : "Short name for kitchen & bar tickets, e.g. FRITES CHEDDAR"}
+              className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-300"
+            />
+            <p className="mt-1 text-xs text-gray-500">Shown on order tickets sent to the kitchen and bar. Bills and the customer menu keep the item name. Leave empty to use the item name.</p>
           </div>
 
           <div className="col-span-12">

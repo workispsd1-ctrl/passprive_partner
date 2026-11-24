@@ -17,13 +17,14 @@ import {
   RotateCw,
   ZoomIn,
   ZoomOut,
+  Minus,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { getActiveRestaurantId } from "@/lib/restaurant-partner/activeRestaurant";
 import { AREA_KINDS, areaKindMeta as kindMeta, sortAreas } from "@/lib/restaurant-partner/tableAreas";
 import { toast } from "sonner";
 import FloorItems from "@/components/restaurant-dashboard/FloorItems";
-import { FLOOR_ITEMS, floorItemMeta, snapPosition, zoomFloor } from "@/lib/restaurant-partner/floorItems";
+import { FLOOR_ITEMS, floorItemMeta, resizeTables, snapPosition, zoomFloor } from "@/lib/restaurant-partner/floorItems";
 
 const SHAPES = [
   { value: "circle", label: "Round" },
@@ -945,6 +946,25 @@ export default function RestaurantTableLayoutPage() {
 
   useEffect(() => () => clearTimeout(itemTimerRef.current), []);
 
+  const resize = async (factor) => {
+    if (busy === "zoom" || !activeArea || activeAreaId === UNASSIGNED) return;
+    const next = resizeTables(tableScale, factor);
+    if (!next) return;
+    const areaId = activeAreaId;
+    setBusy("zoom");
+    setAreas((prev) => prev.map((a) => (a.id === areaId ? { ...a, table_scale: next } : a)));
+    const { error: saveErr } = await supabaseBrowser
+      .from("restaurant_table_areas")
+      .update({ table_scale: next, updated_at: new Date().toISOString() })
+      .eq("id", areaId)
+      .eq("restaurant_id", restaurantId);
+    if (saveErr) {
+      toast.error(friendlyError(saveErr, "Couldn't save the table size."));
+      await load();
+    }
+    setBusy("");
+  };
+
   const zoom = async (factor) => {
     if (busy === "zoom" || !activeArea || activeAreaId === UNASSIGNED) return;
     const result = zoomFloor(areaTables, activeItems, tableScale, factor);
@@ -1351,7 +1371,29 @@ export default function RestaurantTableLayoutPage() {
             </div>
             {activeArea && activeArea.id !== UNASSIGNED ? (
               <div className="flex flex-wrap items-center gap-2">
-                <div className="flex h-9 items-center rounded-xl border border-gray-200 bg-white">
+                <div className="flex h-9 items-center rounded-xl border border-gray-200 bg-white" title="Make tables smaller or bigger without moving them">
+                  <span className="pl-3 pr-1 text-xs font-semibold text-gray-500">Table size</span>
+                  <button
+                    type="button"
+                    onClick={() => resize(0.9)}
+                    disabled={busy === "zoom"}
+                    aria-label="Smaller tables"
+                    className="flex h-9 w-9 items-center justify-center text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <Minus className="h-4 w-4" />
+                  </button>
+                  <span className="w-11 text-center text-xs font-semibold text-gray-700">{Math.round(tableScale * 100)}%</span>
+                  <button
+                    type="button"
+                    onClick={() => resize(1 / 0.9)}
+                    disabled={busy === "zoom"}
+                    aria-label="Bigger tables"
+                    className="flex h-9 w-9 items-center justify-center rounded-r-xl text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="flex h-9 items-center rounded-xl border border-gray-200 bg-white" title="Zoom the whole floor plan">
                   <button
                     type="button"
                     onClick={() => zoom(0.8)}
@@ -1361,7 +1403,7 @@ export default function RestaurantTableLayoutPage() {
                   >
                     <ZoomOut className="h-4 w-4" />
                   </button>
-                  <span className="w-11 text-center text-xs font-semibold text-gray-700">{Math.round(tableScale * 100)}%</span>
+                  <span className="px-1 text-xs font-semibold text-gray-500">Zoom</span>
                   <button
                     type="button"
                     onClick={() => zoom(1.25)}

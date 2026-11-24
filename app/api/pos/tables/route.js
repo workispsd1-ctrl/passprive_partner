@@ -1,6 +1,6 @@
 import { changeTable } from "@/lib/server/changeTable";
 import { logoStamp } from "@/lib/server/receiptLogo";
-import { addBillItems, cancelBillItems, seatTable, setBillItemQty, setCovers } from "@/lib/server/billItems";
+import { addBillItems, cancelBillItems, seatTable, setBillItemQty, setCovers, voidTable } from "@/lib/server/billItems";
 import { addGuest, setItemGuest } from "@/lib/server/billGuests";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { closeOnDeposit, payBillPart } from "@/lib/server/splitBill";
@@ -262,6 +262,11 @@ export async function POST(request) {
     if (action === "reopen") {
       const ok = await reopenBill(ctx, String(body.order_id || ""));
       return ok ? reply({ ok: true, ...(await liveTables(ctx)) }) : reply({ ok: false, error: "invalid_status" }, 409);
+    }
+
+    if (action === "void_order") {
+      const { status, body: out } = await voidTable(ctx.admin, ctx.restaurantId, ctx.userId, body, "POS");
+      return out.ok ? reply({ ok: true, ...(await liveTables(ctx)) }) : reply(out, status);
     }
 
     if (action === "change_table") {
