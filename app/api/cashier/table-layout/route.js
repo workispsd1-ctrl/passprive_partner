@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { setDiscount } from "@/lib/server/billDiscount";
 import { closeOnDeposit } from "@/lib/server/splitBill";
 import { correctMethod, printCorrected, reopenPaidBill } from "@/lib/server/billCorrection";
-import { cancelBillItems, setBillItemQty } from "@/lib/server/billItems";
+import { cancelBillItems, setBillItemQty, setCovers } from "@/lib/server/billItems";
 import { addGuest, setItemGuest } from "@/lib/server/billGuests";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { resolveCashierRestaurant } from "../_shared";
@@ -163,6 +163,11 @@ export async function POST(request) {
       (action === "update_order_state" && ["PAID", "COMPLETED"].includes(String(body?.payment_status || "").toUpperCase()));
     if (ctx.isWaiter && money) {
       return NextResponse.json({ ok: false, error: "Payments and cancelling tables are done by the cashier." }, { status: 403 });
+    }
+
+    if (action === "set_guests") {
+      const { status, body: out } = await setCovers(ctx.admin, ctx.restaurantId, body);
+      return NextResponse.json(out, { status });
     }
 
     if (action === "cancel_items") {

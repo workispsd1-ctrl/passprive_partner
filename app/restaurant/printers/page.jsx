@@ -99,16 +99,20 @@ function ReceiptDetails({ restaurantId }) {
         <div className="mt-4 grid gap-6 md:grid-cols-2">
           <div>
             <div className="text-sm font-medium text-gray-900">Logo</div>
-            <div className="mt-2 grid h-32 place-items-center rounded-xl border border-dashed border-gray-300 bg-gray-50 p-3">
+            <div className="mt-2 grid min-h-32 place-items-center rounded-xl border border-dashed border-gray-300 bg-gray-50 p-3">
               {settings.logo ? (
-                <div className="w-full max-w-[288px] rounded bg-white py-3 shadow-sm">
-                  <img src={settings.logo.png} alt="Printed logo preview" className="mx-auto" style={{ width: `${Math.min(100, (settings.logo.width / 576) * 100)}%`, imageRendering: "pixelated" }} />
+                <div className="w-full max-w-[320px] rounded bg-white px-3 py-3 font-mono text-[11px] leading-[16px] text-gray-900 shadow-sm">
+                  <img src={settings.logo.png} alt="Printed logo preview" className="mx-auto mb-1" style={{ width: `${Math.min(100, (settings.logo.width / 576) * 100)}%`, imageRendering: "pixelated" }} />
+                  <div className="text-center font-bold">FINAL BILL</div>
+                  <div className="text-center">Table 4 · 2 guests</div>
+                  <div className="my-1 border-t border-dashed border-gray-400" />
+                  <div className="flex justify-between"><span>1 Mojito</span><span>300.00</span></div>
                 </div>
               ) : (
                 <span className="text-sm text-gray-500">No logo yet</span>
               )}
             </div>
-            <p className="mt-1 text-xs text-gray-500">Shown at its printed size on an 80 mm receipt: about the size the restaurant name used to print. Black and white only; a dark logo on a white or transparent background prints best.</p>
+            <p className="mt-1 text-xs text-gray-500">Shown to scale on an 80 mm receipt: about the size the restaurant name used to print. Black and white only; a dark logo on a white or transparent background prints best.</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl bg-[#FF4800] px-4 text-sm font-semibold text-white">
                 {busy === "logo" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageUp className="h-4 w-4" />}
