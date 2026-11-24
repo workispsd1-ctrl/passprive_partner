@@ -159,7 +159,7 @@ export async function POST(request) {
     const body = await request.json();
     const action = String(body?.action || "").trim().toLowerCase();
 
-    const money = ["pay_part", "request_pos_payment", "split_to_pos", "cancel_pos_payment", "settle", "void_order", "set_discount", "close_on_deposit", "correct_method", "reopen_paid"].includes(action) ||
+    const money = ["pay_part", "request_pos_payment", "split_to_pos", "cancel_pos_payment", "settle", "void_order", "set_discount", "close_on_deposit", "close_offered", "correct_method", "reopen_paid"].includes(action) ||
       (action === "update_order_state" && ["PAID", "COMPLETED"].includes(String(body?.payment_status || "").toUpperCase()));
     if (ctx.isWaiter && money) {
       return NextResponse.json({ ok: false, error: "Payments and cancelling tables are done by the cashier." }, { status: 403 });
@@ -191,7 +191,7 @@ export async function POST(request) {
       return NextResponse.json(out, { status });
     }
 
-    if (action === "close_on_deposit") {
+    if (action === "close_on_deposit" || action === "close_offered") {
       const { status, body: out } = await closeOnDeposit(ctx.admin, ctx.restaurantId, ctx.userId, body);
       if (out.ok) await queueFinalPrint(ctx.admin, ctx.restaurantId, String(body?.order_id || "")).catch((e) => console.error("final bill print queue failed", e?.message));
       return NextResponse.json(out, { status });

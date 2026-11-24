@@ -2,7 +2,7 @@ import { logoStamp } from "@/lib/server/receiptLogo";
 import { addBillItems, cancelBillItems, seatTable, setBillItemQty } from "@/lib/server/billItems";
 import { addGuest, setItemGuest } from "@/lib/server/billGuests";
 import { settleTableBill } from "@/lib/server/settleBill";
-import { payBillPart } from "@/lib/server/splitBill";
+import { closeOnDeposit, payBillPart } from "@/lib/server/splitBill";
 import { finishDiscovery, pendingDiscovery } from "@/lib/server/printerDiscovery";
 import { activePrinters, claimPrintJob, confirmPrintJob, failPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, printHistory, queueBillPrint, queueFinalPrint, queuePartPrint, RECEIPT_KINDS, releasePrintJob, reprintJob, TICKET_KINDS, unleasePrintJob } from "@/lib/server/printJobs";
 import { setDiscount } from "@/lib/server/billDiscount";
@@ -311,6 +311,12 @@ export async function POST(request) {
     if (action === "confirm_print") {
       await confirmPrintJob(ctx.admin, ctx.restaurantId, ctx.terminalId, String(body.job_id || ""), body.printer_id || null);
       return reply({ ok: true });
+    }
+
+    if (action === "close_offered") {
+      const { status, body: out } = await closeOnDeposit(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      if (out.ok) await queueFinalPrint(ctx.admin, ctx.restaurantId, String(body.order_id || "")).catch((e) => console.error("final bill print queue failed", e?.message));
+      return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);
     }
 
     if (action === "fail_print") {
