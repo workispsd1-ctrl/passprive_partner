@@ -145,6 +145,7 @@ export async function POST(request) {
       note: it?.note,
       guest_id: it?.guest_id,
       discount_pct: it?.discount_pct,
+      discount_amount: it?.discount_amount,
       discount_reason: it?.discount_reason,
       ...(it?.custom_price != null && it?.custom_price !== "" ? { custom_price: it.custom_price } : {}),
     }));
