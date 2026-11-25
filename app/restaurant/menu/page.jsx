@@ -22,6 +22,7 @@ import {
   ExternalLink,
   SlidersHorizontal,
   MoveRight,
+  MoreHorizontal,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchRestaurantPlan, hasMenuCatalogue } from "@/lib/restaurant-partner/plan";
@@ -170,16 +171,95 @@ function itemBuckets(section, subId) {
   ];
 }
 
+function RowMenu({ label, onPick }) {
+  const [pos, setPos] = useState(null);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!pos) return undefined;
+    const close = () => setPos(null);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [pos]);
+  const open = () => {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    const width = 208;
+    const below = window.innerHeight - r.bottom > 110;
+    setPos({ left: Math.max(8, Math.min(r.right - width, window.innerWidth - width - 8)), top: below ? r.bottom + 4 : r.top - 100, width });
+  };
+  const pick = (mode) => {
+    setPos(null);
+    onPick(mode);
+  };
+  return (
+    <>
+      <button
+        ref={ref}
+        type="button"
+        title={`Copy or move ${label}`}
+        aria-label={`More actions for ${label}`}
+        onClick={() => (pos ? setPos(null) : open())}
+        className="h-9 w-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center"
+      >
+        <MoreHorizontal className="h-4 w-4 text-gray-700" />
+      </button>
+      {pos ? (
+        <div className="fixed inset-0 z-40" onClick={() => setPos(null)}>
+          <div
+            className="fixed rounded-xl border border-gray-200 bg-white py-1 shadow-lg"
+            style={{ left: pos.left, top: pos.top, width: pos.width }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button type="button" onClick={() => pick("copy")} className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-gray-800 hover:bg-gray-50">
+              <Copy className="h-4 w-4 text-gray-600" />
+              Copy to…
+            </button>
+            <button type="button" onClick={() => pick("move")} className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-gray-800 hover:bg-gray-50">
+              <MoveRight className="h-4 w-4 text-gray-600" />
+              Move to…
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function PlaceDialog({ place, areas, sections, saving, onClose, onSection, onItem }) {
   const section = sections.find((x) => x.id === place.sectionId);
   const here = section ? sectionPlace(areas, section) : null;
   const item = place.type === "item" ? (section?.items || []).find((i) => i.id === place.itemId) : null;
   const verb = place.mode === "copy" ? "Copy" : "Move";
   const [target, setTarget] = useState(null);
+  const [areaId, setAreaId] = useState(here?.areaId || areas[0]?.id);
+  const area = areas.find((a) => a.id === areaId) || areas[0];
+  const [kind, setKind] = useState(area?.menus.includes(here?.kind) ? here.kind : area?.menus[0]);
+  const [sectionId, setSectionId] = useState(null);
+  const [newName, setNewName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const pickArea = (id) => {
+    const a = areas.find((x) => x.id === id);
+    setAreaId(id);
+    setKind(a?.menus.includes(kind) ? kind : a?.menus[0]);
+    setSectionId(null);
+  };
+  const targetSections = sections.filter((x) => {
+    const p = sectionPlace(areas, x);
+    return p.areaId === area?.id && p.kind === kind;
+  });
   const spots = areas.flatMap((a) => a.menus.map((kind) => ({ key: `${a.id}:${kind}`, areaId: a.id, kind, label: areas.length > 1 ? `${a.name} · ${kind}` : kind })));
   const sameSpot = (sp) => here && sp.areaId === here.areaId && sp.kind === here.kind;
   const chosen = target;
-  const ready = place.type === "section" ? chosen && !(place.mode === "move" && sameSpot(chosen)) : chosen && !(place.mode === "move" && chosen === place.sectionId);
+  const ready =
+    place.type === "section"
+      ? chosen && !(place.mode === "move" && sameSpot(chosen))
+      : creating
+      ? !!newName.trim()
+      : !!sectionId && !(place.mode === "move" && sectionId === place.sectionId);
   return (
     <Dialog
       open
@@ -193,7 +273,11 @@ function PlaceDialog({ place, areas, sections, saving, onClose, onSection, onIte
           <button
             type="button"
             disabled={!ready || saving}
-            onClick={() => (place.type === "section" ? onSection(chosen.areaId, chosen.kind) : onItem(chosen))}
+            onClick={() =>
+              place.type === "section"
+                ? onSection(chosen.areaId, chosen.kind)
+                : onItem(creating ? { newName: newName.trim(), areaId: area.id, kind } : { sectionId, areaId: area.id, kind })
+            }
             className="h-10 flex-[2] rounded-xl bg-[#FF4800] text-sm font-semibold text-white disabled:opacity-50"
           >
             {saving ? "Saving…" : `${verb} here`}
@@ -218,7 +302,7 @@ function PlaceDialog({ place, areas, sections, saving, onClose, onSection, onIte
                   type="button"
                   disabled={place.mode === "move" && current}
                   onClick={() => setTarget(sp)}
-                  className={`h-12 rounded-xl border px-3 text-left text-sm font-semibold ${on ? "border-[#FF4800] bg-[#FFF7F4] text-[#FF4800]" : "border-gray-200 text-gray-800"} disabled:opacity-40`}
+                  className={`min-h-12 rounded-xl border px-3 py-2 text-left text-sm font-semibold break-words ${on ? "border-[#FF4800] bg-[#FFF7F4] text-[#FF4800]" : "border-gray-200 text-gray-800"} disabled:opacity-40`}
                 >
                   {sp.label}
                   {current ? <span className="ml-1 text-xs font-medium text-gray-400">(current)</span> : null}
@@ -228,40 +312,69 @@ function PlaceDialog({ place, areas, sections, saving, onClose, onSection, onIte
           </div>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           <p className="text-sm text-gray-600">
-            {place.mode === "copy" ? "A copy of this dish is added to the section you pick." : "The dish moves to the section you pick."}
+            {place.mode === "copy" ? "Pick the area, menu and section where a copy of this dish should go." : "Pick the area, menu and section this dish should move to."}
           </p>
-          {spots.map((sp) => {
-            const list = sections.filter((x) => {
-              const p = sectionPlace(areas, x);
-              return p.areaId === sp.areaId && p.kind === sp.kind;
-            });
-            if (!list.length) return null;
-            return (
-              <div key={sp.key}>
-                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">{sp.label}</div>
-                <div className="flex flex-wrap gap-2">
-                  {list.map((x) => {
-                    const on = chosen === x.id;
-                    const current = x.id === place.sectionId;
-                    return (
-                      <button
-                        key={x.id}
-                        type="button"
-                        disabled={place.mode === "move" && current}
-                        onClick={() => setTarget(x.id)}
-                        className={`rounded-xl border px-3 py-2 text-sm font-semibold ${on ? "border-[#FF4800] bg-[#FFF7F4] text-[#FF4800]" : "border-gray-200 text-gray-800"} disabled:opacity-40`}
-                      >
-                        {x.name}
-                        {current ? <span className="ml-1 text-xs font-medium text-gray-400">(current)</span> : null}
-                      </button>
-                    );
-                  })}
-                </div>
+          {areas.length > 1 ? (
+            <div>
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Area</div>
+              <div className="flex flex-wrap gap-2">
+                {areas.map((a) => (
+                  <button key={a.id} type="button" onClick={() => pickArea(a.id)} className={`rounded-xl border px-3 py-2 text-sm font-semibold ${a.id === area?.id ? "border-[#FF4800] bg-[#FFF7F4] text-[#FF4800]" : "border-gray-200 text-gray-800"} disabled:opacity-40`}>
+                    {a.name}
+                  </button>
+                ))}
               </div>
-            );
-          })}
+            </div>
+          ) : null}
+          {area?.menus.length > 1 ? (
+            <div>
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Menu</div>
+              <div className="flex flex-wrap gap-2">
+                {area.menus.map((k) => (
+                  <button key={k} type="button" onClick={() => { setKind(k); setSectionId(null); }} className={`rounded-xl border px-3 py-2 text-sm font-semibold ${k === kind ? "border-[#FF4800] bg-[#FFF7F4] text-[#FF4800]" : "border-gray-200 text-gray-800"} disabled:opacity-40`}>
+                    {k}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <div>
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Section</div>
+            <div className="flex flex-wrap gap-2">
+              {targetSections.map((x) => {
+                const current = x.id === place.sectionId;
+                return (
+                  <button
+                    key={x.id}
+                    type="button"
+                    disabled={place.mode === "move" && current}
+                    onClick={() => { setSectionId(x.id); setCreating(false); }}
+                    className={`rounded-xl border px-3 py-2 text-sm font-semibold ${!creating && x.id === sectionId ? "border-[#FF4800] bg-[#FFF7F4] text-[#FF4800]" : "border-gray-200 text-gray-800"} disabled:opacity-40`}
+                  >
+                    {x.name}
+                    {current ? <span className="ml-1 text-xs font-medium text-gray-400">(current)</span> : null}
+                  </button>
+                );
+              })}
+              <button type="button" onClick={() => { setCreating(true); setSectionId(null); }} className={`rounded-xl border px-3 py-2 text-sm font-semibold ${creating ? "border-[#FF4800] bg-[#FFF7F4] text-[#FF4800]" : "border-gray-200 text-gray-800"} disabled:opacity-40`}>
+                + New section
+              </button>
+            </div>
+            {!targetSections.length && !creating ? (
+              <p className="mt-2 text-xs text-gray-500">No sections here yet. Create a new one.</p>
+            ) : null}
+            {creating ? (
+              <input
+                autoFocus
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="New section name"
+                className="mt-2 h-10 w-full rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-[#FF4800]"
+              />
+            ) : null}
+          </div>
         </div>
       )}
     </Dialog>
@@ -567,13 +680,17 @@ export default function RestaurantMenuPage() {
     switchMenuTab(areaId, kind);
   };
 
-  const placeItem = async (fromSectionId, itemId, mode, toSectionId) => {
+  const placeItem = async (fromSectionId, itemId, mode, target) => {
     if (!isSubscribed) return;
     const from = (menu.sections || []).find((x) => x.id === fromSectionId);
     const item = (from?.items || []).find((i) => i.id === itemId);
-    if (!item || (mode === "move" && fromSectionId === toSectionId)) return;
+    const fresh = target.newName
+      ? { id: uid(), name: target.newName, description: null, group: target.kind, menu_area_id: target.areaId, comment_presets: [], subcategories: [], items: [] }
+      : null;
+    const toSectionId = fresh ? fresh.id : target.sectionId;
+    if (!item || !toSectionId || (mode === "move" && fromSectionId === toSectionId)) return;
     const moved = { ...item, ...(mode === "copy" ? { id: uid() } : {}), subcategory_id: fromSectionId === toSectionId ? item.subcategory_id : null };
-    const sections = (menu.sections || []).map((x) => {
+    const sections = [...(menu.sections || []), ...(fresh ? [fresh] : [])].map((x) => {
       let items = x.items || [];
       if (mode === "move" && x.id === fromSectionId) items = items.filter((i) => i.id !== itemId);
       if (x.id === toSectionId) items = [...items, moved];
@@ -583,6 +700,7 @@ export default function RestaurantMenuPage() {
     setMenu(nextMenu);
     setPlaceModal(null);
     await saveMenu(nextMenu);
+    switchMenuTab(target.areaId, target.kind);
   };
 
   const menuCardImages = useMemo(() => getMenuImageUrls(menu), [menu]);
@@ -1504,9 +1622,9 @@ export default function RestaurantMenuPage() {
                             onKeyDown={(e) => {
                               if (e.key === "Enter" || e.key === " ") selectSection(s.id);
                             }}
-                            className="flex-1 cursor-pointer select-none"
+                            className="min-w-0 flex-1 cursor-pointer select-none"
                           >
-                            <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                            <div className="flex items-center gap-2 text-sm font-semibold text-gray-900 break-words">
                               {s.name}
                             </div>
                             <div className="text-xs text-gray-500">
@@ -1514,7 +1632,7 @@ export default function RestaurantMenuPage() {
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-1">
+                          <div className="flex shrink-0 items-center gap-1">
                             <button
                               type="button"
                               onClick={() => setSubDialog({ sectionId: s.id, id: null, name: "" })}
@@ -1540,24 +1658,7 @@ export default function RestaurantMenuPage() {
                             >
                               <ChevronDown className="h-4 w-4 text-gray-700" />
                             </button>
-                            <button
-                              type="button"
-                              title="Copy to another area"
-                              aria-label="Copy section"
-                              onClick={() => setPlaceModal({ type: "section", mode: "copy", sectionId: s.id })}
-                              className="h-9 w-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center"
-                            >
-                              <Copy className="h-4 w-4 text-gray-700" />
-                            </button>
-                            <button
-                              type="button"
-                              title="Move to another area or menu"
-                              aria-label="Move section"
-                              onClick={() => setPlaceModal({ type: "section", mode: "move", sectionId: s.id })}
-                              className="h-9 w-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center"
-                            >
-                              <MoveRight className="h-4 w-4 text-gray-700" />
-                            </button>
+                            <RowMenu label="section" onPick={(M) => setPlaceModal({ type: "section", mode: M, sectionId: s.id })} />
                             <button
                               type="button"
                               onClick={() => openEditSection(s)}
@@ -1681,17 +1782,17 @@ export default function RestaurantMenuPage() {
                     return (
                       <div key={it.id} className="px-4 py-3 hover:bg-gray-50">
                         <div className="flex items-start justify-between gap-4">
-                          <div className="flex items-start gap-3">
-                            <div className="h-12 w-12 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden relative">
+                          <div className="flex min-w-0 flex-1 items-start gap-3">
+                            <div className="h-12 w-12 shrink-0 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden relative">
                               {first ? <img src={first} alt={it.name} className="h-full w-full object-cover" /> : <ImageIcon className="h-5 w-5 text-gray-400" />}
                               {imgs.length > 1 ? (
                                 <span className="absolute bottom-1 right-1 rounded-full bg-black/70 text-white text-[10px] px-1.5 py-0.5">+{imgs.length - 1}</span>
                               ) : null}
                             </div>
 
-                            <div>
+                            <div className="min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <div className="text-sm font-semibold text-gray-900">{it.name}</div>
+                                <div className="text-sm font-semibold text-gray-900 break-words">{it.name}</div>
                                 {it.is_bestseller ? (
                                   <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
                                     <BadgeCheck className="h-3.5 w-3.5" />
@@ -1740,7 +1841,7 @@ export default function RestaurantMenuPage() {
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
+                          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                             <button
                               type="button"
                               aria-label="Move up"
@@ -1769,24 +1870,7 @@ export default function RestaurantMenuPage() {
                               {it.is_available === false ? <Eye className="h-4 w-4 text-gray-700" /> : <EyeOff className="h-4 w-4 text-gray-700" />}
                             </button>
 
-                            <button
-                              type="button"
-                              title="Copy to another section"
-                              aria-label="Copy dish"
-                              onClick={() => setPlaceModal({ type: "item", mode: "copy", sectionId: selectedSection.id, itemId: it.id })}
-                              className="h-9 w-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center"
-                            >
-                              <Copy className="h-4 w-4 text-gray-700" />
-                            </button>
-                            <button
-                              type="button"
-                              title="Move to another section"
-                              aria-label="Move dish"
-                              onClick={() => setPlaceModal({ type: "item", mode: "move", sectionId: selectedSection.id, itemId: it.id })}
-                              className="h-9 w-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center"
-                            >
-                              <MoveRight className="h-4 w-4 text-gray-700" />
-                            </button>
+                            <RowMenu label="dish" onPick={(M) => setPlaceModal({ type: "item", mode: M, sectionId: selectedSection.id, itemId: it.id })} />
                             <button
                               type="button"
                               onClick={() => openEditItem(it)}
@@ -1843,7 +1927,7 @@ export default function RestaurantMenuPage() {
           saving={saving}
           onClose={() => setPlaceModal(null)}
           onSection={(areaId, kind) => placeSection(placeModal.sectionId, placeModal.mode, areaId, kind)}
-          onItem={(toSectionId) => placeItem(placeModal.sectionId, placeModal.itemId, placeModal.mode, toSectionId)}
+          onItem={(target) => placeItem(placeModal.sectionId, placeModal.itemId, placeModal.mode, target)}
         />
       ) : null}
 
