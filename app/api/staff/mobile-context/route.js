@@ -1,3 +1,4 @@
+import { onlinePosTerminals } from "@/lib/server/payRequests";
 import { listWaiters, WAITER_ROLES } from "@/lib/server/waiters";
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
@@ -123,6 +124,7 @@ export async function POST(request) {
       tables: areaTables,
       open_orders: openOrders,
       waiters: await listWaiters(admin, restaurantId).catch(() => []),
+      pos_terminals: await onlinePosTerminals(admin, restaurantId).catch(() => []),
       me: { id: userId, waiter: WAITER_ROLES.includes(String(staffRole || "")) },
     });
   } catch (error) {

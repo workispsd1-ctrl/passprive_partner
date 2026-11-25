@@ -1,7 +1,7 @@
 import { listWaiters, resolveWaiter, WAITER_ROLES } from "@/lib/server/waiters";
 import { changeTable } from "@/lib/server/changeTable";
 import { logoStamp } from "@/lib/server/receiptLogo";
-import { addBillItems, cancelBillItems, seatTable, setBillItemQty, setCovers, voidTable } from "@/lib/server/billItems";
+import { addBillItems, cancelBillItems, seatTable, setBillItemQty, setCovers, voidTable, cancelGuest } from "@/lib/server/billItems";
 import { addGuest, setItemGuest } from "@/lib/server/billGuests";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { closeOnDeposit, payBillPart } from "@/lib/server/splitBill";
@@ -90,7 +90,16 @@ function menuSections(menuJson) {
 
 const POS_BACKUP_MS = 20 * 1000;
 
-async function liveTables({ admin, restaurantId, printKinds, lan = false }) {
+async function liveTables({ admin, restaurantId, printKinds, lan = false, terminalId = null }) {
+  if (terminalId) {
+    const cut = new Date(Date.now() - 60 * 1000).toISOString();
+    await admin
+      .from("pos_terminals")
+      .update({ last_seen_at: new Date().toISOString() })
+      .eq("id", terminalId)
+      .or(`last_seen_at.is.null,last_seen_at.lt.${cut}`)
+      .then(() => null, () => null);
+  }
   const [tablesRes, ordersRes, merchantRes, printJobs, payRequests, printers, discovery, logoAt] = await Promise.all([
     admin
       .from("restaurant_table_layouts")
@@ -111,7 +120,7 @@ async function liveTables({ admin, restaurantId, printKinds, lan = false }) {
       .eq("id", restaurantId)
       .maybeSingle(),
     pendingPrintJobs(admin, restaurantId, printKinds, lan, { minAgeMs: POS_BACKUP_MS }).catch(() => []),
-    pendingPayRequests(admin, restaurantId).catch(() => []),
+    pendingPayRequests(admin, restaurantId, terminalId).catch(() => []),
     lan ? activePrinters(admin, restaurantId).catch(() => []) : Promise.resolve([]),
     lan ? pendingDiscovery(admin, restaurantId).catch(() => []) : Promise.resolve([]),
     logoStamp(admin, restaurantId).catch(() => null),
@@ -420,6 +429,11 @@ export async function POST(request) {
     }
 
     if (action === "promo_due") return reply({ ok: true, ...(await promoDue(ctx.admin, ctx.restaurantId)) });
+
+    if (action === "cancel_guest") {
+      const { status, body: out } = await cancelGuest(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);
+    }
 
     if (action === "add_guest" || action === "set_item_guest") {
       const { status, body: out } = action === "add_guest"

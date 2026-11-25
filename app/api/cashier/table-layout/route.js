@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { setDiscount } from "@/lib/server/billDiscount";
 import { closeOnDeposit } from "@/lib/server/splitBill";
 import { cancelPaidBill, correctMethod, printCorrected, reopenPaidBill } from "@/lib/server/billCorrection";
-import { cancelBillItems, setBillItemQty, setCovers, voidTable } from "@/lib/server/billItems";
+import { cancelBillItems, setBillItemQty, setCovers, voidTable, cancelGuest } from "@/lib/server/billItems";
 import { addGuest, setItemGuest } from "@/lib/server/billGuests";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { resolveCashierRestaurant } from "../_shared";
@@ -160,10 +160,10 @@ export async function POST(request) {
     const body = await request.json();
     const action = String(body?.action || "").trim().toLowerCase();
 
-    const money = ["pay_part", "request_pos_payment", "split_to_pos", "cancel_pos_payment", "settle", "void_order", "set_discount", "close_on_deposit", "close_offered", "correct_method", "reopen_paid", "cancel_paid"].includes(action) ||
+    const money = ["pay_part", "request_pos_payment", "split_to_pos", "cancel_pos_payment", "settle", "close_on_deposit", "close_offered", "correct_method", "reopen_paid", "cancel_paid"].includes(action) ||
       (action === "update_order_state" && ["PAID", "COMPLETED"].includes(String(body?.payment_status || "").toUpperCase()));
     if (ctx.isWaiter && money) {
-      return NextResponse.json({ ok: false, error: "Payments and cancelling tables are done by the cashier." }, { status: 403 });
+      return NextResponse.json({ ok: false, error: "Payments are taken by the cashier." }, { status: 403 });
     }
 
     if (action === "set_guests") {
@@ -210,6 +210,11 @@ export async function POST(request) {
 
     if (action === "set_discount") {
       const { status, body: out } = await setDiscount(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      return NextResponse.json(out, { status });
+    }
+
+    if (action === "cancel_guest") {
+      const { status, body: out } = await cancelGuest(ctx.admin, ctx.restaurantId, ctx.userId, body);
       return NextResponse.json(out, { status });
     }
 
@@ -277,14 +282,14 @@ export async function POST(request) {
       const orderId = String(body?.order_id || "").trim();
       const nextBookingStatus = String(body?.booking_status || "").trim().toUpperCase();
       const nextPaymentStatus = String(body?.payment_status || "").trim().toUpperCase();
-      const allowedBooking = new Set(["COMPLETED"]);
+      const allowedBooking = new Set(["COMPLETED", "PLACED"]);
       const allowedPayment = new Set(["PENDING", "PAID", "COMPLETED"]);
       if (!orderId) return NextResponse.json({ ok: false, error: "order_id is required" }, { status: 400 });
       if (!nextBookingStatus && !nextPaymentStatus) {
         return NextResponse.json({ ok: false, error: "booking_status or payment_status is required" }, { status: 400 });
       }
       if (nextBookingStatus && !allowedBooking.has(nextBookingStatus)) {
-        return NextResponse.json({ ok: false, error: "The till can only mark a table completed." }, { status: 400 });
+        return NextResponse.json({ ok: false, error: "The till can only mark a table completed or move it back to in progress." }, { status: 400 });
       }
       if (nextPaymentStatus && !allowedPayment.has(nextPaymentStatus)) {
         return NextResponse.json({ ok: false, error: "Invalid payment_status" }, { status: 400 });
@@ -303,6 +308,19 @@ export async function POST(request) {
       if (!row) return NextResponse.json({ ok: false, error: "Order not found." }, { status: 404 });
       const blocked = bookingStatusChangeError(row, nextBookingStatus, nextPaymentStatus);
       if (blocked) return NextResponse.json({ ok: false, error: blocked }, { status: 409 });
+      if (nextBookingStatus === "PLACED") {
+        if (nextPaymentStatus || !["COMPLETED", "SERVED"].includes(String(row.booking_status || "").toUpperCase()) || isBillPaid(row)) {
+          return NextResponse.json({ ok: false, error: "Only tables waiting for payment can go back to in progress." }, { status: 409 });
+        }
+        const { data: waiting } = await ctx.admin
+          .from("pos_payment_requests")
+          .select("id")
+          .eq("restaurant_id", ctx.restaurantId)
+          .eq("order_id", orderId)
+          .eq("status", "pending")
+          .limit(1);
+        if (waiting?.length) return NextResponse.json({ ok: false, error: "This bill is waiting on the POS. Cancel that payment first." }, { status: 409 });
+      }
 
       if (nextPaymentStatus === "PAID" || nextPaymentStatus === "COMPLETED") {
         if (Number(row.total_amount || 0) <= 0) {

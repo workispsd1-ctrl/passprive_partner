@@ -140,11 +140,12 @@ export async function POST(request) {
       guest_id: it?.guest_id,
       discount_pct: it?.discount_pct,
       discount_reason: it?.discount_reason,
+      ...(it?.custom_price != null && it?.custom_price !== "" ? { custom_price: it.custom_price } : {}),
     }));
-    const discountError = discountProblem(rawLines, !ctx.isWaiter);
+    const discountError = discountProblem(rawLines, true);
     if (discountError) return NextResponse.json({ ok: false, error: discountError }, { status: 400 });
     const index = menuIndex(menuRow?.menu_json);
-    const priced = priceLines(rawLines, index, { allowDiscount: !ctx.isWaiter });
+    const priced = priceLines(rawLines, index, { allowDiscount: true });
     if (!priced) {
       return NextResponse.json({ ok: false, error: "Some items are no longer on the menu. Refresh and try again." }, { status: 400 });
     }
@@ -176,7 +177,7 @@ export async function POST(request) {
         const guests = guestsOf(openExisting);
         const prevDetails = openExisting.order_details && typeof openExisting.order_details === "object" ? openExisting.order_details : {};
         const bill = billPct(prevDetails);
-        const pricedGuest = guests.length ? priceLines(rawLines, index, { guests, allowDiscount: !ctx.isWaiter })?.lines || normalizedItems : normalizedItems;
+        const pricedGuest = guests.length ? priceLines(rawLines, index, { guests, allowDiscount: true })?.lines || normalizedItems : normalizedItems;
         const guestLines = bill ? pricedGuest.map((l) => priceLine(l, bill)) : pricedGuest;
         const mergedItems = mergeLines(openExisting.order_items, guestLines);
         const sums = totalsOf(mergedItems);

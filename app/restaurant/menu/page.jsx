@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import QRCode from "qrcode";
 import {
   Plus,
@@ -677,7 +678,14 @@ export default function RestaurantMenuPage() {
     setMenu(nextMenu);
     setPlaceModal(null);
     await saveMenu(nextMenu);
-    switchMenuTab(areaId, kind);
+    const area = areas.find((a) => a.id === areaId);
+    const where = `${areas.length > 1 && area ? `${area.name} · ` : ""}${kind}`;
+    if (mode === "move") {
+      switchMenuTab(areaId, kind);
+      toast.success(`“${src.name}” moved to ${where}`);
+    } else {
+      toast.success(`“${src.name}” copied to ${where}`);
+    }
   };
 
   const placeItem = async (fromSectionId, itemId, mode, target) => {
@@ -700,7 +708,10 @@ export default function RestaurantMenuPage() {
     setMenu(nextMenu);
     setPlaceModal(null);
     await saveMenu(nextMenu);
-    switchMenuTab(target.areaId, target.kind);
+    const area = areas.find((a) => a.id === target.areaId);
+    const sectionName = fresh ? fresh.name : (menu.sections || []).find((x) => x.id === toSectionId)?.name || "";
+    const where = [areas.length > 1 && area ? area.name : "", target.kind, sectionName].filter(Boolean).join(" · ");
+    toast.success(`“${item.name || "Dish"}” ${mode === "copy" ? "copied" : "moved"} to ${where}`);
   };
 
   const menuCardImages = useMemo(() => getMenuImageUrls(menu), [menu]);
