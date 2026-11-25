@@ -21,6 +21,7 @@ import {
   Download,
   ExternalLink,
   SlidersHorizontal,
+  MoveRight,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchRestaurantPlan, hasMenuCatalogue } from "@/lib/restaurant-partner/plan";
@@ -167,6 +168,104 @@ function itemBuckets(section, subId) {
     { id: "", name: null, items: items.filter((i) => !known.has(i.subcategory_id)) },
     ...subcats.map((c) => ({ id: c.id, name: c.name, items: items.filter((i) => i.subcategory_id === c.id) })),
   ];
+}
+
+function PlaceDialog({ place, areas, sections, saving, onClose, onSection, onItem }) {
+  const section = sections.find((x) => x.id === place.sectionId);
+  const here = section ? sectionPlace(areas, section) : null;
+  const item = place.type === "item" ? (section?.items || []).find((i) => i.id === place.itemId) : null;
+  const verb = place.mode === "copy" ? "Copy" : "Move";
+  const [target, setTarget] = useState(null);
+  const spots = areas.flatMap((a) => a.menus.map((kind) => ({ key: `${a.id}:${kind}`, areaId: a.id, kind, label: areas.length > 1 ? `${a.name} · ${kind}` : kind })));
+  const sameSpot = (sp) => here && sp.areaId === here.areaId && sp.kind === here.kind;
+  const chosen = target;
+  const ready = place.type === "section" ? chosen && !(place.mode === "move" && sameSpot(chosen)) : chosen && !(place.mode === "move" && chosen === place.sectionId);
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title={`${verb} ${place.type === "section" ? `“${section?.name || "section"}”` : `“${item?.name || "dish"}”`}`}
+      footer={
+        <div className="flex gap-2">
+          <button type="button" onClick={onClose} className="h-10 flex-1 rounded-xl border border-gray-200 text-sm font-semibold">
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!ready || saving}
+            onClick={() => (place.type === "section" ? onSection(chosen.areaId, chosen.kind) : onItem(chosen))}
+            className="h-10 flex-[2] rounded-xl bg-[#FF4800] text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {saving ? "Saving…" : `${verb} here`}
+          </button>
+        </div>
+      }
+    >
+      {place.type === "section" ? (
+        <div className="space-y-2">
+          <p className="text-sm text-gray-600">
+            {place.mode === "copy"
+              ? "A copy of this section and all its dishes is added to the area you pick. Changes to one copy don't affect the other."
+              : "The section and all its dishes move to the area and menu you pick."}
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {spots.map((sp) => {
+              const on = chosen?.key === sp.key;
+              const current = sameSpot(sp);
+              return (
+                <button
+                  key={sp.key}
+                  type="button"
+                  disabled={place.mode === "move" && current}
+                  onClick={() => setTarget(sp)}
+                  className={`h-12 rounded-xl border px-3 text-left text-sm font-semibold ${on ? "border-[#FF4800] bg-[#FFF7F4] text-[#FF4800]" : "border-gray-200 text-gray-800"} disabled:opacity-40`}
+                >
+                  {sp.label}
+                  {current ? <span className="ml-1 text-xs font-medium text-gray-400">(current)</span> : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600">
+            {place.mode === "copy" ? "A copy of this dish is added to the section you pick." : "The dish moves to the section you pick."}
+          </p>
+          {spots.map((sp) => {
+            const list = sections.filter((x) => {
+              const p = sectionPlace(areas, x);
+              return p.areaId === sp.areaId && p.kind === sp.kind;
+            });
+            if (!list.length) return null;
+            return (
+              <div key={sp.key}>
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">{sp.label}</div>
+                <div className="flex flex-wrap gap-2">
+                  {list.map((x) => {
+                    const on = chosen === x.id;
+                    const current = x.id === place.sectionId;
+                    return (
+                      <button
+                        key={x.id}
+                        type="button"
+                        disabled={place.mode === "move" && current}
+                        onClick={() => setTarget(x.id)}
+                        className={`rounded-xl border px-3 py-2 text-sm font-semibold ${on ? "border-[#FF4800] bg-[#FFF7F4] text-[#FF4800]" : "border-gray-200 text-gray-800"} disabled:opacity-40`}
+                      >
+                        {x.name}
+                        {current ? <span className="ml-1 text-xs font-medium text-gray-400">(current)</span> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Dialog>
+  );
 }
 
 function Dialog({ open, onClose, title, children, footer }) {
@@ -414,6 +513,7 @@ export default function RestaurantMenuPage() {
   const [menuAreaId, setMenuAreaId] = useState("");
   const [menuTab, setMenuTab] = useState("Kitchen");
   const [areaModal, setAreaModal] = useState(null);
+  const [placeModal, setPlaceModal] = useState(null);
   const currentArea = areas.find((a) => a.id === menuAreaId) || areas[0];
   const currentKind = currentArea.menus.includes(menuTab) ? menuTab : currentArea.menus[0];
   const inTab = (s, areaId, kind) => {
@@ -451,6 +551,40 @@ export default function RestaurantMenuPage() {
     await saveMenu(nextMenu);
     switchMenuTab(list[0].id, list[0].menus[0]);
   };
+  const placeSection = async (sectionId, mode, areaId, kind) => {
+    if (!isSubscribed) return;
+    const src = (menu.sections || []).find((x) => x.id === sectionId);
+    if (!src) return;
+    const placed = { menu_area_id: areaId, group: kind };
+    const sections =
+      mode === "move"
+        ? (menu.sections || []).map((x) => (x.id === sectionId ? { ...x, ...placed } : x))
+        : [...(menu.sections || []), { ...src, ...placed, id: uid(), items: (src.items || []).map((i) => ({ ...i, id: uid() })) }];
+    const nextMenu = { ...menu, sections, updated_at: new Date().toISOString() };
+    setMenu(nextMenu);
+    setPlaceModal(null);
+    await saveMenu(nextMenu);
+    switchMenuTab(areaId, kind);
+  };
+
+  const placeItem = async (fromSectionId, itemId, mode, toSectionId) => {
+    if (!isSubscribed) return;
+    const from = (menu.sections || []).find((x) => x.id === fromSectionId);
+    const item = (from?.items || []).find((i) => i.id === itemId);
+    if (!item || (mode === "move" && fromSectionId === toSectionId)) return;
+    const moved = { ...item, ...(mode === "copy" ? { id: uid() } : {}), subcategory_id: fromSectionId === toSectionId ? item.subcategory_id : null };
+    const sections = (menu.sections || []).map((x) => {
+      let items = x.items || [];
+      if (mode === "move" && x.id === fromSectionId) items = items.filter((i) => i.id !== itemId);
+      if (x.id === toSectionId) items = [...items, moved];
+      return items === x.items ? x : { ...x, items };
+    });
+    const nextMenu = { ...menu, sections, updated_at: new Date().toISOString() };
+    setMenu(nextMenu);
+    setPlaceModal(null);
+    await saveMenu(nextMenu);
+  };
+
   const menuCardImages = useMemo(() => getMenuImageUrls(menu), [menu]);
 
   const selectedSection = useMemo(() => {
@@ -1408,6 +1542,24 @@ export default function RestaurantMenuPage() {
                             </button>
                             <button
                               type="button"
+                              title="Copy to another area"
+                              aria-label="Copy section"
+                              onClick={() => setPlaceModal({ type: "section", mode: "copy", sectionId: s.id })}
+                              className="h-9 w-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center"
+                            >
+                              <Copy className="h-4 w-4 text-gray-700" />
+                            </button>
+                            <button
+                              type="button"
+                              title="Move to another area or menu"
+                              aria-label="Move section"
+                              onClick={() => setPlaceModal({ type: "section", mode: "move", sectionId: s.id })}
+                              className="h-9 w-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center"
+                            >
+                              <MoveRight className="h-4 w-4 text-gray-700" />
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => openEditSection(s)}
                               className="h-9 w-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center"
                             >
@@ -1619,6 +1771,24 @@ export default function RestaurantMenuPage() {
 
                             <button
                               type="button"
+                              title="Copy to another section"
+                              aria-label="Copy dish"
+                              onClick={() => setPlaceModal({ type: "item", mode: "copy", sectionId: selectedSection.id, itemId: it.id })}
+                              className="h-9 w-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center"
+                            >
+                              <Copy className="h-4 w-4 text-gray-700" />
+                            </button>
+                            <button
+                              type="button"
+                              title="Move to another section"
+                              aria-label="Move dish"
+                              onClick={() => setPlaceModal({ type: "item", mode: "move", sectionId: selectedSection.id, itemId: it.id })}
+                              className="h-9 w-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center"
+                            >
+                              <MoveRight className="h-4 w-4 text-gray-700" />
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => openEditItem(it)}
                               className="h-9 w-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center"
                             >
@@ -1662,6 +1832,18 @@ export default function RestaurantMenuPage() {
           onClose={() => setAreaModal(null)}
           onSave={saveArea}
           onDelete={() => deleteArea(areaModal)}
+        />
+      ) : null}
+
+      {placeModal ? (
+        <PlaceDialog
+          place={placeModal}
+          areas={areas}
+          sections={menu.sections || []}
+          saving={saving}
+          onClose={() => setPlaceModal(null)}
+          onSection={(areaId, kind) => placeSection(placeModal.sectionId, placeModal.mode, areaId, kind)}
+          onItem={(toSectionId) => placeItem(placeModal.sectionId, placeModal.itemId, placeModal.mode, toSectionId)}
         />
       ) : null}
 
