@@ -163,6 +163,8 @@ export default function CashierTableOrdersPage() {
           <div className="divide-y divide-slate-100">
             {rows.map((o) => {
               const items = extractItems(o);
+              const voided = String(o.booking_status || "").toUpperCase() === "CANCELLED";
+              const strike = voided ? "line-through text-slate-400!" : "";
               return (
                 <button
                   key={o.id}
@@ -172,18 +174,19 @@ export default function CashierTableOrdersPage() {
                 >
                   <div className="grid grid-cols-1 md:grid-cols-7 gap-2 items-center">
                     <div className="md:col-span-2">
-                      <div className="font-semibold text-slate-900">#{String(o.id).slice(0, 8)}</div>
+                      <div className={`font-semibold text-slate-900 ${strike}`}>#{String(o.id).slice(0, 8)}</div>
+                      {voided ? <span className="mt-1 inline-flex rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">Cancelled</span> : null}
                       <div className="text-xs text-slate-500">{fmtDateTime(o.created_at)}</div>
                     </div>
-                    <div className="text-sm text-slate-700">T{o.table_no || "—"}</div>
-                    <div className="text-sm text-slate-700">{o.customer_name || "Guest"}</div>
-                    <div className="text-sm font-semibold text-slate-900">{money(o.total_amount)}</div>
+                    <div className={`text-sm text-slate-700 ${strike}`}>T{o.table_no || "—"}</div>
+                    <div className={`text-sm text-slate-700 ${strike}`}>{o.customer_name || "Guest"}</div>
+                    <div className={`text-sm font-semibold text-slate-900 ${strike}`}>{money(o.total_amount)}</div>
                     <div>
                       <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${paymentClass(o.payment_status)}`}>
                         {String(o.payment_status || "PENDING").toUpperCase()}
                       </span>
                     </div>
-                    <div className="text-xs text-slate-600">{items.length} item(s)</div>
+                    <div className={`text-xs text-slate-600 ${strike}`}>{items.length} item(s)</div>
                   </div>
                 </button>
               );
@@ -210,7 +213,7 @@ export default function CashierTableOrdersPage() {
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                 <div className="inline-flex items-center gap-2"><UserRound className="h-4 w-4" /> {selected.customer_name || "Guest"}</div>
                 <div className="inline-flex items-center gap-2"><Clock3 className="h-4 w-4" /> {fmtDateTime(selected.created_at)}</div>
-                <div className="inline-flex items-center gap-2"><ReceiptText className="h-4 w-4" /> {money(selected.total_amount)}</div>
+                <div className={`inline-flex items-center gap-2 ${String(selected.booking_status || "").toUpperCase() === "CANCELLED" ? "line-through text-slate-400!" : ""}`}><ReceiptText className="h-4 w-4" /> {money(selected.total_amount)}</div>
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-white p-3">

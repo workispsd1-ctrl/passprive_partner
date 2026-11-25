@@ -1,3 +1,4 @@
+import { listWaiters, resolveWaiter, WAITER_ROLES } from "@/lib/server/waiters";
 import { changeTable } from "@/lib/server/changeTable";
 import { logoStamp } from "@/lib/server/receiptLogo";
 import { addBillItems, cancelBillItems, seatTable, setBillItemQty, setCovers, voidTable } from "@/lib/server/billItems";
@@ -7,6 +8,7 @@ import { closeOnDeposit, payBillPart } from "@/lib/server/splitBill";
 import { finishDiscovery, pendingDiscovery } from "@/lib/server/printerDiscovery";
 import { activePrinters, claimPrintJob, confirmPrintJob, failPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, printHistory, queueBillPrint, queueFinalPrint, queuePartPrint, RECEIPT_KINDS, releasePrintJob, reprintJob, TICKET_KINDS, unleasePrintJob } from "@/lib/server/printJobs";
 import { setDiscount } from "@/lib/server/billDiscount";
+import { createBooking } from "@/lib/server/bookingCreate";
 import { cancelPaidBill, correctMethod, printCorrected, reopenPaidBill } from "@/lib/server/billCorrection";
 import { accountDetail, listAccounts, printStatement, settleAccount } from "@/lib/server/customerAccounts";
 import { cancelPayRequest, claimPayRequest, failPayRequest, pendingPayRequests, retryPayRequest } from "@/lib/server/payRequests";
@@ -27,7 +29,7 @@ function isPaidOnline(o) {
   return o?.source === "public_menu" && ["PAID", "COMPLETED"].includes(String(o?.payment_status || "").toUpperCase());
 }
 const ORDER_COLUMNS =
-  "id, table_no, guest_count, customer_name, notes, invoice_no, booking_status, payment_status, subtotal_amount, total_amount, tip_amount, order_items, created_at, updated_at, source, qr_pending:order_details->qr_pending, payments:order_details->payments, guests:order_details->guests, bill_discount:order_details->bill_discount";
+  "id, table_no, guest_count, customer_name, notes, invoice_no, booking_status, payment_status, subtotal_amount, total_amount, tip_amount, order_items, created_at, updated_at, source, qr_pending:order_details->qr_pending, payments:order_details->payments, guests:order_details->guests, bill_discount:order_details->bill_discount, opened_by:order_details->opened_by";
 
 function thumbnail(urls) {
   const url = Array.isArray(urls) ? String(urls[0] || "") : "";
@@ -128,6 +130,7 @@ async function liveTables({ admin, restaurantId, printKinds, lan = false }) {
     pay_requests: payRequests,
     tables: tablesRes.data || [],
     orders: orders.map((o) => (promos.has(o.id) ? { ...o, promo: promos.get(o.id) } : o)),
+    waiters: await listWaiters(admin, restaurantId).catch(() => []),
   };
 }
 
@@ -236,6 +239,11 @@ export async function POST(request) {
       return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);
     }
 
+    if (action === "create_booking") {
+      const { status, body: out } = await createBooking(ctx, body);
+      return reply(out, status);
+    }
+
     if (action === "set_discount") {
       const { status, body: out } = await setDiscount(ctx.admin, ctx.restaurantId, ctx.userId, body);
       return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);
@@ -304,13 +312,21 @@ export async function POST(request) {
       return reply({ ok: true, sections: menuSections(data?.menu_json), menus: menuTabs(menuAreas(parseMenuJson(data?.menu_json))).map((t) => t.label) });
     }
 
+    if (action === "waiters") {
+      return reply({ ok: true, waiters: await listWaiters(ctx.admin, ctx.restaurantId) });
+    }
+
     if (action === "seat") {
-      const { status, body: out } = await seatTable(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      const picked = await resolveWaiter(ctx.admin, ctx.restaurantId, { callerId: ctx.userId, callerIsWaiter: WAITER_ROLES.includes(ctx.staffRole || ""), waiterId: body?.waiter_id });
+      if (picked.error) return reply({ ok: false, error: picked.error }, 400);
+      const { status, body: out } = await seatTable(ctx.admin, ctx.restaurantId, ctx.userId, body, { openedBy: picked.waiter });
       return reply(out, status);
     }
 
     if (action === "add_items") {
-      const { status, body: out } = await addBillItems(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      const picked = await resolveWaiter(ctx.admin, ctx.restaurantId, { callerId: ctx.userId, callerIsWaiter: WAITER_ROLES.includes(ctx.staffRole || ""), waiterId: body?.waiter_id });
+      if (picked.error) return reply({ ok: false, error: picked.error }, 400);
+      const { status, body: out } = await addBillItems(ctx.admin, ctx.restaurantId, ctx.userId, body, "POS", { orderedBy: picked.waiter });
       return out.ok ? reply({ ok: true, ...(await liveTables(ctx)) }) : reply(out, status);
     }
 

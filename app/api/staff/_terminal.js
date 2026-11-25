@@ -1,3 +1,4 @@
+import { readRetry } from "@/lib/server/dbRetry";
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { serviceClient } from "@/lib/server/deviceSession";
@@ -37,28 +38,28 @@ export async function requireTerminal(request, plans = ["booking", "payments"]) 
 
   const deviceToken = String(request.headers.get("x-device-token") || "").trim();
   const viaDevice = DEVICE_TOKEN_RE.test(deviceToken);
-  let query = admin
-    .from("pos_terminals")
-    .select("id, restaurant_id, restaurants:restaurant_id(service_level)")
-    .eq("status", "active");
-  query = viaDevice
-    ? query.eq("token_hash", createHash("sha256").update(deviceToken).digest("hex"))
-    : query.eq("auth_user_id", userId);
-
-  const { data: terminal, error: termErr } = await query.maybeSingle();
-  if (termErr) return { error: serverError(termErr) };
+  const termQuery = () => {
+    const query = admin
+      .from("pos_terminals")
+      .select("id, restaurant_id, restaurants:restaurant_id(service_level)")
+      .eq("status", "active");
+    return (viaDevice
+      ? query.eq("token_hash", createHash("sha256").update(deviceToken).digest("hex"))
+      : query.eq("auth_user_id", userId)
+    ).maybeSingle();
+  };
+  const termRes = await readRetry(termQuery);
+  if (!termRes) return { error: reply({ ok: false, error: "server_busy" }, 503) };
+  const terminal = termRes.data;
   if (!terminal?.restaurant_id) return { error: reply({ ok: false, error: "device_not_paired" }, 401) };
 
   let staffRole = null;
   if (viaDevice) {
-    const { data: staff, error: staffErr } = await admin
-      .from("restaurant_staff")
-      .select("role")
-      .eq("restaurant_id", terminal.restaurant_id)
-      .eq("user_id", userId)
-      .limit(1)
-      .maybeSingle();
-    if (staffErr) return { error: serverError(staffErr) };
+    const staffRes = await readRetry(() =>
+      admin.from("restaurant_staff").select("role").eq("restaurant_id", terminal.restaurant_id).eq("user_id", userId).limit(1).maybeSingle()
+    );
+    if (!staffRes) return { error: reply({ ok: false, error: "server_busy" }, 503) };
+    const staff = staffRes.data;
     if (!staff) return { error: reply({ ok: false, error: "staff_removed" }, 403) };
     staffRole = String(staff.role || "").toLowerCase();
   }

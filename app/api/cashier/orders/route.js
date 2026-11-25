@@ -1,3 +1,4 @@
+import { listWaiters, resolveWaiter, waiterStamp } from "@/lib/server/waiters";
 import { NextResponse } from "next/server";
 import { seatTable } from "@/lib/server/billItems";
 import { resolveCashierRestaurant } from "../_shared";
@@ -29,12 +30,12 @@ export async function GET(request) {
       ctx.admin.from("restaurants").select("id,name,menu_json").eq("id", ctx.restaurantId).maybeSingle(),
       ctx.admin
         .from("restaurant_table_layouts")
-        .select("table_no,label")
+        .select("table_no,label,area:restaurant_table_areas!restaurant_table_layouts_area_fk(name)")
         .eq("restaurant_id", ctx.restaurantId)
         .order("table_no", { ascending: true }),
       ctx.admin
         .from("restaurant_table_bookings")
-        .select("id,table_no,booking_status,payment_status,updated_at,guests:order_details->guests")
+        .select("id,table_no,booking_status,payment_status,updated_at,guests:order_details->guests,opened_by:order_details->opened_by")
         .eq("restaurant_id", ctx.restaurantId),
     ]);
 
@@ -76,11 +77,14 @@ export async function GET(request) {
         table_no: Number(r.table_no),
         order_id: r.id,
         guests: (Array.isArray(r.guests) ? r.guests : []).filter((g) => g?.id).map((g) => ({ id: g.id, name: g.name })),
+        opened_by: r.opened_by?.id ? { id: r.opened_by.id, name: r.opened_by.name || null } : null,
       })),
+      waiters: await listWaiters(ctx.admin, ctx.restaurantId).catch(() => []),
+      me: { id: ctx.userId, name: ctx.fullName, waiter: Boolean(ctx.isWaiter) },
       restaurant_id: ctx.restaurantId,
       restaurant_name: ctx.restaurantName,
       menu: menu && typeof menu === "object" ? menu : null,
-      tables: tablesRes.data || [],
+      tables: (tablesRes.data || []).map(({ area, ...t }) => ({ ...t, area_name: (Array.isArray(area) ? area[0]?.name : area?.name) || null })),
       occupied_table_nos: occupiedTableNos,
     });
   } catch (error) {
@@ -99,7 +103,9 @@ export async function POST(request) {
     const body = await request.json();
 
     if (body?.action === "seat") {
-      const { status, body: out } = await seatTable(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      const picked = await resolveWaiter(ctx.admin, ctx.restaurantId, { callerId: ctx.userId, callerIsWaiter: ctx.isWaiter, waiterId: body?.waiter_id });
+      if (picked.error) return NextResponse.json({ ok: false, error: picked.error }, { status: 400 });
+      const { status, body: out } = await seatTable(ctx.admin, ctx.restaurantId, ctx.userId, body, { openedBy: picked.waiter });
       return NextResponse.json(out, { status });
     }
 
@@ -144,6 +150,13 @@ export async function POST(request) {
     }
     const normalizedItems = priced.lines;
     const subtotal = fromCents(priced.subtotalCents);
+    let orderWaiter = null;
+    if (orderType === "TABLE") {
+      const picked = await resolveWaiter(ctx.admin, ctx.restaurantId, { callerId: ctx.userId, callerIsWaiter: ctx.isWaiter, waiterId: body?.waiter_id });
+      if (picked.error) return NextResponse.json({ ok: false, error: picked.error }, { status: 400 });
+      orderWaiter = picked.waiter;
+    }
+    const ticketBy = orderWaiter?.id || ctx.userId;
     const tax = 0;
     const total = subtotal;
 
@@ -184,6 +197,8 @@ export async function POST(request) {
               cashier_user_id: ctx.userId,
               created_by: "cashier",
               last_append_at: new Date().toISOString(),
+              ...(orderWaiter ? { last_order_by: waiterStamp(orderWaiter) } : {}),
+              ...(!prevDetails.opened_by && orderWaiter ? { opened_by: waiterStamp(orderWaiter) } : {}),
             },
             subtotal_amount: nextSubtotal,
             tax_amount: nextTax,
@@ -205,7 +220,7 @@ export async function POST(request) {
           return NextResponse.json({ ok: false, error: "This table was just updated. Please try again." }, { status: 409 });
         }
         await queueOrderTicket(ctx.admin, ctx.restaurantId, {
-          by: ctx.userId,
+          by: ticketBy,
           orderId: openExisting.id,
           tableNo,
           guests: openExisting.guest_count,
@@ -231,6 +246,7 @@ export async function POST(request) {
           cashier_user_id: ctx.userId,
           created_by: "cashier",
           ...(itemDiscounts(normalizedItems, ctx.userId).length ? { discounts: itemDiscounts(normalizedItems, ctx.userId) } : {}),
+          ...(orderWaiter ? { opened_by: waiterStamp(orderWaiter), last_order_by: waiterStamp(orderWaiter) } : {}),
         },
         subtotal_amount: subtotal,
         tax_amount: tax,
@@ -249,7 +265,7 @@ export async function POST(request) {
         .single();
       if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
       await queueOrderTicket(ctx.admin, ctx.restaurantId, {
-          by: ctx.userId, orderId: data.id, tableNo, lines: normalizedItems, notes, source: "Till" });
+          by: ticketBy, orderId: data.id, tableNo, lines: normalizedItems, notes, source: "Till" });
       return NextResponse.json({ ok: true, order_type: "TABLE", continued: false, order: data });
     }
 

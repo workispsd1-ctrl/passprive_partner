@@ -1,3 +1,4 @@
+import { BUSY, readRetry } from "@/lib/server/dbRetry";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { NOT_IN_PLAN, restaurantHasPlan } from "@/lib/server/plan";
@@ -26,11 +27,9 @@ async function resolveRestaurant(token) {
 
   const userId = userRes.user.id;
 
-  const { data: staffRowRows } = await admin
-    .from("restaurant_staff")
-    .select("restaurant_id, role")
-    .eq("user_id", userId)
-    .limit(2);
+  const staffRes = await readRetry(() => admin.from("restaurant_staff").select("restaurant_id, role").eq("user_id", userId).limit(2));
+  if (!staffRes) return BUSY;
+  const staffRowRows = staffRes.data;
   const staffRow = staffRowRows?.length === 1 ? staffRowRows[0] : null;
 
   let restaurantId = staffRow?.restaurant_id || null;

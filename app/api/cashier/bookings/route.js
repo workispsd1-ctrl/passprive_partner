@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveCashierRestaurant } from "../_shared";
 import { bookingTableNo, manageBooking, seatBooking } from "@/lib/server/bookingManage";
+import { createBooking } from "@/lib/server/bookingCreate";
 
 function parseHHMM(value) {
   const raw = String(value || "").slice(0, 5);
@@ -11,52 +12,6 @@ function parseHHMM(value) {
 
 function overlapMinutes(aStart, aEnd, bStart, bEnd) {
   return Math.max(aStart, bStart) < Math.min(aEnd, bEnd);
-}
-
-async function createBooking(ctx, body) {
-  const bad = (error) => NextResponse.json({ ok: false, error }, { status: 400 });
-  const name = String(body?.customer_name || "").trim().slice(0, 80);
-  const phone = String(body?.customer_phone || "").trim().slice(0, 20);
-  const date = String(body?.booking_date || "");
-  const time = String(body?.booking_time || "").slice(0, 5);
-  const party = Number(body?.party_size);
-  const note = String(body?.special_request || "").trim().slice(0, 500) || null;
-
-  if (!name) return bad("Guest name is required.");
-  if (phone.replace(/\D/g, "").length < 7) return bad("Enter a valid phone number.");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return bad("Pick a date.");
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return bad("Enter a time like 19:30.");
-  if (!Number.isInteger(party) || party < 1 || party > 100) return bad("Party size must be 1 to 100.");
-
-  const nowMu = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString().slice(0, 16).replace("T", " ");
-  if (`${date} ${time}` < nowMu) return bad("That time has already passed.");
-
-  const { data, error } = await ctx.admin
-    .from("restaurant_bookings")
-    .insert({
-      restaurant_id: ctx.restaurantId,
-      customer_name: name,
-      customer_phone: phone,
-      booking_date: date,
-      booking_time: time,
-      party_size: party,
-      special_request: note,
-      status: "confirmed",
-      source: "partner",
-      handled_by: "merchant",
-      read: true,
-    })
-    .select("id")
-    .single();
-  if (error) return NextResponse.json({ ok: false, error: "Could not save the booking." }, { status: 400 });
-  const extras = {};
-  if (body?.table_no) extras.table_no = body.table_no;
-  if (body?.cover && Number(body.cover.amount) > 0) extras.cover = body.cover;
-  if (Object.keys(extras).length) {
-    const { body: out } = await manageBooking(ctx, { id: data.id, ...extras });
-    if (!out.ok) return NextResponse.json({ ok: true, booking: data, warning: out.message || out.error });
-  }
-  return NextResponse.json({ ok: true, booking: data });
 }
 
 export async function GET(request) {
@@ -77,7 +32,7 @@ export async function GET(request) {
     const range = span >= 0 && span <= 400 ? { from, to } : null;
     const bookingQuery = ctx.admin
       .from("restaurant_bookings")
-      .select("id,customer_name,customer_phone,customer_email,booking_date,booking_time,duration_minutes,party_size,status,source,created_at,booking_code,customer_booking_number,special_request,booked_slot_label,payment_status,payment_amount,payment_method,payment_reference,table_no,cancel_reason,notes_internal,read,proposed_at,cover_charge_amount,cover_request_status,cover_request_total,cover_request_due_at,updated_at,seated_at,seated_order_id")
+      .select("id,customer_name,customer_phone,customer_email,booking_date,booking_time,duration_minutes,party_size,status,source,created_at,booking_code,customer_booking_number,special_request,booked_slot_label,payment_status,payment_amount,payment_method,payment_reference,table_no,cancel_reason,notes_internal,read,proposed_at,cover_charge_amount,cover_request_status,cover_request_total,cover_request_due_at,updated_at,seated_at,seated_order_id,taken_by_name")
       .eq("restaurant_id", ctx.restaurantId);
 
     const [bookingRes, tableOrderRes, layoutRes] = await Promise.all([
@@ -218,6 +173,7 @@ export async function GET(request) {
 
     return NextResponse.json({
       ok: true,
+      me: { name: ctx.fullName, waiter: Boolean(ctx.isWaiter) },
       bookings: decorated,
       tables: layoutRes.data || [],
       table_orders: tableOrders,
@@ -237,7 +193,10 @@ export async function POST(request) {
 
     const body = await request.json();
     const action = String(body?.action || "").trim().toLowerCase();
-    if (action === "create") return createBooking(ctx, body);
+    if (action === "create") {
+      const { status, body: out } = await createBooking(ctx, body);
+      return NextResponse.json(out, { status });
+    }
     if (action !== "auto_assign_tables") {
       return NextResponse.json({ ok: false, error: "Invalid action" }, { status: 400 });
     }

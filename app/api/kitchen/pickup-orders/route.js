@@ -1,3 +1,4 @@
+import { BUSY, readRetry } from "@/lib/server/dbRetry";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { NOT_IN_PLAN, restaurantHasPlan } from "@/lib/server/plan";
@@ -24,13 +25,9 @@ async function resolveKitchenRestaurant(token) {
 
   const userId = userRes.user.id;
 
-  const { data: userRow, error: userRowErr } = await admin
-    .from("users")
-    .select("role, full_name")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (userRowErr) return { error: userRowErr.message, status: 400 };
+  const roleRes = await readRetry(() => admin.from("users").select("role, full_name").eq("id", userId).maybeSingle());
+  if (!roleRes) return BUSY;
+  const userRow = roleRes.data;
 
   const role = String(userRow?.role || "").toLowerCase();
   if (![
@@ -45,11 +42,10 @@ async function resolveKitchenRestaurant(token) {
     return { error: "Access denied", status: 403 };
   }
 
-  const { data: staffRowRows, error: staffErr } = await admin
-    .from("restaurant_staff")
-    .select("restaurant_id, role")
-    .eq("user_id", userId)
-    .limit(2);
+  const staffRes = await readRetry(() => admin.from("restaurant_staff").select("restaurant_id, role").eq("user_id", userId).limit(2));
+  if (!staffRes) return BUSY;
+  const staffRowRows = staffRes.data;
+  const staffErr = null;
   const staffRow = staffRowRows?.length === 1 ? staffRowRows[0] : null;
 
   if (staffErr) return { error: staffErr.message, status: 400 };

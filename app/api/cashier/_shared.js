@@ -1,3 +1,4 @@
+import { BUSY, readRetry } from "@/lib/server/dbRetry";
 import { createClient } from "@supabase/supabase-js";
 import { NOT_IN_PLAN, restaurantHasPlan } from "@/lib/server/plan";
 
@@ -35,11 +36,9 @@ export async function resolveCashierRestaurant(token) {
 
   const userId = userRes.user.id;
 
-  const { data: userRow } = await admin
-    .from("users")
-    .select("role, full_name")
-    .eq("id", userId)
-    .maybeSingle();
+  const userRes2 = await readRetry(() => admin.from("users").select("role, full_name").eq("id", userId).maybeSingle());
+  if (!userRes2) return BUSY;
+  const userRow = userRes2.data;
 
   const role = String(userRow?.role || "").toLowerCase();
   const isWaiter = ["restaurant_waiter", "restaurant_bearer", "waiter"].includes(role);
@@ -47,22 +46,18 @@ export async function resolveCashierRestaurant(token) {
     return { error: "Access denied", status: 403 };
   }
 
-  const { data: staffRowRows } = await admin
-    .from("restaurant_staff")
-    .select("restaurant_id, role")
-    .eq("user_id", userId)
-    .limit(2);
+  const staffRes = await readRetry(() => admin.from("restaurant_staff").select("restaurant_id, role").eq("user_id", userId).limit(2));
+  if (!staffRes) return BUSY;
+  const staffRowRows = staffRes.data;
   const staffRow = staffRowRows?.length === 1 ? staffRowRows[0] : null;
 
   if (!staffRow?.restaurant_id) {
     return { error: "No restaurant assigned for this cashier account.", status: 403 };
   }
 
-  const { data: restaurant } = await admin
-    .from("restaurants")
-    .select("id, name, cover_image")
-    .eq("id", staffRow.restaurant_id)
-    .maybeSingle();
+  const restRes = await readRetry(() => admin.from("restaurants").select("id, name, cover_image").eq("id", staffRow.restaurant_id).maybeSingle());
+  if (!restRes) return BUSY;
+  const restaurant = restRes.data;
 
   if (!restaurant?.id) return { error: "Restaurant not found", status: 404 };
   if (!(await restaurantHasPlan(admin, restaurant.id))) return { error: NOT_IN_PLAN, status: 403 };
@@ -72,6 +67,7 @@ export async function resolveCashierRestaurant(token) {
     role,
     isWaiter,
     userName: userRow?.full_name || "Cashier",
+    fullName: String(userRow?.full_name || "").trim() || null,
     restaurantId: restaurant.id,
     restaurantName: restaurant.name || "Restaurant",
     restaurantLogo: restaurant.cover_image || "",

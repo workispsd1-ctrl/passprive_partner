@@ -1,3 +1,4 @@
+import { listWaiters, WAITER_ROLES } from "@/lib/server/waiters";
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { movesFor } from "@/lib/server/guestMoves";
@@ -87,7 +88,8 @@ export async function POST(request) {
     };
     const areaTables = allTables.filter(inArea);
     const areaNos = new Set(areaTables.map((t) => Number(t.table_no)));
-    const openOrders = (orderRows || []).filter((o) => !isQrPending(o) && (!area || areaNos.has(Number(o.table_no))));
+    const planNos = new Set(allTables.map((t) => Number(t.table_no)));
+    const openOrders = (orderRows || []).filter((o) => !isQrPending(o) && (!area || areaNos.has(Number(o.table_no)) || !planNos.has(Number(o.table_no))));
 
     const menu = parseMenu(restaurantRow.menu_json);
     const menuV = createHash("sha1").update(JSON.stringify(menu)).digest("hex").slice(0, 16);
@@ -120,6 +122,8 @@ export async function POST(request) {
       guest_moves: await movesFor(admin, restaurantId, area?.id || null, userId).catch(() => ({ to_seat: [], notices: [] })),
       tables: areaTables,
       open_orders: openOrders,
+      waiters: await listWaiters(admin, restaurantId).catch(() => []),
+      me: { id: userId, waiter: WAITER_ROLES.includes(String(staffRole || "")) },
     });
   } catch (error) {
     return serverError(error);

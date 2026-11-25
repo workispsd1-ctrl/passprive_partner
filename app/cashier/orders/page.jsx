@@ -39,6 +39,10 @@ export default function CashierOrdersPage() {
   const [notes, setNotes] = useState("");
   const [cart, setCart] = useState({});
   const [openBills, setOpenBills] = useState([]);
+  const [waiters, setWaiters] = useState([]);
+  const [me, setMe] = useState({ id: "", name: "", waiter: false });
+  const [waiterId, setWaiterId] = useState("");
+  const [waiterMissing, setWaiterMissing] = useState(false);
   const [forGuest, setForGuest] = useState(null);
   const [guestText, setGuestText] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
@@ -61,6 +65,8 @@ export default function CashierOrdersPage() {
       setTables(tableRows);
       setOccupiedTableNos(Array.isArray(json?.occupied_table_nos) ? json.occupied_table_nos.map((n) => Number(n)) : []);
       setOpenBills(Array.isArray(json?.open_bills) ? json.open_bills : []);
+      setWaiters(Array.isArray(json?.waiters) ? json.waiters : []);
+      if (json?.me) setMe({ id: String(json.me.id || ""), name: String(json.me.name || ""), waiter: Boolean(json.me.waiter) });
       if (tableRows.length && !tableNo) setTableNo(String(tableRows[0].table_no || ""));
     } catch (e) {
       setError(e?.message || "Failed to load menu.");
@@ -78,7 +84,25 @@ export default function CashierOrdersPage() {
   }, []);
 
   const cartItems = useMemo(() => Object.values(cart), [cart]);
+  const labelCount = useMemo(() => {
+    const m = new Map();
+    tables.forEach((t) => {
+      const l = t.label || `T${t.table_no}`;
+      m.set(l, (m.get(l) || 0) + 1);
+    });
+    return m;
+  }, [tables]);
+  const tableName = (t) => {
+    const l = t.label || `T${t.table_no}`;
+    return labelCount.get(l) > 1 && t.area_name ? `${t.area_name} · ${l}` : l;
+  };
   const openBill = orderType === "TABLE" ? openBills.find((b) => Number(b.table_no) === Number(tableNo)) || null : null;
+  const openedById = openBill?.opened_by?.id || "";
+  const needsWaiter = orderType === "TABLE" && !me.waiter && waiters.length > 0;
+  useEffect(() => {
+    setWaiterId(openedById);
+    setWaiterMissing(false);
+  }, [openedById, tableNo]);
   const guests = openBill?.guests || [];
   const guestName = (id) => guests.find((g) => g.id === id)?.name || "";
   const activeGuest = guests.some((g) => g.id === forGuest) ? forGuest : null;
@@ -164,6 +188,11 @@ export default function CashierOrdersPage() {
       }
     }
     if (placing) return;
+    if (needsWaiter && !waiterId) {
+      setWaiterMissing(true);
+      setError(openBill ? "Pick the waiter who took this order." : "Pick the waiter who opened this table.");
+      return;
+    }
 
     setPlacing(true);
     try {
@@ -174,6 +203,7 @@ export default function CashierOrdersPage() {
       const payload = {
         order_type: orderType,
         table_no: orderType === "TABLE" ? Number(tableNo) : null,
+        ...(needsWaiter && waiterId ? { waiter_id: waiterId } : {}),
         customer_name: customerName.trim() || "Walk-in",
         customer_phone: customerPhone.trim() || null,
         notes: notes.trim() || null,
@@ -357,10 +387,43 @@ export default function CashierOrdersPage() {
               <option value="">Choose table</option>
               {tables.map((t) => (
                 <option key={t.table_no} value={t.table_no}>
-                  T{t.table_no} {t.label ? `• ${t.label}` : ""}{occupiedTableNos.includes(Number(t.table_no)) ? " • Occupied" : ""}
+                  {tableName(t)}{occupiedTableNos.includes(Number(t.table_no)) ? " • Occupied" : ""}
                 </option>
               ))}
             </select>
+            {me.waiter ? (
+              <div className="mt-3">
+                <div className="text-xs font-semibold text-slate-600">{openBill ? "Ordered by" : "Opened by"}</div>
+                <div className="mt-1 flex h-10 items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 text-sm font-semibold text-slate-800">
+                  {me.name || "You"}
+                </div>
+              </div>
+            ) : needsWaiter ? (
+              <div className="mt-3">
+                <label className={`text-xs font-semibold ${waiterMissing ? "text-red-600" : "text-slate-600"}`}>
+                  {openBill ? "Ordered by" : "Opened by"} <span className="text-red-600">*</span>
+                </label>
+                <select
+                  value={waiterId}
+                  onChange={(e) => {
+                    setWaiterId(e.target.value);
+                    setWaiterMissing(false);
+                    setError("");
+                  }}
+                  className={`mt-1 h-10 w-full rounded-xl border bg-white px-3 text-sm ${waiterMissing ? "border-red-500" : waiterId ? "border-orange-500" : "border-slate-300"}`}
+                >
+                  <option value="">Pick the waiter</option>
+                  {waiters.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name}
+                    </option>
+                  ))}
+                </select>
+                {openBill?.opened_by?.name ? (
+                  <div className="mt-1 text-xs text-slate-500">Table opened by {openBill.opened_by.name}</div>
+                ) : null}
+              </div>
+            ) : null}
             {openBill ? (
               <div className="mt-3">
                 <div className="text-xs font-semibold text-slate-600">Ordering for</div>
