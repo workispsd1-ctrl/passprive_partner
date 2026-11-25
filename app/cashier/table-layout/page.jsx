@@ -677,7 +677,7 @@ export default function CashierTableLayoutPage() {
                     const payment = String(o?.payment_status || "").toUpperCase();
                     const isPaid = payment === "PAID" || payment === "COMPLETED";
                     const orderClosed = booking === "CANCELLED" || isPaid;
-                    const completedDone = booking === "COMPLETED" || isPaid;
+                    const completedDone = booking === "COMPLETED" || booking === "SERVED" || isPaid;
                     const paidDone = isPaid;
                     const busyOnOrder = updatingOrderKey.startsWith(`${o.id}:`);
                     return (
@@ -709,12 +709,12 @@ export default function CashierTableLayoutPage() {
                             onClick={() => updateOrderState(o.id, { booking_status: "COMPLETED", payment_status: "PENDING" }, "completed")}
                             className="rounded-lg border border-amber-700 bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-amber-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
                           >
-                            Mark Completed
+                            Payment
                           </button>
                           {waiterView ? null : (
                             <button
                               type="button"
-                              disabled={paidDone || busyOnOrder}
+                              disabled={paidDone || !completedDone || busyOnOrder}
                               onClick={() => updateOrderState(o.id, { payment_status: "PAID" }, "paid")}
                               className="rounded-lg border border-emerald-700 bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
                             >

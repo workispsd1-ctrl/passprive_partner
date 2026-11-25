@@ -14,6 +14,18 @@ import { cancelPayRequest, createPayBills, createPayRequest, orderPayRequests } 
 
 const TILL_METHODS = ["CASH", "AVOIR", "ACCOUNT"];
 
+async function onPaymentStage(admin, restaurantId, orderId) {
+  const { data, error } = await admin
+    .from("restaurant_table_bookings")
+    .select("booking_status, payments:order_details->payments")
+    .eq("id", orderId)
+    .eq("restaurant_id", restaurantId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return true;
+  return ["SERVED", "COMPLETED"].includes(String(data.booking_status || "").toUpperCase()) || (Array.isArray(data.payments) && data.payments.length > 0);
+}
+
 const isClosed = isBillClosed;
 
 async function releaseFinished(ctx, tables, orders) {
@@ -164,6 +176,11 @@ export async function POST(request) {
       (action === "update_order_state" && ["PAID", "COMPLETED"].includes(String(body?.payment_status || "").toUpperCase()));
     if (ctx.isWaiter && money) {
       return NextResponse.json({ ok: false, error: "Payments are taken by the cashier." }, { status: 403 });
+    }
+
+    const paysNow = ["pay_part", "request_pos_payment", "split_to_pos"].includes(action) || (action === "update_order_state" && String(body?.payment_status || "").toUpperCase() === "PAID" && !body?.booking_status);
+    if (paysNow && !(await onPaymentStage(ctx.admin, ctx.restaurantId, String(body?.order_id || "")))) {
+      return NextResponse.json({ ok: false, error: "Move this table to On payment first." }, { status: 409 });
     }
 
     if (action === "set_guest_name") {
