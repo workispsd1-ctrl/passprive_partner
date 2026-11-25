@@ -7,7 +7,7 @@ import { closeOnDeposit, payBillPart } from "@/lib/server/splitBill";
 import { finishDiscovery, pendingDiscovery } from "@/lib/server/printerDiscovery";
 import { activePrinters, claimPrintJob, confirmPrintJob, failPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, printHistory, queueBillPrint, queueFinalPrint, queuePartPrint, RECEIPT_KINDS, releasePrintJob, reprintJob, TICKET_KINDS, unleasePrintJob } from "@/lib/server/printJobs";
 import { setDiscount } from "@/lib/server/billDiscount";
-import { correctMethod, printCorrected, reopenPaidBill } from "@/lib/server/billCorrection";
+import { cancelPaidBill, correctMethod, printCorrected, reopenPaidBill } from "@/lib/server/billCorrection";
 import { accountDetail, listAccounts, printStatement, settleAccount } from "@/lib/server/customerAccounts";
 import { cancelPayRequest, claimPayRequest, failPayRequest, pendingPayRequests, retryPayRequest } from "@/lib/server/payRequests";
 import { heldPromos, PROMO_ERRORS, promoDue, promoLocked, quotePromo, recordPromoAttempt, releasePromo, reservePromo } from "@/lib/server/promoCode";
@@ -228,6 +228,11 @@ export async function POST(request) {
 
     if (action === "reopen_paid") {
       const { status, body: out } = await reopenPaidBill(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);
+    }
+
+    if (action === "cancel_paid") {
+      const { status, body: out } = await cancelPaidBill(ctx.admin, ctx.restaurantId, ctx.userId, body);
       return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);
     }
 

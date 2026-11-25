@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { setDiscount } from "@/lib/server/billDiscount";
 import { closeOnDeposit } from "@/lib/server/splitBill";
-import { correctMethod, printCorrected, reopenPaidBill } from "@/lib/server/billCorrection";
+import { cancelPaidBill, correctMethod, printCorrected, reopenPaidBill } from "@/lib/server/billCorrection";
 import { cancelBillItems, setBillItemQty, setCovers, voidTable } from "@/lib/server/billItems";
 import { addGuest, setItemGuest } from "@/lib/server/billGuests";
 import { settleTableBill } from "@/lib/server/settleBill";
@@ -160,7 +160,7 @@ export async function POST(request) {
     const body = await request.json();
     const action = String(body?.action || "").trim().toLowerCase();
 
-    const money = ["pay_part", "request_pos_payment", "split_to_pos", "cancel_pos_payment", "settle", "void_order", "set_discount", "close_on_deposit", "close_offered", "correct_method", "reopen_paid"].includes(action) ||
+    const money = ["pay_part", "request_pos_payment", "split_to_pos", "cancel_pos_payment", "settle", "void_order", "set_discount", "close_on_deposit", "close_offered", "correct_method", "reopen_paid", "cancel_paid"].includes(action) ||
       (action === "update_order_state" && ["PAID", "COMPLETED"].includes(String(body?.payment_status || "").toUpperCase()));
     if (ctx.isWaiter && money) {
       return NextResponse.json({ ok: false, error: "Payments and cancelling tables are done by the cashier." }, { status: 403 });
@@ -194,6 +194,11 @@ export async function POST(request) {
 
     if (action === "reopen_paid") {
       const { status, body: out } = await reopenPaidBill(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      return NextResponse.json(out, { status });
+    }
+
+    if (action === "cancel_paid") {
+      const { status, body: out } = await cancelPaidBill(ctx.admin, ctx.restaurantId, ctx.userId, body);
       return NextResponse.json(out, { status });
     }
 
