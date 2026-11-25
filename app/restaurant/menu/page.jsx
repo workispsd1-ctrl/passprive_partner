@@ -873,12 +873,19 @@ export default function RestaurantMenuPage() {
         full_menu_image_url: savedUrls[0] || null,
         sections: payload.sections || [],
       });
-      await saveRestaurantMenuData(supabaseBrowser, rid, fresh);
-      originalMenuRef.current = fresh;
-      setMenu(fresh);
+      const stamp = await saveRestaurantMenuData(supabaseBrowser, rid, fresh, originalMenuRef.current?.updated_at || null);
+      const savedMenu = { ...fresh, updated_at: stamp };
+      originalMenuRef.current = savedMenu;
+      setMenu(savedMenu);
       setInfoMsg("Menu images saved.");
     } catch (error) {
-      setSaveError(error.message || "Failed to save menu images.");
+      if (error?.code === "menu_conflict") {
+        toast.error(error.message);
+        setSaveError(error.message);
+        setTimeout(() => window.location.reload(), 2500);
+      } else {
+        setSaveError(error.message || "Failed to save menu images.");
+      }
     } finally {
       setSaving(false);
     }

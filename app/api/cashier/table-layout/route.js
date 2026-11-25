@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { setDiscount } from "@/lib/server/billDiscount";
 import { closeOnDeposit } from "@/lib/server/splitBill";
 import { cancelPaidBill, correctMethod, printCorrected, reopenPaidBill } from "@/lib/server/billCorrection";
-import { cancelBillItems, setBillItemQty, setCovers, voidTable, cancelGuest } from "@/lib/server/billItems";
+import { cancelBillItems, setBillItemQty, setCovers, setGuestName, voidTable, cancelGuest } from "@/lib/server/billItems";
 import { addGuest, setItemGuest } from "@/lib/server/billGuests";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { resolveCashierRestaurant } from "../_shared";
@@ -164,6 +164,11 @@ export async function POST(request) {
       (action === "update_order_state" && ["PAID", "COMPLETED"].includes(String(body?.payment_status || "").toUpperCase()));
     if (ctx.isWaiter && money) {
       return NextResponse.json({ ok: false, error: "Payments are taken by the cashier." }, { status: 403 });
+    }
+
+    if (action === "set_guest_name") {
+      const { status, body: out } = await setGuestName(ctx.admin, ctx.restaurantId, body);
+      return NextResponse.json(out, { status });
     }
 
     if (action === "set_guests") {

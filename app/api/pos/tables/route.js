@@ -1,17 +1,17 @@
 import { listWaiters, resolveWaiter, WAITER_ROLES } from "@/lib/server/waiters";
 import { changeTable } from "@/lib/server/changeTable";
 import { logoStamp } from "@/lib/server/receiptLogo";
-import { addBillItems, cancelBillItems, seatTable, setBillItemQty, setCovers, voidTable, cancelGuest } from "@/lib/server/billItems";
+import { addBillItems, cancelBillItems, seatTable, setBillItemQty, setCovers, setGuestName, voidTable, cancelGuest } from "@/lib/server/billItems";
 import { addGuest, setItemGuest } from "@/lib/server/billGuests";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { closeOnDeposit, payBillPart } from "@/lib/server/splitBill";
 import { finishDiscovery, pendingDiscovery } from "@/lib/server/printerDiscovery";
-import { activePrinters, claimPrintJob, confirmPrintJob, failPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, printHistory, queueBillPrint, queueFinalPrint, queuePartPrint, RECEIPT_KINDS, releasePrintJob, reprintJob, TICKET_KINDS, unleasePrintJob } from "@/lib/server/printJobs";
+import { activePrinters, claimPrintJob, confirmPrintJob, failPrintJob, isQrPending, leasePrintJob, pendingPrintJobs, printHistory, queueBillPrint, queueFinalPrint, queuePartPrint, RECEIPT_KINDS, releasePrintJob, reprintJob, TICKET_KINDS, unleasePrintJob, dismissPrintJob, stuckPrintJobs } from "@/lib/server/printJobs";
 import { setDiscount } from "@/lib/server/billDiscount";
 import { createBooking } from "@/lib/server/bookingCreate";
 import { cancelPaidBill, correctMethod, printCorrected, reopenPaidBill } from "@/lib/server/billCorrection";
 import { accountDetail, listAccounts, printStatement, settleAccount } from "@/lib/server/customerAccounts";
-import { cancelPayRequest, claimPayRequest, failPayRequest, pendingPayRequests, retryPayRequest } from "@/lib/server/payRequests";
+import { cancelPayRequest, claimPayRequest, failPayRequest, pendingPayRequests, retryPayRequest, payPickupRequest, pendingPickupRequests, posPickups, setPickupStatus } from "@/lib/server/payRequests";
 import { heldPromos, PROMO_ERRORS, promoDue, promoLocked, quotePromo, recordPromoAttempt, releasePromo, reservePromo } from "@/lib/server/promoCode";
 import { isBillClosed } from "@/lib/server/tableBill";
 import { readJson, reply, requireTerminal, serverError } from "../../staff/_terminal";
@@ -140,6 +140,8 @@ async function liveTables({ admin, restaurantId, printKinds, lan = false, termin
     tables: tablesRes.data || [],
     orders: orders.map((o) => (promos.has(o.id) ? { ...o, promo: promos.get(o.id) } : o)),
     waiters: await listWaiters(admin, restaurantId).catch(() => []),
+    stuck_prints: await stuckPrintJobs(admin, restaurantId).catch(() => []),
+    pickup_requests: await pendingPickupRequests(admin, restaurantId, terminalId).catch(() => []),
   };
 }
 
@@ -203,6 +205,20 @@ export async function POST(request) {
         .update({ lan_print_at: new Date().toISOString(), ...(body.discovery === true ? { discovery_at: new Date().toISOString() } : {}) })
         .eq("id", ctx.terminalId)
         .or(`lan_print_at.is.null,lan_print_at.lt.${minuteAgo}`);
+    }
+
+    if (action === "pickups") {
+      return reply({ ok: true, pickups: await posPickups(ctx.admin, ctx.restaurantId), pickup_requests: await pendingPickupRequests(ctx.admin, ctx.restaurantId, ctx.terminalId) });
+    }
+
+    if (action === "pickup_status") {
+      const { status, body: out } = await setPickupStatus(ctx.admin, ctx.restaurantId, body);
+      return reply(out, status);
+    }
+
+    if (action === "pay_pickup") {
+      const { status, body: out } = await payPickupRequest(ctx.admin, ctx.restaurantId, ctx.terminalId, body);
+      return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);
     }
 
     if (action === "claim_request") {
@@ -296,6 +312,11 @@ export async function POST(request) {
       return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);
     }
 
+    if (action === "set_guest_name") {
+      const { status, body: out } = await setGuestName(ctx.admin, ctx.restaurantId, body);
+      return out.ok ? reply({ ok: true, ...(await liveTables(ctx)) }) : reply(out, status);
+    }
+
     if (action === "set_guests") {
       const { status, body: out } = await setCovers(ctx.admin, ctx.restaurantId, body);
       return out.ok ? reply({ ok: true, ...(await liveTables(ctx)) }) : reply(out, status);
@@ -374,6 +395,11 @@ export async function POST(request) {
       const orderId = String(body.order_id || "");
       if (!/^[0-9a-f-]{36}$/i.test(orderId)) return reply({ ok: false, error: "invalid_order" }, 400);
       return reply({ ok: true, jobs: await printHistory(ctx.admin, ctx.restaurantId, orderId) });
+    }
+
+    if (action === "dismiss_print") {
+      await dismissPrintJob(ctx.admin, ctx.restaurantId, body.job_id, ctx.terminalId);
+      return reply({ ok: true, ...(await liveTables(ctx)) });
     }
 
     if (action === "reprint") {

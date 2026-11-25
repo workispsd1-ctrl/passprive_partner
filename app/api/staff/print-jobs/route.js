@@ -1,5 +1,5 @@
 import { readJson, reply, requireTerminal, serverError } from "../_terminal";
-import { confirmPrintJob, failPrintJob, leasePrintJob, printHistory, reprintJob, unleasePrintJob } from "@/lib/server/printJobs";
+import { confirmPrintJob, dismissPrintJob, failPrintJob, leasePrintJob, printHistory, reprintJob, unleasePrintJob } from "@/lib/server/printJobs";
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -7,7 +7,7 @@ export async function POST(request) {
   try {
     const ctx = await requireTerminal(request, ["payments"]);
     if (ctx.error) return ctx.error;
-    const { admin, restaurantId, terminalId } = ctx;
+    const { admin, restaurantId, terminalId, userId } = ctx;
     const body = await readJson(request);
     if (body?.action === "history") {
       const orderId = String(body?.order_id || "");
@@ -16,6 +16,10 @@ export async function POST(request) {
     }
     const jobId = String(body?.job_id || "");
     if (!UUID.test(jobId)) return reply({ ok: false, error: "invalid_job" }, 400);
+    if (body?.action === "dismiss") {
+      return reply(await dismissPrintJob(admin, restaurantId, body.job_id, userId || terminalId));
+    }
+
     if (body?.action === "reprint") {
       const out = await reprintJob(admin, restaurantId, jobId, terminalId);
       return reply(out, out.ok ? 200 : out.error === "not_found" ? 404 : 409);

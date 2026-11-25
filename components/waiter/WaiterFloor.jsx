@@ -322,7 +322,7 @@ export default function WaiterFloor() {
                 </div>
               ) : null}
               <button type="button" disabled={busy} onClick={() => markServed(o)} className="h-11 w-full rounded-xl bg-emerald-600 text-sm font-semibold text-white disabled:opacity-60">
-                {busy ? "Updating…" : "Mark completed"}
+                {busy ? "Updating…" : "Payment"}
               </button>
             </div>
           )}

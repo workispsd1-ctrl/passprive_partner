@@ -1,3 +1,4 @@
+import { createPickupPayRequest } from "@/lib/server/payRequests";
 import { listWaiters, resolveWaiter, waiterStamp } from "@/lib/server/waiters";
 import { NextResponse } from "next/server";
 import { seatTable } from "@/lib/server/billItems";
@@ -101,6 +102,11 @@ export async function POST(request) {
     if (ctx.error) return NextResponse.json({ ok: false, error: ctx.error }, { status: ctx.status });
 
     const body = await request.json();
+
+    if (body?.action === "pickup_to_pos") {
+      const { status, body: out } = await createPickupPayRequest(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      return NextResponse.json(out, { status });
+    }
 
     if (body?.action === "seat") {
       const picked = await resolveWaiter(ctx.admin, ctx.restaurantId, { callerId: ctx.userId, callerIsWaiter: ctx.isWaiter, waiterId: body?.waiter_id });

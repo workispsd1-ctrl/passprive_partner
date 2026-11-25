@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { movesFor } from "@/lib/server/guestMoves";
 import { markDiscoveryCapable, pendingDiscovery } from "@/lib/server/printerDiscovery";
-import { activePrinters, pendingPrintJobs, RECEIPT_KINDS, TICKET_KINDS } from "@/lib/server/printJobs";
+import { activePrinters, pendingPrintJobs, RECEIPT_KINDS, stuckPrintJobs, TICKET_KINDS } from "@/lib/server/printJobs";
 import { requireTerminal, serverError } from "../_terminal";
 import { isQrPending } from "@/lib/server/printJobs";
 
@@ -125,6 +125,7 @@ export async function POST(request) {
       open_orders: openOrders,
       waiters: await listWaiters(admin, restaurantId).catch(() => []),
       pos_terminals: await onlinePosTerminals(admin, restaurantId).catch(() => []),
+      stuck_prints: await stuckPrintJobs(admin, restaurantId).catch(() => []),
       me: { id: userId, waiter: WAITER_ROLES.includes(String(staffRole || "")) },
     });
   } catch (error) {
