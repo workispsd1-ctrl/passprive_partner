@@ -1,8 +1,9 @@
+import { manageBooking } from "@/lib/server/bookingManage";
 import { listWaiters, resolveWaiter, WAITER_ROLES } from "@/lib/server/waiters";
 import { changeTable } from "@/lib/server/changeTable";
 import { logoStamp } from "@/lib/server/receiptLogo";
 import { addBillItems, cancelBillItems, seatTable, setBillItemQty, setCovers, setGuestName, voidTable, cancelGuest } from "@/lib/server/billItems";
-import { addGuest, setItemGuest } from "@/lib/server/billGuests";
+import { addGuest, renameGuest, setItemGuest } from "@/lib/server/billGuests";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { closeOnDeposit, payBillPart } from "@/lib/server/splitBill";
 import { finishDiscovery, pendingDiscovery } from "@/lib/server/printerDiscovery";
@@ -212,7 +213,7 @@ export async function POST(request) {
     }
 
     if (action === "pickup_status") {
-      const { status, body: out } = await setPickupStatus(ctx.admin, ctx.restaurantId, body);
+      const { status, body: out } = await setPickupStatus(ctx.admin, ctx.restaurantId, { ...body, user_id: ctx.userId });
       return reply(out, status);
     }
 
@@ -262,6 +263,17 @@ export async function POST(request) {
     if (action === "cancel_paid") {
       const { status, body: out } = await cancelPaidBill(ctx.admin, ctx.restaurantId, ctx.userId, body);
       return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);
+    }
+
+    if (action === "cancel_booking") {
+      const reason = String(body?.reason || "").trim();
+      if (reason.length < 2) return reply({ ok: false, error: "Pick a reason." }, 400);
+      const { data: bk } = await ctx.admin.from("restaurant_bookings").select("id, status, seated_at").eq("id", String(body?.id || "")).eq("restaurant_id", ctx.restaurantId).maybeSingle();
+      if (!bk) return reply({ ok: false, error: "This booking no longer exists." }, 404);
+      if (bk.seated_at) return reply({ ok: false, error: "This booking is already seated. Cancel the table instead." }, 409);
+      if (String(bk.status || "").toLowerCase() === "cancelled") return reply({ ok: true, already: true });
+      const { status, body: out } = await manageBooking(ctx, { id: bk.id, status: "cancelled", cancel_reason: reason });
+      return reply(out, status);
     }
 
     if (action === "create_booking") {
@@ -455,6 +467,11 @@ export async function POST(request) {
     }
 
     if (action === "promo_due") return reply({ ok: true, ...(await promoDue(ctx.admin, ctx.restaurantId)) });
+
+    if (action === "rename_guest") {
+      const { status, body: out } = await renameGuest(ctx.admin, ctx.restaurantId, body);
+      return out.ok ? reply({ ...out, ...(await liveTables(ctx)) }) : reply(out, status);
+    }
 
     if (action === "cancel_guest") {
       const { status, body: out } = await cancelGuest(ctx.admin, ctx.restaurantId, ctx.userId, body);

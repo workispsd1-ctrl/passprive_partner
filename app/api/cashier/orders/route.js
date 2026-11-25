@@ -1,4 +1,4 @@
-import { createPickupPayRequest } from "@/lib/server/payRequests";
+import { cancelPickupOrder, createPickupPayRequest } from "@/lib/server/payRequests";
 import { listWaiters, resolveWaiter, waiterStamp } from "@/lib/server/waiters";
 import { NextResponse } from "next/server";
 import { seatTable } from "@/lib/server/billItems";
@@ -353,6 +353,11 @@ export async function PATCH(request) {
     }
     if (paymentStatus && !allowedPaymentStatus.has(paymentStatus)) {
       return NextResponse.json({ ok: false, error: "Invalid payment_status" }, { status: 400 });
+    }
+
+    if (orderStatus === "CANCELLED") {
+      const { status, body: out } = await cancelPickupOrder(ctx.admin, ctx.restaurantId, id, ctx.userId, body?.reason);
+      return NextResponse.json(out, { status });
     }
 
     const patch = { updated_at: new Date().toISOString() };

@@ -3,7 +3,7 @@ import { setDiscount } from "@/lib/server/billDiscount";
 import { closeOnDeposit } from "@/lib/server/splitBill";
 import { cancelPaidBill, correctMethod, printCorrected, reopenPaidBill } from "@/lib/server/billCorrection";
 import { cancelBillItems, setBillItemQty, setCovers, setGuestName, voidTable, cancelGuest } from "@/lib/server/billItems";
-import { addGuest, setItemGuest } from "@/lib/server/billGuests";
+import { addGuest, renameGuest, setItemGuest } from "@/lib/server/billGuests";
 import { settleTableBill } from "@/lib/server/settleBill";
 import { resolveCashierRestaurant } from "../_shared";
 import { bookingStatusChangeError, isBillClosed, isBillPaid, quickPaymentRecord } from "@/lib/server/tableBill";
@@ -232,6 +232,11 @@ export async function POST(request) {
 
     if (action === "set_discount") {
       const { status, body: out } = await setDiscount(ctx.admin, ctx.restaurantId, ctx.userId, body);
+      return NextResponse.json(out, { status });
+    }
+
+    if (action === "rename_guest") {
+      const { status, body: out } = await renameGuest(ctx.admin, ctx.restaurantId, body);
       return NextResponse.json(out, { status });
     }
 
