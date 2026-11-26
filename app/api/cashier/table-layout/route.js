@@ -82,6 +82,7 @@ export async function GET(request) {
         .from("restaurant_table_bookings")
         .select("id, table_no, customer_name, customer_phone, order_items, order_details, notes, total_amount, booking_status, payment_status, created_at, updated_at, source")
         .eq("restaurant_id", ctx.restaurantId)
+        .or(`updated_at.gte.${new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString()},and(booking_status.not.in.(CANCELLED,PAID),payment_status.not.in.(PAID,COMPLETED))`)
         .order("created_at", { ascending: false }),
     ]);
 
