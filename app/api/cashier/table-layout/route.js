@@ -1,3 +1,4 @@
+import { areaTableNos, staffVenue } from "@/lib/server/tillArea";
 import { NextResponse } from "next/server";
 import { setDiscount } from "@/lib/server/billDiscount";
 import { closeOnDeposit } from "@/lib/server/splitBill";
@@ -90,13 +91,17 @@ export async function GET(request) {
     if (layoutRes.error?.code === "42703") layoutRes = await loadLayout("id, table_no, label, shape, capacity, pos_x, pos_y");
     if (layoutRes.error) return NextResponse.json({ ok: false, error: layoutRes.error.message }, { status: 400 });
     if (ordersRes.error) return NextResponse.json({ ok: false, error: ordersRes.error.message }, { status: 400 });
-    const liveOrders = (ordersRes.data || []).filter((o) => !isQrPending(o));
+    const venue = await staffVenue(ctx.admin, ctx);
+    const scoped = venue ? await areaTableNos(ctx.admin, ctx.restaurantId, venue.area.id) : null;
+    const inVenue = (no) => !scoped || scoped.has(Number(no));
+    const liveOrders = (ordersRes.data || []).filter((o) => !isQrPending(o) && inVenue(o.table_no));
+    const tables = await releaseFinished(ctx, layoutRes.data || [], liveOrders);
 
     return NextResponse.json({
       ok: true,
       restaurant_id: ctx.restaurantId,
-      tables: await releaseFinished(ctx, layoutRes.data || [], liveOrders),
-      areas: areasRes.error ? [] : areasRes.data || [],
+      tables: tables.filter((t) => inVenue(t.table_no)),
+      areas: (areasRes.error ? [] : areasRes.data || []).filter((a) => !venue || venue.ids.has(a.id)),
       orders: liveOrders,
     });
   } catch (error) {
@@ -176,6 +181,17 @@ export async function POST(request) {
       (action === "update_order_state" && ["PAID", "COMPLETED"].includes(String(body?.payment_status || "").toUpperCase()));
     if (ctx.isWaiter && money) {
       return NextResponse.json({ ok: false, error: "Payments are taken by the cashier." }, { status: 403 });
+    }
+
+    const venue = await staffVenue(ctx.admin, ctx);
+    if (venue) {
+      const scoped = await areaTableNos(ctx.admin, ctx.restaurantId, venue.area.id);
+      const orderId = String(body?.order_id || "").trim();
+      const { data: own } = orderId ? await ctx.admin.from("restaurant_table_bookings").select("table_no").eq("id", orderId).eq("restaurant_id", ctx.restaurantId).maybeSingle() : { data: null };
+      const tableNos = [own?.table_no, body?.table_no, body?.to_table].filter((n) => n != null && n !== "");
+      if (tableNos.some((n) => !scoped.has(Number(n)))) {
+        return NextResponse.json({ ok: false, error: "This table belongs to another area." }, { status: 403 });
+      }
     }
 
     const paysNow = ["pay_part", "request_pos_payment", "split_to_pos"].includes(action) || (action === "update_order_state" && String(body?.payment_status || "").toUpperCase() === "PAID" && !body?.booking_status);

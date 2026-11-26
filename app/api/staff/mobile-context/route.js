@@ -1,3 +1,5 @@
+import { venueOf } from "@/lib/server/tillArea";
+import { menuForArea } from "@/lib/menuAreas";
 import { onlinePosTerminals } from "@/lib/server/payRequests";
 import { listWaiters, WAITER_ROLES } from "@/lib/server/waiters";
 import { createHash } from "node:crypto";
@@ -78,6 +80,8 @@ export async function POST(request) {
       return row?.area_id && a?.id ? { id: a.id, name: a.name || "" } : null;
     };
     const area = areaOf(staffRow) || areaOf(terminalRow);
+    const { data: areaRows } = area ? await admin.from("restaurant_table_areas").select("id, menu_area_id").eq("restaurant_id", restaurantId) : { data: null };
+    const venue = area ? venueOf(areaRows, area.id) : null;
     const allTables = (tableRows || []).map(({ restaurant_table_areas: a, ...t }) => ({
       ...t,
       area_name: (Array.isArray(a) ? a[0]?.name : a?.name) || null,
@@ -85,14 +89,14 @@ export async function POST(request) {
     const inArea = (t) => {
       if (!area) return true;
       const host = t.attached_to ? allTables.find((x) => x.id === t.attached_to) : null;
-      return (host || t).area_id === area.id;
+      return venue.ids.has((host || t).area_id);
     };
     const areaTables = allTables.filter(inArea);
     const areaNos = new Set(areaTables.map((t) => Number(t.table_no)));
     const planNos = new Set(allTables.map((t) => Number(t.table_no)));
     const openOrders = (orderRows || []).filter((o) => !isQrPending(o) && (!area || areaNos.has(Number(o.table_no)) || !planNos.has(Number(o.table_no))));
 
-    const menu = parseMenu(restaurantRow.menu_json);
+    const menu = menuForArea(parseMenu(restaurantRow.menu_json), venue?.menuAreaId);
     const menuV = createHash("sha1").update(JSON.stringify(menu)).digest("hex").slice(0, 16);
 
     return NextResponse.json({

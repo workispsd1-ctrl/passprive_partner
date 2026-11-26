@@ -1,3 +1,4 @@
+import { areaTableNos, staffVenue } from "@/lib/server/tillArea";
 import { NextResponse } from "next/server";
 import { resolveCashierRestaurant } from "../_shared";
 import { bookingTableNo, manageBooking, seatBooking } from "@/lib/server/bookingManage";
@@ -308,6 +309,10 @@ export async function PATCH(request) {
     const action = String(body?.action || "status").trim().toLowerCase();
     const id = String(body?.id || "").trim();
     if (action === "seat") {
+      const venue = await staffVenue(ctx.admin, ctx);
+      if (venue && body?.table_no != null && body?.table_no !== "" && !(await areaTableNos(ctx.admin, ctx.restaurantId, venue.area.id)).has(Number(body.table_no))) {
+        return NextResponse.json({ ok: false, error: "This table belongs to another area." }, { status: 403 });
+      }
       const { status: code, body: out } = await seatBooking(ctx, body);
       return NextResponse.json(out, { status: code });
     }

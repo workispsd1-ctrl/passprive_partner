@@ -299,12 +299,13 @@ function SeatPicker({ value, onChange }) {
 }
 
 // Mounted fresh each time it opens (see `key` at the call site), so state starts from `initial`.
-function AreaFormModal({ initial, onClose, onSubmit, saving }) {
+function AreaFormModal({ initial, onClose, onSubmit, saving, venues = [] }) {
   const [name, setName] = useState(initial?.name || "Interior");
   const [kind, setKind] = useState(initial?.kind || "interior");
   const [nameTouched, setNameTouched] = useState(Boolean(initial?.name));
   const [floor, setFloor] = useState(initial?.floor_label || "");
   const [movesForFood, setMovesForFood] = useState(Boolean(initial?.guests_move_for_food));
+  const [venue, setVenue] = useState(initial?.menu_area_id || (venues.length === 1 ? venues[0].id : ""));
 
   const onKindChange = (next) => {
     setKind(next);
@@ -315,7 +316,7 @@ function AreaFormModal({ initial, onClose, onSubmit, saving }) {
     e?.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return toast.error("Give this area a name.");
-    onSubmit({ name: trimmed.slice(0, 40), kind, floor_label: floor.trim().slice(0, 30) || null, guests_move_for_food: movesForFood });
+    onSubmit({ name: trimmed.slice(0, 40), kind, floor_label: floor.trim().slice(0, 30) || null, guests_move_for_food: movesForFood, menu_area_id: venue || null });
   };
 
   return (
@@ -349,6 +350,18 @@ function AreaFormModal({ initial, onClose, onSubmit, saving }) {
             placeholder={kindMeta(kind).label}
           />
         </Field>
+        {venues.length > 1 ? (
+          <Field label="Venue / menu" hint="Waiters tied to this venue only see its tables and its menu.">
+            <select value={venue} onChange={(e) => setVenue(e.target.value)} className={inputCls}>
+              <option value="">Not set</option>
+              {venues.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        ) : null}
         <Field label="Floor" hint="Shown on kitchen tickets and to waiters, e.g. “Ground floor” or “1st floor”.">
           <input value={floor} maxLength={30} onChange={(e) => setFloor(e.target.value)} placeholder="e.g. 1st floor" className={inputCls} />
         </Field>
@@ -845,6 +858,11 @@ export default function RestaurantTableLayoutPage() {
   const [selectedId, setSelectedId] = useState(null);
 
   const [areaModal, setAreaModal] = useState(null); // null | {} (add) | area (edit)
+  const [venues, setVenues] = useState([]);
+  const venueLabel = (a) => {
+    const v = venues.find((x) => x.id === a.menu_area_id);
+    return v && v.name.trim().toLowerCase() !== String(a.name || "").trim().toLowerCase() ? `${v.name} · ${a.name}` : a.name;
+  };
   const [addTableOpen, setAddTableOpen] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
   const [editPreview, setEditPreview] = useState(null);
@@ -912,12 +930,13 @@ export default function RestaurantTableLayoutPage() {
       if (!rid) throw new Error("Restaurant not found for this account.");
       setRestaurantId(rid);
 
-      const [areasRes, tablesRes] = await Promise.all([
+      const [areasRes, venuesRes, tablesRes] = await Promise.all([
         supabaseBrowser
           .from("restaurant_table_areas")
-          .select("id, name, kind, sort_order, created_at, floor_objects, table_scale, floor_label, guests_move_for_food")
+          .select("id, name, kind, sort_order, created_at, floor_objects, table_scale, floor_label, guests_move_for_food, menu_area_id")
           .eq("restaurant_id", rid)
           .order("sort_order", { ascending: true }),
+        supabaseBrowser.from("restaurants").select("menu_areas:menu_json->menu_areas").eq("id", rid).maybeSingle(),
         supabaseBrowser
           .from("restaurant_table_layouts")
           .select("id, table_no, label, shape, capacity, pos_x, pos_y, area_id, rotation")
@@ -927,6 +946,7 @@ export default function RestaurantTableLayoutPage() {
       if (areasRes.error) throw areasRes.error;
       if (tablesRes.error) throw tablesRes.error;
 
+      setVenues((Array.isArray(venuesRes.data?.menu_areas) ? venuesRes.data.menu_areas : []).filter((v) => v?.id && v?.name).map((v) => ({ id: String(v.id), name: String(v.name) })));
       const nextAreas = areasRes.data || [];
       const nextTables = (tablesRes.data || []).map((row) => ({
         ...row,
@@ -1247,25 +1267,25 @@ export default function RestaurantTableLayoutPage() {
   };
 
   // ---------- Areas ----------
-  const saveArea = async ({ name, kind, floor_label, guests_move_for_food }) => {
+  const saveArea = async ({ name, kind, floor_label, guests_move_for_food, menu_area_id }) => {
     if (!restaurantId) return;
     setBusy("area");
     try {
       if (areaModal?.id) {
         const { error } = await supabaseBrowser
           .from("restaurant_table_areas")
-          .update({ name, kind, floor_label, guests_move_for_food })
+          .update({ name, kind, floor_label, guests_move_for_food, menu_area_id })
           .eq("id", areaModal.id)
           .eq("restaurant_id", restaurantId);
         if (error) throw error;
-        setAreas((prev) => prev.map((a) => (a.id === areaModal.id ? { ...a, name, kind, floor_label, guests_move_for_food } : a)));
+        setAreas((prev) => prev.map((a) => (a.id === areaModal.id ? { ...a, name, kind, floor_label, guests_move_for_food, menu_area_id } : a)));
         toast.success("Area updated.");
       } else {
         const sort_order = areas.reduce((m, a) => Math.max(m, a.sort_order), -1) + 1;
         const { data, error } = await supabaseBrowser
           .from("restaurant_table_areas")
-          .insert({ restaurant_id: restaurantId, name, kind, sort_order, floor_label, guests_move_for_food })
-          .select("id, name, kind, sort_order, created_at, floor_label, guests_move_for_food")
+          .insert({ restaurant_id: restaurantId, name, kind, sort_order, floor_label, guests_move_for_food, menu_area_id })
+          .select("id, name, kind, sort_order, created_at, floor_label, guests_move_for_food, menu_area_id")
           .single();
         if (error) throw error;
         setAreas((prev) => [...prev, data]);
@@ -1459,6 +1479,7 @@ export default function RestaurantTableLayoutPage() {
           saving={busy === "area"}
           onClose={() => setAreaModal(null)}
           onSubmit={saveArea}
+          venues={venues}
         />
       ) : null}
       {importPreview ? (
@@ -1577,7 +1598,7 @@ export default function RestaurantTableLayoutPage() {
                 style={active ? { background: GRADIENT } : undefined}
               >
                 <Icon className="h-4 w-4" />
-                {a.name}
+                {venueLabel(a)}
                 <span
                   className={`inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] ${
                     active ? "bg-white/25 text-white" : "bg-gray-100 text-gray-600"

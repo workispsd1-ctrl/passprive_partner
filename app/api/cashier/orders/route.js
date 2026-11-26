@@ -1,3 +1,5 @@
+import { areaTableNos, staffVenue } from "@/lib/server/tillArea";
+import { menuForArea } from "@/lib/menuAreas";
 import { cancelPickupOrder, createPickupPayRequest } from "@/lib/server/payRequests";
 import { listWaiters, resolveWaiter, waiterStamp } from "@/lib/server/waiters";
 import { NextResponse } from "next/server";
@@ -45,7 +47,9 @@ export async function GET(request) {
     if (bookingsRes.error) return NextResponse.json({ ok: false, error: bookingsRes.error.message }, { status: 400 });
 
     const rawMenu = restaurantRes.data?.menu_json;
-    const menu =
+    const venue = await staffVenue(ctx.admin, ctx);
+    const scoped = venue ? await areaTableNos(ctx.admin, ctx.restaurantId, venue.area.id) : null;
+    const menu = menuForArea(
       rawMenu && typeof rawMenu === "string"
         ? (() => {
             try {
@@ -54,7 +58,9 @@ export async function GET(request) {
               return null;
             }
           })()
-        : rawMenu;
+        : rawMenu,
+      venue?.menuAreaId,
+    );
 
     const occupiedTableNos = Array.from(
       new Set(
@@ -85,7 +91,7 @@ export async function GET(request) {
       restaurant_id: ctx.restaurantId,
       restaurant_name: ctx.restaurantName,
       menu: menu && typeof menu === "object" ? menu : null,
-      tables: (tablesRes.data || []).map(({ area, ...t }) => ({ ...t, area_name: (Array.isArray(area) ? area[0]?.name : area?.name) || null })),
+      tables: (tablesRes.data || []).filter((t) => !scoped || scoped.has(Number(t.table_no))).map(({ area, ...t }) => ({ ...t, area_name: (Array.isArray(area) ? area[0]?.name : area?.name) || null })),
       occupied_table_nos: occupiedTableNos,
     });
   } catch (error) {
@@ -106,6 +112,12 @@ export async function POST(request) {
     if (body?.action === "pickup_to_pos") {
       const { status, body: out } = await createPickupPayRequest(ctx.admin, ctx.restaurantId, ctx.userId, body);
       return NextResponse.json(out, { status });
+    }
+
+    const venue = await staffVenue(ctx.admin, ctx);
+    const scoped = venue ? await areaTableNos(ctx.admin, ctx.restaurantId, venue.area.id) : null;
+    if (scoped && body?.table_no != null && body?.table_no !== "" && !scoped.has(Number(body.table_no))) {
+      return NextResponse.json({ ok: false, error: "This table belongs to another area." }, { status: 403 });
     }
 
     if (body?.action === "seat") {
@@ -151,7 +163,7 @@ export async function POST(request) {
     }));
     const discountError = discountProblem(rawLines, true);
     if (discountError) return NextResponse.json({ ok: false, error: discountError }, { status: 400 });
-    const index = menuIndex(menuRow?.menu_json);
+    const index = menuIndex(venue?.menuAreaId ? menuForArea(typeof menuRow?.menu_json === "string" ? JSON.parse(menuRow.menu_json) : menuRow?.menu_json, venue.menuAreaId) : menuRow?.menu_json);
     const priced = priceLines(rawLines, index, { allowDiscount: true });
     if (!priced) {
       return NextResponse.json({ ok: false, error: "Some items are no longer on the menu. Refresh and try again." }, { status: 400 });
