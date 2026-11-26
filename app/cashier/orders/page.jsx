@@ -84,17 +84,9 @@ export default function CashierOrdersPage() {
   }, []);
 
   const cartItems = useMemo(() => Object.values(cart), [cart]);
-  const labelCount = useMemo(() => {
-    const m = new Map();
-    tables.forEach((t) => {
-      const l = t.label || `T${t.table_no}`;
-      m.set(l, (m.get(l) || 0) + 1);
-    });
-    return m;
-  }, [tables]);
   const tableName = (t) => {
     const l = t.label || `T${t.table_no}`;
-    return labelCount.get(l) > 1 && t.area_name ? `${t.area_name} · ${l}` : l;
+    return l;
   };
   const openBill = orderType === "TABLE" ? openBills.find((b) => Number(b.table_no) === Number(tableNo)) || null : null;
   const openedById = openBill?.opened_by?.id || "";

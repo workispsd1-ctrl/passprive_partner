@@ -1712,13 +1712,14 @@ export default function RestaurantTableLayoutPage() {
                   <Pencil className="h-3.5 w-3.5" /> Edit area
                 </SecondaryButton>
                 <SecondaryButton
-                  onClick={() => setConfirm({ type: "area", item: activeArea })}
-                  disabled={activeArea.count > 0}
-                  title={activeArea.count > 0 ? "Move or delete this area's tables first" : "Delete area"}
+                  onClick={() =>
+                    activeArea.count > 0
+                      ? toast.error(`${activeArea.name} still has ${activeArea.count} table${activeArea.count === 1 ? "" : "s"}. Move them to another area or delete them first, then delete the area.`)
+                      : setConfirm({ type: "area", item: activeArea })
+                  }
                   className="h-9 px-3 text-xs text-rose-600 hover:bg-rose-50"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Delete</span>
+                  <Trash2 className="h-3.5 w-3.5" /> Delete area
                 </SecondaryButton>
               </div>
             ) : null}
