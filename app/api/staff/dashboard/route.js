@@ -1,3 +1,4 @@
+import { currentDay } from "@/lib/server/businessDay";
 import { NextResponse } from "next/server";
 import { areaTableNos, tillArea } from "@/lib/server/tillArea";
 import { readJson, requireTerminal, serverError } from "../_terminal";
@@ -70,7 +71,8 @@ export async function POST(request) {
     const { from: rangeFrom, to: rangeTo } = getRangeDates(range, customFrom, customTo);
     const mauritiusDay = mauritiusDayRange(new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString().slice(0, 10));
     const isToday = !["month", "yesterday", "week", "custom"].includes(range);
-    const fromISO = isToday ? mauritiusDay.start : rangeFrom.toISOString();
+    const openDayRow = isToday ? await currentDay(admin, restaurantId).catch(() => null) : null;
+    const fromISO = isToday ? openDayRow?.opened_at || mauritiusDay.start : rangeFrom.toISOString();
     const toISO = isToday ? mauritiusDay.end : rangeTo.toISOString();
 
     // 7 days ago for chart (always fixed)
