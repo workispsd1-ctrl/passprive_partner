@@ -1,6 +1,7 @@
 import { BUSY, readRetry } from "@/lib/server/dbRetry";
 import { createClient } from "@supabase/supabase-js";
-import { NOT_IN_PLAN, restaurantHasPlan } from "@/lib/server/plan";
+import { NOT_IN_PLAN, STAFF_PLANS } from "@/lib/server/plan";
+import { userIdFromToken } from "@/lib/server/verifyToken";
 
 export function serverClient() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
@@ -15,29 +16,25 @@ export function adminClient() {
 }
 
 export async function resolveCashierRestaurant(token) {
-  const supabase = serverClient();
   const admin = adminClient();
   if (!admin) return { error: "SUPABASE_SERVICE_ROLE_KEY is missing.", status: 500 };
 
-  let userRes;
-  let userErr;
+  let verified;
   try {
-    const out = await supabase.auth.getUser(token);
-    userRes = out?.data;
-    userErr = out?.error;
-  } catch (error) {
-    const msg = String(error?.message || "");
-    if (msg.includes("ENOTFOUND") || msg.includes("fetch failed") || msg.includes("getaddrinfo")) {
-      return { error: "Supabase host is unreachable right now. Check DNS/network and Supabase URL.", status: 503 };
-    }
+    verified = await userIdFromToken(token);
+  } catch {
     return { error: "Authentication service unavailable.", status: 503 };
   }
-  if (userErr || !userRes?.user?.id) return { error: "Unauthorized", status: 401 };
+  if (verified.error) {
+    return verified.error.status >= 500 ? { error: "Authentication service unavailable.", status: 503 } : { error: "Unauthorized", status: 401 };
+  }
+  const userId = verified.userId;
 
-  const userId = userRes.user.id;
-
-  const userRes2 = await readRetry(() => admin.from("users").select("role, full_name").eq("id", userId).maybeSingle());
-  if (!userRes2) return BUSY;
+  const [userRes2, staffRes] = await Promise.all([
+    readRetry(() => admin.from("users").select("role, full_name").eq("id", userId).maybeSingle()),
+    readRetry(() => admin.from("restaurant_staff").select("restaurant_id, role, restaurants:restaurant_id(id, name, cover_image, service_level)").eq("user_id", userId).limit(2)),
+  ]);
+  if (!userRes2 || !staffRes) return BUSY;
   const userRow = userRes2.data;
 
   const role = String(userRow?.role || "").toLowerCase();
@@ -46,21 +43,14 @@ export async function resolveCashierRestaurant(token) {
     return { error: "Access denied", status: 403 };
   }
 
-  const staffRes = await readRetry(() => admin.from("restaurant_staff").select("restaurant_id, role").eq("user_id", userId).limit(2));
-  if (!staffRes) return BUSY;
   const staffRowRows = staffRes.data;
   const staffRow = staffRowRows?.length === 1 ? staffRowRows[0] : null;
-
   if (!staffRow?.restaurant_id) {
     return { error: "No restaurant assigned for this cashier account.", status: 403 };
   }
-
-  const restRes = await readRetry(() => admin.from("restaurants").select("id, name, cover_image").eq("id", staffRow.restaurant_id).maybeSingle());
-  if (!restRes) return BUSY;
-  const restaurant = restRes.data;
-
+  const restaurant = Array.isArray(staffRow.restaurants) ? staffRow.restaurants[0] : staffRow.restaurants;
   if (!restaurant?.id) return { error: "Restaurant not found", status: 404 };
-  if (!(await restaurantHasPlan(admin, restaurant.id))) return { error: NOT_IN_PLAN, status: 403 };
+  if (!STAFF_PLANS.includes(String(restaurant.service_level || "").toLowerCase())) return { error: NOT_IN_PLAN, status: 403 };
 
   return {
     userId,
